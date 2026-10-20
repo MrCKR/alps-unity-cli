@@ -29,6 +29,24 @@ namespace UnityCli
         /// <summary>配置或程序版本筛选。</summary>
         public long? Revision { get; set; }
 
+        /// <summary>事件序列下界（含）；与 toSequence 同时给出时下界不得大于上界。</summary>
+        public long? FromSequence { get; set; }
+
+        /// <summary>事件序列上界（含）。</summary>
+        public long? ToSequence { get; set; }
+
+        /// <summary>调用身份筛选；省略表示不筛选。程序事件不携带调用身份，其 invocationId 为 0。</summary>
+        public long? InvocationId { get; set; }
+
+        /// <summary>执行点筛选；取值与事件自身的 executionPoint 完全一致才匹配。</summary>
+        public string ExecutionPoint { get; set; }
+
+        /// <summary>方法身份前缀筛选；程序事件的身份形如 programId:entry，因此该前缀可按程序收敛。</summary>
+        public string MethodIdentityPrefix { get; set; }
+
+        /// <summary>线程归属筛选；true 只读主线程事件，false 只读 worker 线程事件。</summary>
+        public bool? MainThread { get; set; }
+
         /// <summary>事件时钟下界（含）。</summary>
         public double? FromClockValue { get; set; }
 

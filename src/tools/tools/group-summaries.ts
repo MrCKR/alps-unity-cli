@@ -11,7 +11,7 @@ export const GROUP_SUMMARIES: Record<string, string> = {
   cinemachine: "Cinemachine virtual camera, brain, aim, body, blend, noise, and extension configuration.",
   catalog: "Built-in Editor and development Player tool catalog transports: health, groups, summary, describe, list, and run per target.",
   component: "Add, get, list, modify, remove, and set components on scene objects.",
-  debug: "Live Editor runtime debugging: sessions, C# code, methods, hooks, threads, breakpoints, values, event stream, and evidence runs.",
+  debug: "Live Editor runtime debugging: sessions, C# code, methods, hooks, threads, breakpoints, values, event stream, and evidence windows.",
   docs: "Offline documentation lookup and search.",
   editor: "Unity Editor state, transitions, dialogs, refresh, selection, focus, and session controls.",
   "game-object": "Create, find, parent, duplicate, transform, and delete scene GameObjects.",

@@ -113,14 +113,32 @@ namespace UnityCli
                 items.Add(item);
             }
             if (items.Count == 0 && rawCount > 0 && budget.IsExhausted)
-                throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension ?? "scannedRecords");
+            {
+                // 预算在取到任何匹配前耗尽：不再裸失败，而是报告扫描停在哪里，让调用方得到可判断的事实。
+                var examined = rawCount - 1 - scanIndex;
+                return new ConsoleReadPage
+                {
+                    Items = items,
+                    RawEntryCount = rawCount,
+                    Truncated = true,
+                    ScanExhausted = true,
+                    ScannedEntries = examined,
+                    Note = "Scan budget was exhausted after " + examined.ToString(CultureInfo.InvariantCulture) + " of " + rawCount.ToString(CultureInfo.InvariantCulture) + " entries, so this page is not a complete match set and no entry matched inside the scanned range. Narrow type/filter or lower count; a larger budget is not available because the request budget is clamped to its absolute limit.",
+                    Budget = budget.Usage()
+                };
+            }
             var truncated = scanIndex >= 0;
+            var scanExhausted = truncated && budget.IsExhausted;
             return new ConsoleReadPage
             {
                 Items = items,
                 RawEntryCount = rawCount,
                 Truncated = truncated,
-                Note = truncated ? "Snapshot truncated; Console entries are intentionally non-resumable because Unity exposes no observable external clear generation." : null,
+                ScanExhausted = scanExhausted,
+                ScannedEntries = rawCount - 1 - scanIndex,
+                Note = scanExhausted
+                    ? "Scan budget was exhausted after " + (rawCount - 1 - scanIndex).ToString(CultureInfo.InvariantCulture) + " of " + rawCount.ToString(CultureInfo.InvariantCulture) + " entries, so older entries were not examined; narrow type/filter or lower count. A larger budget is not available because the request budget is clamped to its absolute limit."
+                    : truncated ? "Snapshot truncated; Console entries are intentionally non-resumable because Unity exposes no observable external clear generation." : null,
                 Budget = budget.Usage()
             };
         }
@@ -231,6 +249,13 @@ namespace UnityCli
         public List<ConsoleEntry> Items { get; set; }
         public long RawEntryCount { get; set; }
         public bool Truncated { get; set; }
+
+        /// <summary>扫描是否因请求预算耗尽而提前停止；为 true 时本页不是完整匹配集。</summary>
+        public bool ScanExhausted { get; set; }
+
+        /// <summary>本次实际检查过的 raw 条目数；用于判断过滤是否过窄。</summary>
+        public long ScannedEntries { get; set; }
+
         public string Note { get; set; }
         public UnityCliRequestBudgetUsage Budget { get; set; }
 

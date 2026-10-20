@@ -64,6 +64,15 @@ namespace UnityCli
         /// <summary>只读取该托管线程上的现场。</summary>
         [UnityCliRange(1, 65535)] public int? ThreadId { get; set; }
 
+        /// <summary>只读取该状态的现场；paused 表示仍停住，resuming 表示已请求解除。</summary>
+        [UnityCliStringEnum("paused", "resuming")] public string State { get; set; }
+
+        /// <summary>只读取该调用身份的现场；省略表示不筛选。</summary>
+        public long? InvocationId { get; set; }
+
+        /// <summary>只读取指定线程归属的现场；true 只读主线程现场，false 只读 worker 现场。</summary>
+        public bool? MainThread { get; set; }
+
         [UnityCliRange(1, DebugLimits.PauseListMaxLimit)] public int? Limit { get; set; }
 
         public string Cursor { get; set; }

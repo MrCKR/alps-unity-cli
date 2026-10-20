@@ -1139,7 +1139,11 @@ namespace UnityCli
                 "E_REQUEST_BUDGET_EXCEEDED",
                 "Tool " + toolName + " exhausted its request-wide Unity main-thread budget before a complete result was available.",
                 new Dictionary<string, object> { { "toolName", toolName }, { "dimension", dimension } },
-                new[] { "Retry with a narrower selector or continue from the returned continuation when available." });
+                new[]
+                {
+                    "Reduce the request cost first: narrow the selector, lower the page size, or pass a smaller explicit budget.",
+                    "If this tool's described result exposes nextCursor, continue from it instead of restarting the read; a result without nextCursor is non-resumable and accepts only a narrower selector."
+                });
         }
 
         /// <summary>effect 后无法确认终态的异常统一收敛为执行超时。</summary>

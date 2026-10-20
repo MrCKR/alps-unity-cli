@@ -222,6 +222,13 @@ namespace UnityCli
         internal static UnityCliDebugEventFilter Filter(DebugEventsRequest request)
         {
             if (request == null) return new UnityCliDebugEventFilter();
+            if (request.FromSequence.HasValue && request.ToSequence.HasValue && request.FromSequence.Value > request.ToSequence.Value)
+            {
+                throw new BridgeCommandException(
+                    "E_SCHEMA_INVALID",
+                    "fromSequence must not be greater than toSequence.",
+                    "Pass fromSequence lower than or equal to toSequence, or omit one of them.");
+            }
             return new UnityCliDebugEventFilter
             {
                 SourceId = request.SourceId,
@@ -230,6 +237,12 @@ namespace UnityCli
                 PlaySessionId = request.PlaySessionId,
                 ThreadId = request.ThreadId,
                 Revision = request.Revision,
+                FromSequence = request.FromSequence,
+                ToSequence = request.ToSequence,
+                InvocationId = request.InvocationId,
+                ExecutionPoint = request.ExecutionPoint,
+                MethodIdentityPrefix = request.MethodIdentityPrefix,
+                MainThread = request.MainThread,
                 FromClockValue = request.FromClockValue,
                 ToClockValue = request.ToClockValue
             };

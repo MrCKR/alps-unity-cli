@@ -350,6 +350,8 @@ namespace UnityCli
         internal static DebugRunListResult List(DebugRunListRequest request)
         {
             var sessionId = request == null ? null : request.SessionId;
+            var verdict = request == null ? null : request.Verdict;
+            var detailAvailable = request == null ? (bool?)null : request.DetailAvailable;
             var runIds = new List<string>();
             lock (Sync)
             {
@@ -361,7 +363,10 @@ namespace UnityCli
                 runIds.Sort(CompareRunId);
             }
             var editorSessionId = UnityCliBridge.EditorSessionId();
-            var scope = UnityCliContinuationToken.Fingerprint(editorSessionId + "\0debug.run.list\0" + (sessionId ?? string.Empty));
+            var scope = UnityCliContinuationToken.Fingerprint(
+                editorSessionId + "\0debug.run.list\0" + (sessionId ?? string.Empty)
+                + "\0" + (verdict ?? string.Empty)
+                + "\0" + (detailAvailable.HasValue ? (detailAvailable.Value ? "true" : "false") : string.Empty));
             var offset = 0;
             if (request != null && !string.IsNullOrEmpty(request.Cursor))
             {
@@ -379,17 +384,22 @@ namespace UnityCli
                 ? DebugLimits.RunListDefaultLimit
                 : Math.Min(Math.Max(1, request.Limit.Value), DebugLimits.RunListMaxLimit);
             var page = new List<DebugRunSummaryView>();
+            var nextOffset = offset;
             lock (Sync)
             {
                 for (var index = offset; index < runIds.Count && page.Count < limit; index++)
                 {
+                    // 筛选在原始窗口顺序上推进：total 仍描述原始窗口数，cursor 指向下一个未检查序号。
+                    nextOffset = index + 1;
                     DebugRunWindow window;
                     if (!Windows.TryGetValue(runIds[index], out window)) continue;
                     RefreshLocked(window);
-                    page.Add(SummaryOf(window, BuildReport(window)));
+                    var summary = SummaryOf(window, BuildReport(window));
+                    if (!string.IsNullOrEmpty(verdict) && !string.Equals(summary.Verdict, verdict, StringComparison.Ordinal)) continue;
+                    if (detailAvailable.HasValue && summary.DetailAvailable != detailAvailable.Value) continue;
+                    page.Add(summary);
                 }
             }
-            var nextOffset = offset + page.Count;
             return new DebugRunListResult
             {
                 Items = page,
@@ -402,7 +412,7 @@ namespace UnityCli
                 Budget = BudgetView(sessionId),
                 EditorSessionId = editorSessionId,
                 DomainGeneration = DebugSessionHost.DomainGeneration(),
-                Note = "Summaries describe what each window retained. When a window's detail was evicted by the declared budget, detailAvailable is false and only the summary facts remain."
+                Note = "Summaries describe what each window retained. When a window's detail was evicted by the declared budget, detailAvailable is false and only the summary facts remain. verdict and detailAvailable filter over the raw window order, so total stays the raw window count and nextCursor continues at the first window this page did not examine. "
             };
         }
 
@@ -1354,17 +1364,16 @@ namespace UnityCli
             {
                 long used = 0L;
                 long detailed = 0L;
-                if (!string.IsNullOrEmpty(sessionId))
+                // 计数器描述本次读取的范围：给出 sessionId 时只统计该 session，未给出时统计全部 session。
+                // 上限仍是每 session 的限制，所以聚合值仅用于判断“当前范围内有多少”。
+                foreach (var pair in RunsBySession)
                 {
-                    List<string> runs;
-                    if (RunsBySession.TryGetValue(sessionId, out runs))
+                    if (!string.IsNullOrEmpty(sessionId) && !string.Equals(pair.Key, sessionId, StringComparison.Ordinal)) continue;
+                    used += pair.Value.Count;
+                    foreach (var runId in pair.Value)
                     {
-                        used = runs.Count;
-                        foreach (var runId in runs)
-                        {
-                            DebugRunWindow window;
-                            if (Windows.TryGetValue(runId, out window) && window.DetailAvailable) detailed++;
-                        }
+                        DebugRunWindow window;
+                        if (Windows.TryGetValue(runId, out window) && window.DetailAvailable) detailed++;
                     }
                 }
                 return new DebugRunBudgetView

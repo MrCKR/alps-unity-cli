@@ -750,6 +750,9 @@ namespace UnityCli
 
         internal static DebugPauseListResult List(DebugPauseListRequest request, string editorSessionId)
         {
+            var state = request == null ? null : request.State;
+            var invocationId = request == null ? (long?)null : request.InvocationId;
+            var mainThread = request == null ? (bool?)null : request.MainThread;
             List<DebugPauseSite> snapshot;
             lock (Sync)
             {
@@ -759,13 +762,24 @@ namespace UnityCli
                     .Where(site => request == null || string.IsNullOrEmpty(request.SessionId) || string.Equals(request.SessionId, site.SessionId, StringComparison.Ordinal))
                     .Where(site => request == null || string.IsNullOrEmpty(request.HookId) || string.Equals(request.HookId, site.HookId, StringComparison.Ordinal))
                     .Where(site => request == null || request.ThreadId == null || request.ThreadId.Value == site.ThreadId)
+                    .Where(site => string.IsNullOrEmpty(state) || string.Equals(site.State, state, StringComparison.Ordinal))
+                    .Where(site => invocationId == null || site.InvocationId == invocationId.Value)
+                    .Where(site => mainThread == null || site.MainThread == mainThread.Value)
                     .ToList();
             }
+            var scope = UnityCliContinuationToken.Fingerprint(
+                editorSessionId + "\0" + ListScope + "\0"
+                + (request == null ? string.Empty : request.SessionId ?? string.Empty) + "\0"
+                + (request == null ? string.Empty : request.HookId ?? string.Empty) + "\0"
+                + (request == null || request.ThreadId == null ? string.Empty : request.ThreadId.Value.ToString(CultureInfo.InvariantCulture)) + "\0"
+                + (state ?? string.Empty) + "\0"
+                + (invocationId.HasValue ? invocationId.Value.ToString(CultureInfo.InvariantCulture) : string.Empty) + "\0"
+                + (mainThread.HasValue ? (mainThread.Value ? "true" : "false") : string.Empty));
             var offset = 0;
             if (request != null && !string.IsNullOrEmpty(request.Cursor))
             {
                 string position;
-                if (!UnityCliContinuationToken.TryParse(request.Cursor, ListScope, editorSessionId, out position)
+                if (!UnityCliContinuationToken.TryParse(request.Cursor, scope, editorSessionId, out position)
                     || !int.TryParse(position, NumberStyles.Integer, CultureInfo.InvariantCulture, out offset)
                     || offset < 0 || offset > snapshot.Count)
                     throw new BridgeCommandException(
@@ -784,7 +798,7 @@ namespace UnityCli
             {
                 Sites = page,
                 NextCursor = nextOffset < snapshot.Count
-                    ? UnityCliContinuationToken.Create(ListScope, editorSessionId, nextOffset.ToString(CultureInfo.InvariantCulture))
+                    ? UnityCliContinuationToken.Create(scope, editorSessionId, nextOffset.ToString(CultureInfo.InvariantCulture))
                     : null,
                 Total = snapshot.Count,
                 NextOffset = nextOffset,

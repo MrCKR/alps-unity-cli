@@ -191,6 +191,12 @@ namespace UnityCli
         public double? FromClockValue;
         public double? ToClockValue;
         public long? Revision;
+        public long? FromSequence;
+        public long? ToSequence;
+        public long? InvocationId;
+        public string ExecutionPoint;
+        public string MethodIdentityPrefix;
+        public bool? MainThread;
 
         /// <summary>规范化筛选文本；cursor 作用域 hash 的唯一输入。</summary>
         public string Canonical()
@@ -204,6 +210,12 @@ namespace UnityCli
             builder.Append("|from=").Append(FromClockValue.HasValue ? FromClockValue.Value.ToString("R", CultureInfo.InvariantCulture) : string.Empty);
             builder.Append("|to=").Append(ToClockValue.HasValue ? ToClockValue.Value.ToString("R", CultureInfo.InvariantCulture) : string.Empty);
             builder.Append("|revision=").Append(Revision.HasValue ? Revision.Value.ToString(CultureInfo.InvariantCulture) : string.Empty);
+            builder.Append("|seqFrom=").Append(FromSequence.HasValue ? FromSequence.Value.ToString(CultureInfo.InvariantCulture) : string.Empty);
+            builder.Append("|seqTo=").Append(ToSequence.HasValue ? ToSequence.Value.ToString(CultureInfo.InvariantCulture) : string.Empty);
+            builder.Append("|invocation=").Append(InvocationId.HasValue ? InvocationId.Value.ToString(CultureInfo.InvariantCulture) : string.Empty);
+            builder.Append("|point=").Append(ExecutionPoint ?? string.Empty);
+            builder.Append("|identityPrefix=").Append(MethodIdentityPrefix ?? string.Empty);
+            builder.Append("|mainThread=").Append(MainThread.HasValue ? (MainThread.Value ? "true" : "false") : string.Empty);
             return builder.ToString();
         }
 
@@ -219,6 +231,13 @@ namespace UnityCli
             if (Revision.HasValue && entry.Revision != Revision.Value) return false;
             if (FromClockValue.HasValue && entry.ClockValue < FromClockValue.Value) return false;
             if (ToClockValue.HasValue && entry.ClockValue > ToClockValue.Value) return false;
+            if (FromSequence.HasValue && entry.Sequence < FromSequence.Value) return false;
+            if (ToSequence.HasValue && entry.Sequence > ToSequence.Value) return false;
+            if (InvocationId.HasValue && entry.InvocationId != InvocationId.Value) return false;
+            if (!string.IsNullOrEmpty(ExecutionPoint) && !string.Equals(entry.ExecutionPoint, ExecutionPoint, StringComparison.Ordinal)) return false;
+            if (!string.IsNullOrEmpty(MethodIdentityPrefix)
+                && (entry.MethodIdentity == null || !entry.MethodIdentity.StartsWith(MethodIdentityPrefix, StringComparison.Ordinal))) return false;
+            if (MainThread.HasValue && entry.MainThread != MainThread.Value) return false;
             return true;
         }
     }

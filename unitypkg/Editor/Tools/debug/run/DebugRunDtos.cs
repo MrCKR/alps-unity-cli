@@ -600,6 +600,13 @@ namespace UnityCli
     {
         public string SessionId { get; set; }
 
+        /// <summary>只读取该判决的窗口；省略表示不按判决筛选。</summary>
+        [UnityCliStringEnum(UnityCliDebugRunVerdicts.Passed, UnityCliDebugRunVerdicts.Failed, UnityCliDebugRunVerdicts.Indeterminate)]
+        public string Verdict { get; set; }
+
+        /// <summary>只读取详细证据是否仍可读的窗口；省略表示不过滤。</summary>
+        public bool? DetailAvailable { get; set; }
+
         [UnityCliRange(1, DebugLimits.RunListMaxLimit)] public int? Limit { get; set; }
 
         public string Cursor { get; set; }

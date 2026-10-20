@@ -91,7 +91,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | `E_TOOL_REGISTRY_UNHEALTHY` | 当前 domain 的 Tool catalog 整体不可用：共享发现基础设施失败，无法构建可信执行表 | 修复后让 Unity 重新编译并 reload domain；局部故障改用 `isolatedCount` 与 `E_TOOL_NAME_CONFLICT` / `E_TOOL_REGISTRATION_FAILED` |
 | `E_SCHEMA_INVALID` | 输入不符合 schema，包括公开数值范围 | 查看对应 `tools describe` 的 inputSchema |
 | `E_REQUEST_BUDGET_INVALID` | request-wide预算为零、负数或超过公开上限 | 传正值且不超过descriptor/schema最大值 |
-| `E_REQUEST_BUDGET_EXCEEDED` | 读取在完整结果前耗尽scan/node/getter/reflection/time/UTF-8预算 | 使用返回的continuation，或收紧selector/提高上限内预算 |
+| `E_REQUEST_BUDGET_EXCEEDED` | 读取在完整结果前耗尽 scan/node/getter/reflection/time/UTF-8 预算 | 先收紧 selector、减小 pageSize 或传更小的显式 budget；结果含 `nextCursor` 的工具从其续读，没有 `nextCursor` 的工具只接受更窄的 selector（预算只能下调，不能超过绝对上限） |
 | `E_CONTINUATION_STALE` | opaque cursor的selector或Unity/assembly generation已变化 | 删除cursor并开始一次fresh读取 |
 
 ### 可选预览错误
