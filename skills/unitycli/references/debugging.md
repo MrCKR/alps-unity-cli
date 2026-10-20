@@ -77,7 +77,7 @@ yield return DebugFlow.Return(value);                    // 结束并返回值
 
 - `waitMs` 只约束本次调用等多久；到期不取消流。
 - `flowBudgetMs` 是流自己的生命周期预算，从首次 tick 起算，**不含编译**，也不计主线程被暂停占用的时间。
-- 同时最多 2 条流每 session、4 条每 Unity 实例；超限立即拒绝而不排队。
+- 同时最多 4 条流每 session、8 条每 Unity 实例；超限立即拒绝而不排队。
 - 流不跨 Domain Reload、Editor 重启或 Play 段结束存活；只能重新提交。
 
 并发与可信度：每条流都在主线程上采样，多开只会互相挤占帧时间。要精确测量“第几帧命中”，并发越低越准；多开适合互不干扰的独立场景。返回值有字节上限，超出时报告 `resultTruncated`。

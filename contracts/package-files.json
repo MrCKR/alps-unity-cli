@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.8.0",
-  "sourceHash": "63454a06580545c7f3da7e6b583a2d54419dbb05d85e05b11101788c7575d692",
+  "sourceHash": "e6dce4545d4eb00fc6d0cd303a08d81cb3a45c3f48315c01fd61a4043855eafb",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -142,7 +142,7 @@
     {
       "path": "Editor/Infrastructure/Debug/DebugLimits.cs",
       "size": 47540,
-      "sha256": "58aa72970d30b33f4a8e38a5c0f78b2194e8a4ee102435fa05576560b60c5981"
+      "sha256": "fd86361715c76fc2997ae78526ebad2a881c3f673fd8445519e585f37bb38f67"
     },
     {
       "path": "Editor/Infrastructure/Debug/DebugListenerHost.cs",
@@ -2521,8 +2521,8 @@
     },
     {
       "path": "Tests/Editor/DebugFlowTests.cs",
-      "size": 14370,
-      "sha256": "0acbb929e6b25afa4c31ebf2f10fee27006caffe7093e320433fdf3653574534"
+      "size": 14439,
+      "sha256": "79f43b3f9f52b337f76113c4c24732f256a2b61a6cdc1c0da9eebbed0464023b"
     },
     {
       "path": "Tests/Editor/DebugInputTests.cs",

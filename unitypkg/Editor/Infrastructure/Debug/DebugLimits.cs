@@ -198,10 +198,10 @@ namespace UnityCli
         // ---- async flow（debug.code.executeAsync）----
 
         /// <summary>单个 session 同时允许的活动流数量。</summary>
-        internal const int MaxFlowsPerSession = 2;
+        internal const int MaxFlowsPerSession = 4;
 
         /// <summary>单个 Unity 实例（本进程 AppDomain）同时允许的活动流数量；两级限制同时生效。</summary>
-        internal const int MaxFlowsPerInstance = 4;
+        internal const int MaxFlowsPerInstance = 8;
 
         /// <summary>流生命周期的默认预算；从首次 tick 起算，不含编译时间。</summary>
         internal const double FlowBudgetDefaultMs = 300000d;

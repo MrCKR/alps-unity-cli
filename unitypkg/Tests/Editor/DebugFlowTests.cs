@@ -156,10 +156,10 @@ namespace UnityCli.Tests
         }
 
         [Test]
-        public void TheSessionLimitRefusesTheThirdFlowBeforeAnyEffect()
+        public void TheSessionLimitRefusesTheFlowAfterThePerSessionCap()
         {
-            DebugFlowHost.Create(Endless(), "s1", 5000d);
-            DebugFlowHost.Create(Endless(), "s1", 5000d);
+            for (var index = 0; index < DebugLimits.MaxFlowsPerSession; index++)
+                DebugFlowHost.Create(Endless(), "s1", 5000d);
 
             BridgeCommandException captured = null;
             try
@@ -171,7 +171,7 @@ namespace UnityCli.Tests
                 captured = exception;
             }
 
-            Assert.IsNotNull(captured, "the third flow in one session must be refused");
+            Assert.IsNotNull(captured, "a flow beyond the per-session cap must be refused");
             Assert.AreEqual("E_DEBUG_FLOW_LIMIT_EXCEEDED", captured.Code);
             var details = captured.Details as Dictionary<string, object>;
             Assert.IsNotNull(details);
@@ -179,22 +179,22 @@ namespace UnityCli.Tests
         }
 
         [Test]
-        public void TheInstanceLimitRefusesTheFifthFlowAcrossSessions()
+        public void TheInstanceLimitRefusesTheFlowAfterThePerInstanceCap()
         {
-            for (var index = 0; index < 4; index++)
+            for (var index = 0; index < DebugLimits.MaxFlowsPerInstance; index++)
                 DebugFlowHost.Create(Endless(), "s" + index, 5000d);
 
             BridgeCommandException captured = null;
             try
             {
-                DebugFlowHost.Create(Endless(), "s9", 5000d);
+                DebugFlowHost.Create(Endless(), "overflow", 5000d);
             }
             catch (BridgeCommandException exception)
             {
                 captured = exception;
             }
 
-            Assert.IsNotNull(captured, "the fifth flow in one Unity instance must be refused");
+            Assert.IsNotNull(captured, "a flow beyond the per-instance cap must be refused");
             Assert.AreEqual("E_DEBUG_FLOW_LIMIT_EXCEEDED", captured.Code);
             var details = captured.Details as Dictionary<string, object>;
             Assert.IsNotNull(details);
