@@ -13,6 +13,25 @@ using BridgeCommandException = UnityCli.UnityCliBridge.BridgeCommandException;
 namespace UnityCli
 {
     /// <summary>
+    /// submit 的结果：是一张收据而不是一个结论。registered 表示流已登记会在 tick 上推进，
+    /// 因此不带 status 字段：把它当成运行中状态会被完成驱动器当成中间态拒掉。
+    /// </summary>
+    internal sealed class DebugCodeFlowSubmitResult
+    {
+        public bool Registered { get; internal set; }
+        public string FlowId { get; internal set; }
+        public string SessionId { get; internal set; }
+        public double BudgetMs { get; internal set; }
+        public double StartedMonotonicMs { get; internal set; }
+        public long ActiveFlows { get; internal set; }
+        public long SessionActiveFlows { get; internal set; }
+        public long MaxFlowsPerInstance { get; internal set; }
+        public long MaxFlowsPerSession { get; internal set; }
+        public string EditorSessionId { get; internal set; }
+        public string Note { get; internal set; }
+    }
+
+    /// <summary>
     /// 流结果视图。status 是唯一区分器：ok:true 不代表完成。
     /// </summary>
     internal sealed class DebugCodeFlowResult

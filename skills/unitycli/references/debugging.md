@@ -49,39 +49,49 @@
 
 ## 跨帧流（`debug.code.flow.*`）
 
-`debug.code.execute` 是同步到底：代码在主线程跑完才返回，运行期间帧不推进，所以里面无法等帧。需要“做 A、等 X、做 B”时用 `debug.code.flow.execute`：它编译一次，然后在中央 editor tick 上逐帧推进，Edit 与 Play 都可用，不靠 `StartCoroutine`。
+`debug.code.execute` 是同步到底：代码在主线程跑完才返回，运行期间帧不推进，所以里面无法等帧。需要“做 A、等 X、做 B”时用跨帧流：编译一次，然后在中央 editor tick 上逐帧推进，Edit 与 Play 都可用，不靠 `StartCoroutine`。
+
+两个启动入口，完成含义不同：
+
+| 入口 | 完成含义 | 请求超时 |
+| --- | --- | --- |
+| `debug.code.flow.run` | 流已到终态 | 由 `flowBudgetMs` 推导（预算 + 60 s 余量） |
+| `debug.code.flow.submit` | 已被接受（不是结果） | 只需覆盖编译 |
+
+`submit` 只给收据：`accepted`、`flowId`、`budgetMs` 与并发占用，**不带 status**。它存在的理由是调用方自己的工具超时常常只有 60–120 s，用 `run` 会被外层掐断、连句柄都拿不到。之后用 `debug.code.flow.wait` 读终态。
+
+`wait` 只观察不执行：省略 `waitMs` 就等到本次请求超时；给一个小值就是取一次快照。超时不是失败，流继续跑。`cancel` 可重复调用，已终态时返回同一终态。
 
 代码体是 `public static IEnumerator Run(string argsJson)`，可用的 using 已包含 `UnityCli`。跨帧只能通过 `DebugFlow` 表达：
 
 ```csharp
 yield return DebugFlow.NextFrame(3);                     // Play 模式等 3 次 Time.frameCount 增长；Edit 模式退化为 3 个 editor tick
-yield return DebugFlow.After(250, 2000);                // 单调时钟，超时必填
+yield return DebugFlow.After(250, 2000);                // 单调时钟
 yield return DebugFlow.Until(() => actor.Hp <= 0, 5000); // 条件，C# 委托
 yield return DebugFlow.UntilSignal("hit-confirmed", 3000);
-yield return DebugFlow.UntilLog("BattleStart", 5000);       // 日志子串命中（可选等级 log/warning/error）
+yield return DebugFlow.UntilLog("BattleStart", 5000);    // 日志子串，可选等级 log/warning/error
 yield return DebugFlow.All(waitA, waitB);                // 全部满足
 yield return DebugFlow.Any(waitA, waitB);                // 任一满足
 yield return DebugFlow.Return(value);                    // 结束并返回值
 ```
 
-每个等待都必填超时，没有默认值；条件写 C# 委托，不提供字符串表达式。等待结束后 `DebugFlow.Last` 是可读的 `DebugFlowWaitResult`：C# 属性 `Satisfied`、`TimedOut`、`ElapsedMs`、`Samples`、`LastObserved`。超时**不抛异常**，它是一次可分支的结果；条件本身抛异常才让流失败，`failureTag` 为 `predicate-exception`。
+每个等待都必填超时，没有默认值；条件写 C# 委托，不提供字符串表达式。等待结束后 `DebugFlow.Last` 是可读的 `DebugFlowWaitResult`，C# 属性为 `Satisfied`、`TimedOut`、`ElapsedMs`、`Samples`、`LastObserved`。超时**不抛异常**，它是一次可分支的结果；条件本身抛异常才让流失败，`failureTag` 为 `predicate-exception`。
 
 结果规则：
 
 - 只有 `completed` 返回 `ok:true`，带 `result`、`steps`、`samples`。
-- `running` 返回 `E_DEBUG_FLOW_PENDING`：用**同一个** flowId 调 `debug.code.flow.wait` 续等；重新提交会产生第二条流，不是恢复路径。
 - `failed`、`timed-out`、`cancelled`、`aborted` 分别返回 `E_DEBUG_FLOW_FAILED`、`E_DEBUG_FLOW_TIMED_OUT`、`E_DEBUG_FLOW_CANCELLED`、`E_DEBUG_FLOW_ABORTED`，`details` 带 `flowId`、`status` 与终态事实。
-- `debug.code.flow.cancel` 可重复调用；已终态时返回同一终态，不重写历史。
+- `E_DEBUG_FLOW_PENDING` 只出现在 `wait` 上（请求时间用尽但流还在跑），它**不是失败**；用同一个 flowId 继续等，不要重新提交。
+- 返回值有 262144 字节上限；超出时整体替换为占位字符串并置 `resultTruncated`，因此要结构化结论就写进 check 或事件，不要依赖大返回值。
 
 预算与存活：
 
-- `waitMs` 只约束本次调用等多久；到期不取消流。
 - `flowBudgetMs` 是流自己的生命周期预算，从首次 tick 起算，**不含编译**，也不计主线程被暂停占用的时间。
 - 同时最多 4 条流每 session、8 条每 Unity 实例；超限立即拒绝而不排队。
 - 流不跨 Domain Reload、Editor 重启或 Play 段结束存活；只能重新提交。
+- 模式门 `requiresPlayMode`（`any` / `play` / `edit`）在编译前判定，模式不符直接拒绝，不消耗编译与产物额度。
 
-并发与可信度：每条流都在主线程上采样，多开只会互相挤占帧时间。要精确测量“第几帧命中”，并发越低越准；多开适合互不干扰的独立场景。返回值有字节上限，超出时报告 `resultTruncated`。
-
+并发与可信度：每条流都在主线程上采样，多开只会互相挤占帧时间。要精确测量“第几帧命中”，并发越低越准；多开适合互不干扰的独立场景。
 ## 边界与遗留
 
 - 运行时调试不修改业务源码、不创建业务程序集、不改业务资源。要让实验中的替代结果成为正式修复，必须作为新的明确业务工作重新实现与验收。

@@ -1352,7 +1352,21 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.code.flow.execute",
+    "toolName": "debug.code.flow.run",
+    "descriptorOwner": "ts-local",
+    "deliveryMode": "direct-terminal",
+    "executionClass": "atomic",
+    "completionPredicate": "typed-business-terminal",
+    "proofSource": "typed-result-and-effect-readback",
+    "reloadPolicy": "caller-responsibility",
+    "timeoutError": "E_EXECUTION_TIMEOUT",
+    "outcomeUnknownPolicy": "caller-responsibility",
+    "completionDriverId": "atomic-typed-result-v1",
+    "journalPolicy": "required",
+    "mutation": true
+  },
+  {
+    "toolName": "debug.code.flow.submit",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",

@@ -900,13 +900,22 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "debug.code.flow.execute",
+      "bridgeCommand": "debug.code.flow.run",
       "group": "debug",
-      "command": "code.flow.execute",
+      "command": "code.flow.run",
       "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": true,
-      "timeout": 140000
+      "timeout": 360000
+    },
+    {
+      "bridgeCommand": "debug.code.flow.submit",
+      "group": "debug",
+      "command": "code.flow.submit",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 90000
     },
     {
       "bridgeCommand": "debug.code.flow.wait",

@@ -215,6 +215,9 @@ namespace UnityCli
         /// <summary>提交与等待调用允许的最大等待时长。</summary>
         internal const double FlowRequestWaitMaxMs = 900000d;
 
+        /// <summary>run 模式提交前的校验余量：覆盖编译与传输收口，真正的外部余量由调用方放宽。</summary>
+        internal const double FlowRunMarginMs = 15000d;
+
         /// <summary>终态流记录的有界保留数量，供重复查询拿到同一结果。</summary>
         internal const int MaxRetiredFlows = 32;
 

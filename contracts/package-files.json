@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
-  "packageVersion": "0.8.0",
-  "sourceHash": "e6dce4545d4eb00fc6d0cd303a08d81cb3a45c3f48315c01fd61a4043855eafb",
+  "packageVersion": "0.8.1",
+  "sourceHash": "39f400634951d878040e7726f9b9180f4bcc7521b0391a8b1e3f7874e383c1ef",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -66,13 +66,13 @@
     },
     {
       "path": "Editor/Generated/UnityCliToolCompletionRegistry.g.cs",
-      "size": 189018,
-      "sha256": "16157517a7a542ee83dca2906dc7267c59808f9bf58552e4fc637f2c47ad9a7d"
+      "size": 189314,
+      "sha256": "fdc88dfef05be47031f3a5031fe3e3caccafec25398478ad6785fbf3836414ae"
     },
     {
       "path": "Editor/Infrastructure/CodeExecFlowSupport.cs",
-      "size": 11695,
-      "sha256": "b2beb1fdfba212c2721c6f7e9e44e13e8f2919baa80deb4079af60924e15dc88"
+      "size": 15985,
+      "sha256": "d3d4f1af9d91f8b7ba3a9719be30c354df51dcaa2fc69f11687176a18c49aa25"
     },
     {
       "path": "Editor/Infrastructure/CodeExecSupport.cs",
@@ -141,8 +141,8 @@
     },
     {
       "path": "Editor/Infrastructure/Debug/DebugLimits.cs",
-      "size": 47540,
-      "sha256": "fd86361715c76fc2997ae78526ebad2a881c3f673fd8445519e585f37bb38f67"
+      "size": 47738,
+      "sha256": "e0055444842c0630bb9b226049245af093d605564e1950987bd56e0bcba5c492"
     },
     {
       "path": "Editor/Infrastructure/Debug/DebugListenerHost.cs",
@@ -1011,8 +1011,8 @@
     },
     {
       "path": "Editor/Tools/debug/code/DebugCodeFlowDtos.cs",
-      "size": 15625,
-      "sha256": "f95d05e10d8c87a6fa852474e7e844aa6d75db8f1387f8f798bb1de0078f616e"
+      "size": 16589,
+      "sha256": "052778f846540d566a0329d40775392b7100b7c2e1683280d141161ec23c3570"
     },
     {
       "path": "Editor/Tools/debug/console/clear.cs",
@@ -2727,7 +2727,7 @@
     {
       "path": "package.json",
       "size": 267,
-      "sha256": "798ba0f83abe94c04fba9b67d22e351a8ab8fccceb52741b719ed0fde1ab2ddc"
+      "sha256": "89345bd38da909cf45877e707cbfd5599f3eb7ff1aeda5eba0fadfa0418997ec"
     }
   ]
 }

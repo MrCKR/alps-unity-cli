@@ -89,7 +89,8 @@ function numberValue(value: unknown): number | undefined {
  */
 export const debugBridgeSpecs: BridgeCommandSpec[] = [
   { group: "debug", command: "code.execute", bridgeCommand: "code.execute", toolName: "debug.code.execute", buildArgs: codeArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "debug", command: "code.flow.execute", bridgeCommand: "code.flow.execute", toolName: "debug.code.flow.execute", buildArgs: structuredPassthrough, destructiveHint: true, supportsDryRun: true },
+  { group: "debug", command: "code.flow.submit", bridgeCommand: "code.flow.submit", toolName: "debug.code.flow.submit", buildArgs: structuredPassthrough, destructiveHint: true, supportsDryRun: true },
+  { group: "debug", command: "code.flow.run", bridgeCommand: "code.flow.run", toolName: "debug.code.flow.run", buildArgs: structuredPassthrough, destructiveHint: true, supportsDryRun: true },
   { group: "debug", command: "code.flow.wait", bridgeCommand: "code.flow.wait", toolName: "debug.code.flow.wait", buildArgs: structuredPassthrough },
   { group: "debug", command: "code.flow.cancel", bridgeCommand: "code.flow.cancel", toolName: "debug.code.flow.cancel", buildArgs: structuredPassthrough, destructiveHint: true },
   { group: "debug", command: "console.read", bridgeCommand: "catalog.editor.run", toolName: "debug.console.read", buildArgs: consoleReadArgs },
