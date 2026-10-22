@@ -2,6 +2,8 @@
 name: unity-cli-validation
 description: unitycli 的验证规划、契约校验、自动化测试、Dev Unity 实测矩阵、安装同步和干净子代理门禁硬规范。任何 Tool、Extension、Bridge、descriptor、安全、wait、公开行为或项目治理规范修改在设计、实施、验证和宣称完成前必须完整读取并执行。
 compatibility: 适用于 alps-unity-cli；Unity 真实验证使用 ./Dev，子代理使用项目级 unity-cli-gate。
+metadata:
+  internal: true
 ---
 
 # UnityCLI Validation

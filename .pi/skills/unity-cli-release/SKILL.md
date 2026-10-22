@@ -2,6 +2,8 @@
 name: unity-cli-release
 description: unitycli 的版本号语义与 npm 发布流程硬规范。升版本、打 tag、npm publish、push、本地安装验证时必须读取；判断一次改动应升大版本还是小版本、判断是否达到正式发布标准时也必须读取。
 compatibility: 适用于 alps-unity-cli；需要 pwsh、npm、git 与已登录 npm 账号。
+metadata:
+  internal: true
 ---
 
 # UnityCLI 版本与发布规范

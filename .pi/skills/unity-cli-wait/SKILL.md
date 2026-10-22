@@ -2,6 +2,8 @@
 name: unity-cli-wait
 description: unitycli 异步 Tool、跨帧等待、callback 生命周期与中央 scheduler 硬规范。涉及 ValueTask、Promise、ctx.Wait、EditorApplication.update、timeout/cancel 或 PlayMode 跨帧行为时必须先完整读取；修改公开能力时同时加载 unity-cli-capability。
 compatibility: 适用于 alps-unity-cli 的 TypeScript CLI 与 Unity C# Bridge。
+metadata:
+  internal: true
 ---
 
 # UnityCLI Wait

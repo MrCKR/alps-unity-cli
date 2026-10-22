@@ -2,6 +2,8 @@
 name: unity-cli-issue-lifecycle
 description: 管理 UnityCLI 产品缺陷从登记、canonical 源码实现、自动化与契约验证、授权测试安装、真实 Unity 验证到归档的闭环。准备修复 UnityCLI 产品缺陷并维护 issue 状态时必须使用；用户明确要求在指定真实或 Dev 项目紧急热修已安装 Package 时也必须使用。普通无关的一次性单元测试失败、纯问答和只调查不修改不触发。
 compatibility: 适用于 alps-unity-cli；需要 read、edit/write、pwsh、真实 Unity 验证和项目测试。
+metadata:
+  internal: true
 ---
 
 # UnityCLI Issue Lifecycle

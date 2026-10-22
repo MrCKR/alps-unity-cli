@@ -2,6 +2,8 @@
 name: unity-cli-extension
 description: unitycli Extension 的目录结构、manifest、Unity package 依赖、Bridge descriptor、安装投影、availability 与同步更新硬规范。新增、修改、删除任何 extensions/<id> 内容或扩展贡献的 Tool 时必须先完整读取；同时必须加载 unity-cli-capability。
 compatibility: 适用于 alps-unity-cli 仓库的 extensions 目录和 Unity 安装投影。
+metadata:
+  internal: true
 ---
 
 # UnityCLI Extension

@@ -2,6 +2,8 @@
 name: unity-cli-capability
 description: unitycli 的统一 Tool、Bridge、descriptor、schema、安全、Editor/PlayMode 与结构化输出硬规范。新增、修改或删除任何 Unity 能力、公开 metadata、summary/describe、错误 envelope、自定义 Tool 或 destructive 语义时必须先完整读取并遵守；Extension 能力也必须同时使用本 Skill。
 compatibility: 适用于 alps-unity-cli 仓库；需要 read 和项目现有验证工具。
+metadata:
+  internal: true
 ---
 
 # UnityCLI Capability
