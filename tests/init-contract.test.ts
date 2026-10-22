@@ -17,7 +17,7 @@ test("init contract and schema enumerate the final command surface only", () => 
   assert.deepEqual(Object.keys(contract.subcommands), ["help", "discover", "package", "skill"]);
   assert.deepEqual(contract.subcommands.skill.agents, [".agents", "claude"]);
   assert.deepEqual(contract.subcommands.skill.scopes, ["workspace", "user"]);
-  assert.deepEqual(contract.subcommands.package.options, ["project", "close-editor", "check", "timeout-ms"]);
+  assert.deepEqual(contract.subcommands.package.options, ["project", "close-editor", "hot", "check", "timeout-ms"]);
   assert.deepEqual(contract.subcommands.skill.requiredAnyOf, [["target"], ["agent", "scope"]]);
   assert.doesNotMatch(JSON.stringify({ contract, schema }), /pkg-only|skill-only|<pi\|/);
   assert.equal(schema.oneOf.length, 2);

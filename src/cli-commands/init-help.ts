@@ -4,6 +4,7 @@ import type { CliResult } from "../types.js";
 const commands = {
   discover: "unitycli init discover",
   packageInstall: "unitycli init package --project <UnityProject>",
+  packageInstallHot: "unitycli init package --project <UnityProject> --hot",
   packageInstallAndCloseEditor: "unitycli init package --project <UnityProject> --close-editor",
   packageCheck: "unitycli init package --project <UnityProject> --check",
   explicitSkillInstall: "unitycli init skill --target <SkillDirectory>",
@@ -27,7 +28,7 @@ export function handleInitHelp(args: string[], flags: Record<string, string | bo
       "Run `unitycli init discover` from the user's current working directory and use its compact current-project plan.",
       "Treat every project, scope, host, or Skill directory the user already specified as final; never ask them to choose it again. Use `init skill --target` for an explicit directory such as `.pi/skills/unitycli`.",
       "When discovery returns one current or ancestor Unity project, use it without another project-selection question. Ask only entries present in discovery.requiredDecisions.",
-      "If the exact target Unity project is running, ask once whether it may be closed normally. After approval use `init package --close-editor`; never force-terminate Unity or decide an unsaved-scene prompt for the user.",
+      "If the exact target Unity project is running, keep it open: use `init package --hot`, then run `unitycli tools run editor.refresh` so the Editor imports the replaced package, and verify with `init package --check`. Ask once whether the project may be closed normally only when the user prefers closing; after approval use `init package --close-editor`. Never force-terminate Unity, and the installer must never start or restart the Editor.",
       "Bridge and Skill installation are independent authorized effects. A failure blocks only that effect and its check; continue other user-authorized independent installation effects and report every final status.",
       "Run one corresponding `--check` after each successful package or Skill installation and verify its business status.",
       "For a recoverable installation error, follow its exact nextActions after the required external state changes. Do not create unbounded retries or change the user's selected targets.",

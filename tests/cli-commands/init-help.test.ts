@@ -26,8 +26,9 @@ test("init help is self-contained for minimal decisions, explicit targets, norma
   assert.equal(data.audience, "ai");
   assert.equal(data.protocolVersion, 2);
   assert.equal(data.nextCommand, "unitycli init discover");
-  assert.deepEqual(Object.keys(data.commands).sort(), ["discover", "explicitSkillCheck", "explicitSkillInstall", "packageCheck", "packageInstall", "packageInstallAndCloseEditor", "userSkillCheck", "userSkillInstall", "workspaceSkillCheck", "workspaceSkillInstall"]);
+  assert.deepEqual(Object.keys(data.commands).sort(), ["discover", "explicitSkillCheck", "explicitSkillInstall", "packageCheck", "packageInstall", "packageInstallAndCloseEditor", "packageInstallHot", "userSkillCheck", "userSkillInstall", "workspaceSkillCheck", "workspaceSkillInstall"]);
   assert.match(data.commands.packageInstallAndCloseEditor, /--close-editor/);
+  assert.match(data.commands.packageInstallHot, /--hot/);
   assert.match(data.commands.explicitSkillInstall, /--target <SkillDirectory>/);
   assert.match(data.commands.workspaceSkillInstall, /--agent <\.agents\|claude> --scope workspace --workspace <path>/);
   const instructions = data.aiInstructions.join("\n");

@@ -14,7 +14,7 @@ const expectedSubcommands = ["help", "discover", "package", "skill"];
 const removedOptions = ["pkg-only", "skill-only", "unity"];
 if (contract.version !== 2 || contract.topLevel !== "init" || contract.schema !== "schemas/init.schema.json") failures.push("init contract identity must be version 2 and reference schemas/init.schema.json");
 if (JSON.stringify(Object.keys(contract.subcommands)) !== JSON.stringify(expectedSubcommands)) failures.push("init contract subcommands must be help, discover, package, skill in order");
-if (JSON.stringify(contract.subcommands.package.options) !== JSON.stringify(["project", "close-editor", "check", "timeout-ms"])) failures.push("init package options mismatch");
+if (JSON.stringify(contract.subcommands.package.options) !== JSON.stringify(["project", "close-editor", "hot", "check", "timeout-ms"])) failures.push("init package options mismatch");
 if (JSON.stringify(contract.subcommands.skill.options) !== JSON.stringify(["agent", "scope", "workspace", "target", "check", "timeout-ms"])) failures.push("init skill options mismatch");
 if (JSON.stringify(contract.subcommands.skill.requiredAnyOf) !== JSON.stringify([["target"], ["agent", "scope"]])) failures.push("init skill required input modes mismatch");
 if (JSON.stringify(contract.subcommands.skill.agents) !== JSON.stringify([".agents", "claude"])) failures.push("init skill agent enum mismatch");

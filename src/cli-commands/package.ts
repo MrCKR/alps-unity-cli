@@ -26,7 +26,10 @@ async function handleInitPackage(args: string[], flags: Record<string, string | 
   if (timeoutMs === undefined) return failure(requestId, "E_INIT_TIMEOUT_INVALID", "init package --timeout-ms must be a positive integer.", ["Pass --timeout-ms <positive-integer>."], { option: "--timeout-ms" });
   const check = getBoolean(flags, "check");
   const closeEditor = getBoolean(flags, "close-editor");
+  const hot = getBoolean(flags, "hot");
   if (check && closeEditor) return failure(requestId, "E_INIT_CLOSE_EDITOR_CHECK_FORBIDDEN", "init package --check is read-only and cannot close Unity Editor.", ["Remove either --check or --close-editor."], { option: "--close-editor" });
+  if (check && hot) return failure(requestId, "E_INIT_HOT_CHECK_FORBIDDEN", "init package --check is read-only and cannot perform a hot install.", ["Remove either --check or --hot."], { option: "--hot" });
+  if (hot && closeEditor) return failure(requestId, "E_INIT_HOT_CLOSE_EDITOR_CONFLICT", "init package cannot both keep the Editor open and close it.", ["Choose either --hot or --close-editor."], { option: "--hot" });
   const absoluteDeadlineMs = Date.now() + timeoutMs;
   const remaining = (): number => Math.max(0, absoluteDeadlineMs - Date.now());
   try {
@@ -53,8 +56,12 @@ async function handleInitPackage(args: string[], flags: Record<string, string | 
     }
 
     let editorClose: { status: "not-running" | "closed"; requested: number } | undefined;
-    if (editors.length > 0 && !closeEditor) {
-      throw new PackageManagerError("E_INIT_EDITOR_RUNNING", "The exact target Unity project is open and may hold Bridge package files.", ["Ask the user whether to close this exact Unity project, then rerun with --close-editor after approval."], { editorCount: editors.length });
+    if (editors.length > 0 && !closeEditor && !hot) {
+      throw new PackageManagerError("E_INIT_EDITOR_RUNNING", "The exact target Unity project is open and may hold Bridge package files.", [
+        "Keep the Editor open and update in place: rerun with --hot, then run `unitycli tools run editor.refresh` so the running Editor imports the replaced package, and verify with `unitycli init package --project <UnityProject> --check`.",
+        "Or ask the user once whether this exact Unity project may be closed normally, then rerun with --close-editor after approval.",
+        "Never force-terminate Unity and never let the installer start or restart the Editor.",
+      ], { editorCount: editors.length });
     }
     if (closeEditor) {
       if (editors.length === 0) editorClose = { status: "not-running", requested: 0 };
@@ -89,12 +96,18 @@ async function handleInitPackage(args: string[], flags: Record<string, string | 
       projectPath: identity.canonicalProjectPath,
       projectIdentity: identity,
       ...(editorClose ? { editorClose } : {}),
+      ...(hot && editors.length > 0 ? { hotUpdate: { editorRunning: true, refreshRequired: true, refreshTool: "editor.refresh" } } : {}),
       package: { status: "installed", install, readback },
       ...(extensionRepair.repaired.length > 0 || extensionRepair.failures.length > 0 ? { extensionRepair } : {}),
-      nextActions: [
-        "Open or refresh this Unity project to import the copied Bridge package.",
-        ...(extensionRepair.repaired.length > 0 ? ["Switch focus to Unity Editor so it recompiles the refreshed extension projections before the next bridge call."] : []),
-      ],
+      nextActions: hot && editors.length > 0
+        ? [
+            "Run `unitycli tools run editor.refresh --instance <projectPath|name|alias>` so the open Editor imports the replaced package, then run `unitycli init package --project <UnityProject> --check` to verify the installed bytes.",
+            ...(extensionRepair.repaired.length > 0 ? ["Switch focus to Unity Editor so it recompiles the refreshed extension projections before the next bridge call."] : []),
+          ]
+        : [
+            "Open or refresh this Unity project to import the copied Bridge package.",
+            ...(extensionRepair.repaired.length > 0 ? ["Switch focus to Unity Editor so it recompiles the refreshed extension projections before the next bridge call."] : []),
+          ],
     }, warnings.length > 0 ? { warnings } : undefined);
   } catch (error) {
     if (error instanceof ProjectIdentityError) return failure(requestId, error.code, error.message, ["Pass the root of an existing Unity project."], error.details);

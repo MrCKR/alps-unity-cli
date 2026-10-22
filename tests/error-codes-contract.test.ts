@@ -30,6 +30,13 @@ test("the generated registry stays a projection of source, not a hand-edited lis
   for (const entry of registry.codes) {
     const semantics = registry.semantics[entry.fact];
     assert.ok(semantics, `${entry.code} must use a closed fact`);
+    const overridden = typeof (entry as { semanticsOverrideReason?: string }).semanticsOverrideReason === "string";
+    if (overridden) {
+      // 站点级 override 必须带理由，且不得改变 effectStarted 而把 effect 前拒绝说成已发生。
+      assert.ok(((entry as { semanticsOverrideReason?: string }).semanticsOverrideReason ?? "").trim().length > 0, `${entry.code} override needs a reason`);
+      assert.equal(entry.effectStarted, semantics[0], `${entry.code} override may not change effectStarted`);
+      continue;
+    }
     assert.equal(entry.effectStarted, semantics[0], `${entry.code} effectStarted must come from its fact`);
     assert.equal(entry.transient, semantics[1], `${entry.code} transient must come from its fact`);
   }

@@ -56,6 +56,7 @@ export const CLI_ARGS_SPEC: CliArgsSpec = {
     workspace: "value",
     check: "boolean",
     "close-editor": "boolean",
+    hot: "boolean",
     force: "boolean",
     all: "boolean",
     job: "boolean",
@@ -177,7 +178,7 @@ function commandOptionNames(group: string | undefined, command: string | undefin
   }
   if (group === "init") {
     if (command === "help" || command === "discover") return new Set(global);
-    if (command === "package") return new Set([...global, "project", "check", "close-editor", "timeout-ms"]);
+    if (command === "package") return new Set([...global, "project", "check", "close-editor", "hot", "timeout-ms"]);
     if (command === "skill") return new Set([...global, "agent", "scope", "workspace", "target", "check", "timeout-ms"]);
     return new Set(global);
   }
@@ -233,7 +234,7 @@ function help(): Record<string, unknown> {
       "extensions doctor [--project <path>]",
       "init help",
       "init discover",
-      "init package --project <UnityProject> [--close-editor] [--check] [--timeout-ms <n>]",
+      "init package --project <UnityProject> [--hot] [--close-editor] [--check] [--timeout-ms <n>]",
       "init skill --target <SkillDirectory> [--check] [--timeout-ms <n>]",
       "init skill --agent <.agents|claude> --scope workspace --workspace <path> [--check] [--timeout-ms <n>]",
       "init skill --agent <.agents|claude> --scope user [--check] [--timeout-ms <n>]",

@@ -14,6 +14,7 @@ const codes = entries.map((entry) => {
     fact: entry.fact,
     effectStarted: entry.effectStarted ?? "unknown",
     transient: entry.transient ?? false,
+    ...(entry.semanticsReason ? { semanticsOverrideReason: entry.semanticsReason } : {}),
     prefix: tokens[0] ?? null,
     renameTo: entry.status === "rename" && entry.fact ? entry.target : null,
     emitters: entry.files

@@ -637,8 +637,8 @@
   ],
   "counts": {
     "files": 785,
-    "codes": 1008,
-    "classified": 1008,
+    "codes": 1010,
+    "classified": 1010,
     "unclassified": 0,
     "dynamicConcatenationSites": 0
   },
@@ -5615,7 +5615,30 @@
       "code": "E_INIT_EDITOR_RUNNING",
       "fact": "RUNNING",
       "effectStarted": "false",
-      "transient": true,
+      "transient": false,
+      "semanticsOverrideReason": "Retrying without changing the Editor state can never succeed, so this code is not transient even though the RUNNING fact defaults to transient.",
+      "prefix": "INIT",
+      "renameTo": null,
+      "emitters": [
+        "src/cli-commands/package.ts"
+      ]
+    },
+    {
+      "code": "E_INIT_HOT_CHECK_FORBIDDEN",
+      "fact": "FORBIDDEN",
+      "effectStarted": "false",
+      "transient": false,
+      "prefix": "INIT",
+      "renameTo": null,
+      "emitters": [
+        "src/cli-commands/package.ts"
+      ]
+    },
+    {
+      "code": "E_INIT_HOT_CLOSE_EDITOR_CONFLICT",
+      "fact": "CONFLICT",
+      "effectStarted": "false",
+      "transient": false,
       "prefix": "INIT",
       "renameTo": null,
       "emitters": [

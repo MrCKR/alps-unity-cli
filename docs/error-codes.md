@@ -42,7 +42,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 
 | 错误码 | 含义 | 恢复 |
 |--------|------|------|
-| `E_INIT_EDITOR_RUNNING` | 准确目标Unity项目正在运行，未授权安装器关闭 | 只询问一次；用户同意后对同一项目使用`init package --close-editor` |
+| `E_INIT_EDITOR_RUNNING` | 准确目标Unity项目正在运行且本次安装未声明如何处理 | 保持Editor运行：改用`init package --hot`，再`tools run editor.refresh`并`init package --check`验证字节；只有用户更愿意关闭时才询问一次，同意后对同一项目使用`init package --close-editor`；安装器永不强杀、永不启动或重启Editor |
 | `E_EDITOR_STATE_UNVERIFIABLE` | 安装前无法严格判断准确项目的Editor进程 | 确认目标项目未在Unity中打开，再重新执行安装 |
 | `E_EDITOR_CLOSE_FAILED` | 无法向准确目标Editor发送正常关闭请求 | 用户正常关闭该项目后重新安装；不得强制终止 |
 | `E_EDITOR_CLOSE_BLOCKED` | 正常关闭后Editor仍存在，通常有未保存或modal提示 | 由用户处理Unity提示并正常关闭，再重新安装 |

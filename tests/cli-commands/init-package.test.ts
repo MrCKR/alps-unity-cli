@@ -94,6 +94,13 @@ test("init package requires explicit close authorization for a running exact Edi
     assert.equal(closeCalls, 0);
     await assert.rejects(() => readFile(join(project, "Packages", "com.alpsckr.unitycli", "package.json")), { code: "ENOENT" });
 
+    const hot = await execute(["init", "package", "--project", project, "--hot"], processRuntime);
+    assert.equal(hot.ok, true, JSON.stringify(hot));
+    assert.equal(closeCalls, 0, "--hot must never close the Editor");
+    assert.deepEqual((hot as any).data.hotUpdate, { editorRunning: true, refreshRequired: true, refreshTool: "editor.refresh" });
+    assert.match((hot as any).data.nextActions[0], /editor\.refresh/);
+    assert.equal((hot as any).data.package.readback.status, "installed");
+
     const installed = await execute(["init", "package", "--project", project, "--close-editor"], processRuntime);
     assert.equal(installed.ok, true, JSON.stringify(installed));
     assert.equal(closeCalls, 1);

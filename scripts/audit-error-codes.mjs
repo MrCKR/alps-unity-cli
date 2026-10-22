@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { classifyAll, FACT_SEMANTICS, retiredCodes } from "./lib/error-code-taxonomy.mjs";
+import { SEMANTIC_OVERRIDES } from "./lib/error-code-renames.mjs";
 
 const root = process.argv[2] ?? process.cwd();
 const registryPath = join(root, "contracts", "error-codes.json");
@@ -46,12 +47,19 @@ metrics.renameCandidates = targets.size;
 // R5 事实与语义类必须一致，登记表不得自证新的语义。
 for (const entry of registry.codes) {
   if (!entry.fact) continue;
-  const expected = FACT_SEMANTICS[entry.fact];
-  if (!expected) { failures.push({ rule: "R5-unknown-fact", count: 1, samples: [entry.code, entry.fact] }); continue; }
-  const [effectStarted, transient] = expected;
+  const base = FACT_SEMANTICS[entry.fact];
+  if (!base) { failures.push({ rule: "R5-unknown-fact", count: 1, samples: [entry.code, entry.fact] }); continue; }
+  const override = SEMANTIC_OVERRIDES[entry.code];
+  if (override && !String(override.reason ?? "").trim())
+    failures.push({ rule: "R5-override-without-reason", count: 1, samples: [entry.code] });
+  const effectStarted = override?.effectStarted ?? base[0];
+  const transient = override?.transient ?? base[1];
   if (entry.effectStarted !== effectStarted || entry.transient !== transient)
     failures.push({ rule: "R5-semantics-mismatch", count: 1, samples: [entry.code] });
+  if (override && !entry.semanticsOverrideReason)
+    failures.push({ rule: "R5-override-not-recorded", count: 1, samples: [entry.code] });
 }
+metrics.semanticsOverrides = Object.keys(SEMANTIC_OVERRIDES).length;
 
 // R6 码必须能被静态枚举：禁止用运行时参数拼接。
 if (dynamicSites.length > 0) failures.push({ rule: "R6-runtime-concatenated-code", count: dynamicSites.length, samples: [...new Set(dynamicSites.map((site) => `${site.file}${site.suffix}`))].slice(0, 20) });

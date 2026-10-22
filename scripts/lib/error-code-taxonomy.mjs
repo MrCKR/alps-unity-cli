@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, relative, sep } from "node:path";
-import { FACT_ADDITIONS, RETIRED_CODES, SYNONYM_TARGETS } from "./error-code-renames.mjs";
+import { FACT_ADDITIONS, RETIRED_CODES, SEMANTIC_OVERRIDES, SYNONYM_TARGETS } from "./error-code-renames.mjs";
 
 /** 事实词表（闭集，按长度优先匹配）；末位 token 序列命中即视为该事实。 */
 const BASE_FACTS = [
@@ -216,13 +216,22 @@ export function classifyCode(tokens) {
   return { fact: null, subjectTokens: tokens };
 }
 
+/** 事实默认语义 + 站点 override（override 必须带理由）。 */
+function semanticsFor(code, fact) {
+  const base = FACT_SEMANTICS[fact] ?? ["unknown", false];
+  const override = SEMANTIC_OVERRIDES[code];
+  return override
+    ? { effectStarted: override.effectStarted ?? base[0], transient: override.transient ?? base[1], reason: override.reason }
+    : { effectStarted: base[0], transient: base[1], reason: null };
+}
+
 /** 一条码的分类结果：目标名、事实、语义与原因。 */
 export function classifyOne(code) {
   const tokens = code.replace(/^E_/, "").split("_").filter(Boolean);
   const parsed = classifyCode(tokens);
   if (parsed.fact) {
-    const semantics = FACT_SEMANTICS[parsed.fact] ?? ["unknown", false];
-    return { code, target: code, fact: parsed.fact, effectStarted: semantics[0], transient: semantics[1], status: "conforming", reason: "fact-closed" };
+    const semantics = semanticsFor(code, parsed.fact);
+    return { code, target: code, fact: parsed.fact, effectStarted: semantics.effectStarted, transient: semantics.transient, semanticsReason: semantics.reason, status: "conforming", reason: "fact-closed" };
   }
   const last = tokens[tokens.length - 1];
   const lastTwo = tokens.slice(-2).join("_");
@@ -234,8 +243,8 @@ export function classifyOne(code) {
     const target = ["E", ...tokens.slice(0, -1), SYNONYM_TARGETS[last]].join("_");
     const targetTokens = target.replace(/^E_/, "").split("_").filter(Boolean);
     const parsedTarget = classifyCode(targetTokens);
-    const semantics = parsedTarget.fact ? FACT_SEMANTICS[parsedTarget.fact] : null;
-    return { code, target, fact: parsedTarget.fact, effectStarted: semantics?.[0] ?? "unknown", transient: semantics?.[1] ?? false, status: "rename", reason: "synonym" };
+    const semantics = parsedTarget.fact ? semanticsFor(code, parsedTarget.fact) : null;
+    return { code, target, fact: parsedTarget.fact, effectStarted: semantics?.effectStarted ?? "unknown", transient: semantics?.transient ?? false, semanticsReason: semantics?.reason ?? null, status: "rename", reason: "synonym" };
   }
   return { code, target: null, fact: null, effectStarted: "unknown", transient: false, status: "residual", reason: "fact-not-in-closed-set", tail: tokens.slice(-3).join("_") };
 }
