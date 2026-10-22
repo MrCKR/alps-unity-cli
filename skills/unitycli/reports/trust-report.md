@@ -3,7 +3,7 @@
 Status: governed local package
 Owner: alps-unity-cli maintainers
 Review cadence: per-release
-Reviewed: 2026-10-22 for release 0.8.2
+Reviewed: 2026-10-22 for release 0.9.0
 
 ## Scope
 
@@ -35,7 +35,7 @@ The Skill does not add confirmation, intent review, or a predefined operation ra
 
 ## Verified Evidence
 
-Verified for release 0.8.2 (2026-10-22):
+Verified for release 0.9.0 (2026-10-22):
 
 - Full repository suite: 1392/1392 PASS.
 - Skill governance and projection: the installer projects byte-identical runtime bundles for both hosts; the installed Skill keeps its `experience/` records across an update and still passes the integrity check.
