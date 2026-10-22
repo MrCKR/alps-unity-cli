@@ -235,10 +235,10 @@ describe("ERROR_CODES taxonomy", () => {
 
   it("includes runtime error codes", () => {
     assert.equal(ERROR_CODES.E_RUNTIME_SESSION_STALE, "E_RUNTIME_SESSION_STALE");
-    assert.equal(ERROR_CODES.E_RUNTIME_NOT_READY, "E_RUNTIME_NOT_READY");
+    assert.equal(ERROR_CODES.E_RUNTIME_UNAVAILABLE, "E_RUNTIME_UNAVAILABLE");
     assert.equal(ERROR_CODES.E_RUNTIME_TIMEOUT, "E_RUNTIME_TIMEOUT");
     assert.equal(TRANSIENT_ERROR_CODES.has(ERROR_CODES.E_RUNTIME_SESSION_STALE), false);
-    assert.equal(TRANSIENT_ERROR_CODES.has(ERROR_CODES.E_RUNTIME_NOT_READY), true);
+    assert.equal(TRANSIENT_ERROR_CODES.has(ERROR_CODES.E_RUNTIME_UNAVAILABLE), true);
   });
 });
 
@@ -336,22 +336,22 @@ describe("DEFAULT_RETRY_AFTER_MS", () => {
 });
 // ─── Runtime Error Codes ───
 
-describe("E_RUNTIME_NOT_READY is transient with retryAfterMs=3000", () => {
-  it("E_RUNTIME_NOT_READY is in TRANSIENT_ERROR_CODES", () => {
-    assert.ok(TRANSIENT_ERROR_CODES.has(ERROR_CODES.E_RUNTIME_NOT_READY), "E_RUNTIME_NOT_READY should be transient");
+describe("E_RUNTIME_UNAVAILABLE is transient with retryAfterMs=3000", () => {
+  it("E_RUNTIME_UNAVAILABLE is in TRANSIENT_ERROR_CODES", () => {
+    assert.ok(TRANSIENT_ERROR_CODES.has(ERROR_CODES.E_RUNTIME_UNAVAILABLE), "E_RUNTIME_UNAVAILABLE should be transient");
   });
 
-  it("E_RUNTIME_NOT_READY failure envelope has transient=true and retryAfterMs=3000", () => {
+  it("E_RUNTIME_UNAVAILABLE failure envelope has transient=true and retryAfterMs=3000", () => {
     const requestId = createRequestId();
-    const result = failure(requestId, "E_RUNTIME_NOT_READY", "Runtime is not ready (Play Mode not active).", ["Wait for Play Mode to become active and retry."]);
+    const result = failure(requestId, "E_RUNTIME_UNAVAILABLE", "Runtime is not ready (Play Mode not active).", ["Wait for Play Mode to become active and retry."]);
     assert.ok(!result.ok);
     assert.equal(result.error?.transient, true);
     assert.equal(result.error?.retryAfterMs, 3000);
-    assert.equal(result.error?.code, "E_RUNTIME_NOT_READY");
+    assert.equal(result.error?.code, "E_RUNTIME_UNAVAILABLE");
   });
 
-  it("DEFAULT_RETRY_AFTER_MS has E_RUNTIME_NOT_READY=3000", () => {
-    assert.equal(DEFAULT_RETRY_AFTER_MS[ERROR_CODES.E_RUNTIME_NOT_READY], 3000);
+  it("DEFAULT_RETRY_AFTER_MS has E_RUNTIME_UNAVAILABLE=3000", () => {
+    assert.equal(DEFAULT_RETRY_AFTER_MS[ERROR_CODES.E_RUNTIME_UNAVAILABLE], 3000);
   });
 });
 

@@ -113,7 +113,7 @@ test("catalog failure leaves exact operability execution and describe routable b
     ] as const) {
       const execution = await dispatchTool(name, undefined, { input: JSON.stringify(input), instance: "missing" }, { dataDir }, `req_catalog_${name.replaceAll(".", "_")}`);
       assert.equal(execution.ok, false, name);
-      if (!execution.ok) assert.notEqual(execution.error.code, "E_TOOL_NOT_FOUND_FOR_TARGET", name);
+      if (!execution.ok) assert.notEqual(execution.error.code, "E_TOOL_TARGET_NOT_FOUND", name);
 
       const describe = await handleToolsCommand("describe", [name], {}, { dataDir }, `req_catalog_describe_${name.replaceAll(".", "_")}`);
       assert.equal(describe.ok, true, JSON.stringify(describe));

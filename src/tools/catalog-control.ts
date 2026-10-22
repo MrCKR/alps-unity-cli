@@ -173,7 +173,7 @@ export async function projectCatalogDescribe(
   if (!name) return failure(requestId, "TOOLS_DESCRIBE_NAME_REQUIRED", "Pass a tool name: unitycli tools describe <tool>.", ["Run unitycli tools group to see tool groups."]);
   const resolved = await resolveCatalogTool(name, flags, runtime, requestId, absoluteDeadlineMs);
   if (!resolved.ok) return resolved;
-  if (!resolved.tool) return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found for target: ${name}.`, [
+  if (!resolved.tool) return failure(requestId, "E_TOOL_TARGET_NOT_FOUND", `Tool not found for target: ${name}.`, [
     "Run unitycli tools group to see tool groups.",
     "Run unitycli tools search <k1|k2|...> to find related tools.",
   ]);

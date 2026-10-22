@@ -94,7 +94,8 @@ const STALE_SNAKE_CASE = [
 
 // Must use correct error code names
 const STALE_ERROR_CODES = [
-  "E_PLAYMODE_NOT_READY",   // must be E_RUNTIME_NOT_READY
+  "E_PLAYMODE_NOT_READY",   // must be E_RUNTIME_UNAVAILABLE
+  "E_RUNTIME_NOT_READY",     // must be E_RUNTIME_UNAVAILABLE
 ];
 
 // ── Tests ──────────────────────────────────────────────────
@@ -211,13 +212,13 @@ test("skill does not use stale CLI parameter/field/error names", () => {
     `skill must use retryAfterMs (camelCase), not ${LEGACY_RETRY_AFTER_MS_FIELD}`
   );
 
-  // E_RUNTIME_NOT_READY, not E_PLAYMODE_NOT_READY
-  // Allow in warning table
-  const playmodeMatches = skill.match(/E_PLAYMODE_NOT_READY/g);
-  const playmodeAllowed = (skill.match(/使用 `E_PLAYMODE_NOT_READY`/g) ?? []).length;
+  // E_RUNTIME_UNAVAILABLE, not E_PLAYMODE_NOT_READY or E_RUNTIME_NOT_READY
+  const stalePlayModeCode = /E_(?:PLAYMODE_NOT_READY|RUNTIME_NOT_READY|PLAYMODE_UNAVAILABLE)/g;
+  const playmodeMatches = skill.match(stalePlayModeCode);
+  const playmodeAllowed = (skill.match(/使用 `E_(?:PLAYMODE_NOT_READY|RUNTIME_NOT_READY|PLAYMODE_UNAVAILABLE)`/g) ?? []).length;
   assert.ok(
     (playmodeMatches?.length ?? 0) - playmodeAllowed <= 0,
-    `skill must use E_RUNTIME_NOT_READY, not E_PLAYMODE_NOT_READY outside warning context`
+    `skill must use E_RUNTIME_UNAVAILABLE, not a playmode-specific availability code outside warning context`
   );
 });
 
@@ -241,18 +242,19 @@ test("docs use camelCase for error response fields", () => {
       violations.push(`${file}: uses stale "${LEGACY_RETRY_AFTER_MS_FIELD}" (should be "retryAfterMs")`);
     }
 
-    // E_PLAYMODE_NOT_READY → E_RUNTIME_NOT_READY
-    if (content.includes("E_PLAYMODE_NOT_READY")) {
+    // E_PLAYMODE_NOT_READY / E_RUNTIME_NOT_READY / E_PLAYMODE_UNAVAILABLE → E_RUNTIME_UNAVAILABLE
+    const stalePlayModeCode = /E_(?:PLAYMODE_NOT_READY|RUNTIME_NOT_READY|PLAYMODE_UNAVAILABLE)/;
+    if (stalePlayModeCode.test(content)) {
       const lines = content.split("\n");
       let staleCount = 0;
       for (const line of lines) {
-        if (!line.includes("E_PLAYMODE_NOT_READY")) continue;
+        if (!stalePlayModeCode.test(line)) continue;
         const trimmed = line.trim().toLowerCase();
         if (trimmed.includes("不是") || trimmed.includes("不要") || trimmed.includes("do not") || trimmed.includes("instead of") || (trimmed.includes("使用 ") && trimmed.includes(" | "))) continue;
         staleCount++;
       }
       if (staleCount > 0) {
-        violations.push(`${file}: uses "E_PLAYMODE_NOT_READY" instead of "E_RUNTIME_NOT_READY" (outside warning context)`);
+        violations.push(`${file}: uses a retired playmode availability code instead of "E_RUNTIME_UNAVAILABLE" (outside warning context)`);
       }
     }
   }

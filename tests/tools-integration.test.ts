@@ -358,7 +358,7 @@ test("generation-bound cursor rejects a changed catalog and multi-target output 
     makeLiveTool({ name: "fixture.runtime", summary: "Order hit runtime.", description: "Emit one runtime-scoped catalog item.", group: "fixture", target: "runtime" }),
     makeLiveTool({ name: "fixture.alpha", summary: "Order hit alpha.", description: "Emit one alpha-ordered catalog item.", group: "fixture" }),
   ];
-  const runtimeOverlay = { ...editorTools[1], available: false as const, unavailableReason: "E_RUNTIME_NOT_READY: Enter Play Mode." };
+  const runtimeOverlay = { ...editorTools[1], available: false as const, unavailableReason: "E_RUNTIME_UNAVAILABLE: Enter Play Mode." };
   const runtime = { ...connected, projectTools: editorTools, runtimeTools: [runtimeOverlay] };
   const first = await execute(["tools", "search", "order hit", "--page-size", "1"], runtime as never);
   assert.equal(first.ok, true, JSON.stringify(first));
@@ -377,7 +377,7 @@ test("former discovery Tool identities are unavailable through tools run", async
   for (const name of ["tools.describe", "tools.group", "tools.group-list", "tools.search"]) {
     const result = await execute(["tools", "run", name, "--input", "{}"], connected as never);
     assert.equal(result.ok, false, name);
-    if (!result.ok) assert.equal(result.error.code, "E_TOOL_NOT_FOUND_FOR_TARGET", name);
+    if (!result.ok) assert.equal(result.error.code, "E_TOOL_TARGET_NOT_FOUND", name);
   }
 });
 
@@ -385,7 +385,7 @@ test("unknown exact name returns one stable not-found terminal", async () => {
   const result = await execute(["tools", "describe", "missing.exact-tool"], { ...connected, projectTools: [], runtimeTools: [] } as never);
   assert.equal(result.ok, false);
   if (!result.ok) {
-    assert.equal(result.error.code, "E_TOOL_NOT_FOUND_FOR_TARGET");
+    assert.equal(result.error.code, "E_TOOL_TARGET_NOT_FOUND");
     assert.equal(result.error.transient, false);
     assert.equal(result.error.retryAfterMs, 0);
   }
@@ -523,7 +523,7 @@ test("target both keeps default editor availability when runtime is not ready", 
     target: "both",
     available: true,
   });
-  const runtime = { ...editor, available: false, unavailableReason: "E_RUNTIME_NOT_READY: Enter Play Mode before executing this Tool." };
+  const runtime = { ...editor, available: false, unavailableReason: "E_RUNTIME_UNAVAILABLE: Enter Play Mode before executing this Tool." };
   const result = await execute(["tools", "describe", "sample.both"], {
     ...connected,
     projectTools: [editor],
@@ -896,14 +896,14 @@ test("unknown tools and subcommands return stable errors with current search gui
   for (const name of ["missing.tool", "docs.list", "docs.topic"]) {
     const missing = await execute(["tools", "run", name, "--input", "{}"], connected as never);
     assert.ok(!missing.ok);
-    assert.equal(missing.error?.code, "E_TOOL_NOT_FOUND_FOR_TARGET");
+    assert.equal(missing.error?.code, "E_TOOL_TARGET_NOT_FOUND");
     assert.ok(missing.error?.nextActions.includes("Run unitycli tools search <k1|k2|...> to find related tools."));
   }
 
   for (const argv of [["tools", "run"], ["tools", "describe", "missing.tool"]]) {
     const missing = await execute(argv, connected as never);
     assert.ok(!missing.ok);
-    assert.equal(missing.error?.code, "E_TOOL_NOT_FOUND_FOR_TARGET");
+    assert.equal(missing.error?.code, "E_TOOL_TARGET_NOT_FOUND");
     assert.ok(missing.error?.nextActions.some((action) => action.includes("tools search <k1|k2|...>")));
   }
 
@@ -943,6 +943,6 @@ test("live catalog name conflicts surface as E_TOOL_NAME_CONFLICT instead of not
   if (resolved.ok) return;
   assert.equal(resolved.error.code, "E_TOOL_NAME_CONFLICT");
   assert.deepEqual(calls, ["catalog.editor.describe"]);
-  assert.doesNotMatch(JSON.stringify(resolved), /E_TOOL_NOT_FOUND|E_TOOL_NOT_FOUND_FOR_TARGET/);
+  assert.doesNotMatch(JSON.stringify(resolved), /E_TOOL_NOT_FOUND|E_TOOL_TARGET_NOT_FOUND/);
   assert.match(JSON.stringify(resolved), /automation_get_battle_state/);
 });

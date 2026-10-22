@@ -210,7 +210,7 @@ test("component.remove validates RequireComponent dependencies before its effect
   const source = await (await import("node:fs/promises")).readFile(new URL("../unitypkg/Editor/Tools/component/remove.cs", import.meta.url), "utf8");
   assert.match(source, /EnsureDependenciesRemain\(gameObject, targets\)[\s\S]*ctx\.CommitEffect\(\)/);
   assert.match(source, /GetCustomAttributes\(typeof\(RequireComponent\), true\)/);
-  assert.match(source, /E_COMPONENT_REMOVE_DEPENDENCY/);
+  assert.match(source, /E_COMPONENT_REMOVE_CONFLICT/);
   assert.match(source, /targetIds\.Any\(id => EditorUtility\.InstanceIDToObject\(id\) != null\)/);
   assert.doesNotMatch(source, /observedSingleTarget\.GetComponent\(componentName\) != null/);
 });

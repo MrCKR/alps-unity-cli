@@ -68,8 +68,8 @@ test("final init invalid inputs fail before effects with stable closed errors", 
       { argv: ["init", "skill", "--agent", ".agents"], code: "E_INIT_SCOPE_INVALID" },
       { argv: ["init", "skill", "--agent", ".agents", "--scope", "workspace"], code: "E_INIT_WORKSPACE_REQUIRED" },
       { argv: ["init", "skill", "--agent", ".agents", "--scope", "user", "--workspace", root], code: "E_INIT_WORKSPACE_FORBIDDEN" },
-      { argv: ["init", "help", "--check"], code: "E_UNKNOWN_OPTION" },
-      { argv: ["init", "discover", "--project", project], code: "E_UNKNOWN_OPTION" },
+      { argv: ["init", "help", "--check"], code: "E_SHELL_OPTION_UNKNOWN" },
+      { argv: ["init", "discover", "--project", project], code: "E_SHELL_OPTION_UNKNOWN" },
     ];
     for (const item of cases) {
       const result = await execute(item.argv, runtime);

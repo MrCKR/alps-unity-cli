@@ -101,7 +101,7 @@ test("the artifact budget is declared only in DebugLimits", async () => {
 test("refusal reports occupancy and never reloads the domain automatically", async () => {
   const owner = await read(OWNER);
 
-  assert.match(owner, /internal const string BudgetExhaustedCode = "E_HOOK_COMPILE_BUDGET_EXHAUSTED";/);
+  assert.match(owner, /internal const string BudgetExhaustedCode = "E_COMPILER_BUDGET_EXHAUSTED";/);
   assert.match(owner, /internal const string ReloadSuggestion = "[^"]*Reload the Unity domain/);
   // describe 与实现共用同一上限来源：不仅公布数量/字节，还公布单产物固定开销与可回收、可复用的事实。
   assert.match(owner, /BudgetExhaustedCode/);

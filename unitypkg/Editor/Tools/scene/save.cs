@@ -80,7 +80,7 @@ namespace UnityCli
         {
             var scene = SceneManager.GetActiveScene();
             if (!scene.IsValid() || !scene.isLoaded)
-                throw Error("E_SCENE_NOT_LOADED", "scene.save requires one valid loaded active scene.", null);
+                throw Error("E_SCENE_UNAVAILABLE", "scene.save requires one valid loaded active scene.", null);
             var path = SceneToolSupport.ResolveScenePath(request.Path ?? request.Name, false);
             if (string.IsNullOrEmpty(path)) path = SceneToolSupport.NormalizeAssetPath(scene.path);
             if (string.IsNullOrEmpty(path))

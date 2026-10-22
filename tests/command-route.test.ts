@@ -231,7 +231,7 @@ test("command名称选择保持native exact优先且不做相似能力映射", a
   assert.ok(explicit.ok, JSON.stringify(explicit));
   assert.deepEqual(requests.map((request) => (request.input as { name: string }).name), ["eval", "UnityPipeline_eval"]);
   assert.equal(missing.ok, false);
-  if (!missing.ok) assert.equal(missing.error.code, "E_TOOL_NOT_FOUND_FOR_TARGET");
+  if (!missing.ok) assert.equal(missing.error.code, "E_TOOL_TARGET_NOT_FOUND");
 });
 
 test("online command resolution uses exact Runtime describe without injected projectTools or extra business posts", async () => {
@@ -332,8 +332,8 @@ test("online command resolution uses exact Runtime describe without injected pro
 
 test("command在effect前拒绝未知、缺值、重复与positional溢出", async () => {
   const cases = [
-    { argv: ["command", "eval", "--unknown", "x"], code: "E_UNKNOWN_OPTION" },
-    { argv: ["command", "eval", "--displayName", "x"], code: "E_UNKNOWN_OPTION" },
+    { argv: ["command", "eval", "--unknown", "x"], code: "E_SHELL_OPTION_UNKNOWN" },
+    { argv: ["command", "eval", "--displayName", "x"], code: "E_SHELL_OPTION_UNKNOWN" },
     { argv: ["command", "eval", "--count", "--pdb"], code: "E_OPTION_VALUE_REQUIRED" },
     { argv: ["command", "eval", "--code", "a", "--code", "b"], code: "E_SCHEMA_INVALID" },
     { argv: ["command", "eval", "code", "1", "true", "1.5", "[]", "{}", "null", "display", "null", "extra"], code: "E_SCHEMA_INVALID" },

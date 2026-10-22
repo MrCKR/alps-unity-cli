@@ -187,7 +187,7 @@ namespace UnityCli
             var has = owner.GetMethod("Has" + suffix, new[] { typeof(string) });
             var get = owner.GetMethod("Get" + suffix, new[] { typeof(string) });
             if (set == null || has == null || get == null || get.ReturnType != valueType || has.ReturnType != typeof(bool)) throw new UnityCliBridge.BridgeCommandException("E_VFX_PARAMETER_API_UNSUPPORTED", "VisualEffect typed parameter API is unavailable for " + parameterType + ".", "Check the installed Visual Effect Graph package version.");
-            if (!(bool)has.Invoke(component, new object[] { name })) throw new UnityCliBridge.BridgeCommandException("E_VFX_PARAMETER_NOT_EXPOSED", "VisualEffect parameter is not exposed: " + name, "Expose a parameter with the requested name and type in the VFX Graph.");
+            if (!(bool)has.Invoke(component, new object[] { name })) throw new UnityCliBridge.BridgeCommandException("E_VFX_PARAMETER_UNAVAILABLE", "VisualEffect parameter is not exposed: " + name, "Expose a parameter with the requested name and type in the VFX Graph.");
         }
 
         private static void Invoke(Type owner, Component component, string methodName, System.Type[] signature, params object[] args)
@@ -206,7 +206,7 @@ namespace UnityCli
             if (has == null || get == null)
                 throw new UnityCliBridge.BridgeCommandException("E_VFX_PARAMETER_API_UNSUPPORTED", "VisualEffect readback API is unavailable for " + typeName + ".", "Check the installed Visual Effect Graph package version.");
             if (!(bool)has.Invoke(component, new object[] { name }))
-                throw new UnityCliBridge.BridgeCommandException("E_VFX_PARAMETER_NOT_EXPOSED", "VisualEffect parameter is not exposed: " + name, "Expose a parameter with the requested name and type in the VFX Graph.");
+                throw new UnityCliBridge.BridgeCommandException("E_VFX_PARAMETER_UNAVAILABLE", "VisualEffect parameter is not exposed: " + name, "Expose a parameter with the requested name and type in the VFX Graph.");
             var actual = get.Invoke(component, new object[] { name });
             if (!Equals(actual, expected))
                 throw new UnityCliBridge.BridgeCommandException("E_VFX_PARAMETER_VERIFY_FAILED", "VisualEffect parameter did not retain the requested value: " + name, "Check the parameter type and value in the VFX Graph.");

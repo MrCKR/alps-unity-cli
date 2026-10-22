@@ -66,7 +66,7 @@ test("arity errors fail before command dispatch", async () => {
 
   const unknown = await execute(["--internal-route", "tools", "group"], runtime);
   assert.equal(unknown.ok, false);
-  assert.equal(unknown.error.code, "E_UNKNOWN_OPTION");
+  assert.equal(unknown.error.code, "E_SHELL_OPTION_UNKNOWN");
 });
 
 test("global value options are equivalent before and after commands", async () => {
@@ -83,11 +83,11 @@ test("generic and removed output format options are rejected", async () => {
   for (const value of ["json", "text", "tsv", "ndjson"]) {
     const result = await execute(["tools", "group", "--format", value], runtime);
     assert.equal(result.ok, false);
-    assert.equal(result.error.code, "E_UNKNOWN_OPTION");
+    assert.equal(result.error.code, "E_SHELL_OPTION_UNKNOWN");
   }
   const removedRaw = await execute(["tools", "group", "--raw"], runtime);
   assert.equal(removedRaw.ok, false);
-  assert.equal(removedRaw.error.code, "E_UNKNOWN_OPTION");
+  assert.equal(removedRaw.error.code, "E_SHELL_OPTION_UNKNOWN");
 });
 
 test("known options are rejected outside their declared route", async () => {
@@ -98,7 +98,7 @@ test("known options are rejected outside their declared route", async () => {
   ]) {
     const result = await execute(argv, runtime);
     assert.equal(result.ok, false);
-    assert.equal(result.error.code, "E_UNKNOWN_OPTION");
+    assert.equal(result.error.code, "E_SHELL_OPTION_UNKNOWN");
   }
 });
 
@@ -111,7 +111,7 @@ test("unknown commands and options return a closed public error envelope", async
 
   const option = await execute(["tools", "group", "--internal-route", "x"], runtime);
   assert.ok(!option.ok);
-  assert.equal(option.error?.code, "E_UNKNOWN_OPTION");
+  assert.equal(option.error?.code, "E_SHELL_OPTION_UNKNOWN");
 
   for (const argv of [
     ["tools", "run", "docs.get", "--fingerprint-mode", "warn"],
@@ -120,7 +120,7 @@ test("unknown commands and options return a closed public error envelope", async
   ]) {
     const fingerprintMode = await execute(argv, runtime);
     assert.ok(!fingerprintMode.ok);
-    assert.equal(fingerprintMode.error?.code, "E_UNKNOWN_OPTION");
+    assert.equal(fingerprintMode.error?.code, "E_SHELL_OPTION_UNKNOWN");
   }
 });
 

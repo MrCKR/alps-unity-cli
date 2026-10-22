@@ -59,7 +59,7 @@ test("init help reads no workspace files and rejects additional input", async ()
     for (const argv of [["init", "help", "extra"], ["init", "help", "--project", root], ["init", "help", "--check"]]) {
       const invalid = await execute(argv, { dataDir: join(root, "data") } as never);
       assert.equal(invalid.ok, false, argv.join(" "));
-      assert.ok(["E_INIT_ARGUMENT_UNEXPECTED", "E_UNKNOWN_OPTION"].includes(invalid.error.code));
+      assert.ok(["E_INIT_ARGUMENT_UNEXPECTED", "E_SHELL_OPTION_UNKNOWN"].includes(invalid.error.code));
     }
     assert.deepEqual(await tree(root), before);
   } finally {

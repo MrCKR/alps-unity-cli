@@ -1323,7 +1323,7 @@ namespace UnityCli
         {
             if (operation == null || operation.Failure == null) return false;
             return string.Equals(operation.Failure.Code, "E_CODE_COMPILE_FAILED", StringComparison.Ordinal)
-                || string.Equals(operation.Failure.Code, "E_DEBUG_COMPILE_BUDGET_EXCEEDED", StringComparison.Ordinal);
+                || string.Equals(operation.Failure.Code, "E_COMPILER_BUDGET_EXHAUSTED", StringComparison.Ordinal);
         }
 
         /// <summary>

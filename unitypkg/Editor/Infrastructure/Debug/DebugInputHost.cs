@@ -823,7 +823,7 @@ namespace UnityCli
             var failure = DebugTriggerBudget.TryPlan(sessionId, DebugTriggerBudget.KindInput, planId, out used);
             if (failure == null) return;
             throw new BridgeCommandException(
-                "E_DEBUG_TRIGGER_BUDGET_EXCEEDED",
+                "E_DEBUG_TRIGGER_BUDGET_EXHAUSTED",
                 "The planned injection and input budget of this session is exhausted, so the dispatch was refused before any effect.",
                 new Dictionary<string, object>
                 {

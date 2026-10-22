@@ -855,7 +855,7 @@ namespace UnityCli
         private static string ProjectToolUnavailableForCatalog(RegisteredToolDescriptor definition, bool runtimeOnly)
         {
             return runtimeOnly && !playModeReady
-                ? "E_RUNTIME_NOT_READY: Enter Play Mode before executing this Tool."
+                ? "E_RUNTIME_UNAVAILABLE: Enter Play Mode before executing this Tool."
                 : ToolUnavailableReason(definition);
         }
 
@@ -1136,7 +1136,7 @@ namespace UnityCli
         private static BridgeCommandException RequestBudgetExceeded(string toolName, string dimension)
         {
             return new BridgeCommandException(
-                "E_REQUEST_BUDGET_EXCEEDED",
+                "E_REQUEST_BUDGET_LIMIT_EXCEEDED",
                 "Tool " + toolName + " exhausted its request-wide Unity main-thread budget before a complete result was available.",
                 new Dictionary<string, object> { { "toolName", toolName }, { "dimension", dimension } },
                 new[]
@@ -1227,7 +1227,7 @@ namespace UnityCli
         private static string ToolUnavailableReason(RegisteredToolDescriptor definition)
         {
             if (definition.Target == "runtime" || definition.PlayModeSupport == "runtime-only")
-                return "E_RUNTIME_NOT_READY: Enter Play Mode before executing this Tool.";
+                return "E_RUNTIME_UNAVAILABLE: Enter Play Mode before executing this Tool.";
             if (definition.PlayModeSupport == "editor-only" && IsPlayingOrWillChangePlaymodeNow())
                 return "E_TOOL_PLAYMODE_UNAVAILABLE: Exit Play Mode before executing this editor-only Tool.";
             if (BuildProfileApiRequired(definition) && BuildToolSupport.BuildProfileType() == null)

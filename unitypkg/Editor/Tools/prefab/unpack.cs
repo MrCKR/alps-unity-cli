@@ -52,7 +52,7 @@ namespace UnityCli
             }
             if (!PrefabUtility.IsPartOfPrefabInstance(gameObject))
             {
-                throw new UnityCliBridge.BridgeCommandException("E_NOT_PREFAB_INSTANCE", gameObject.name + " is not a prefab instance.", "Pass a GameObject that is a prefab instance.");
+                throw new UnityCliBridge.BridgeCommandException("E_PREFAB_INSTANCE_NOT_FOUND", gameObject.name + " is not a prefab instance.", "Pass a GameObject that is a prefab instance.");
             }
             if (ctx.DryRun)
             {

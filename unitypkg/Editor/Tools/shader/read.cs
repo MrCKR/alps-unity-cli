@@ -60,7 +60,7 @@ namespace UnityCli
             }
             catch (Exception exception)
             {
-                throw new UnityCliBridge.BridgeCommandException("E_IO_ERROR", "Failed to read Shader file: " + exception.Message, "Check file encoding and permissions: " + path);
+                throw new UnityCliBridge.BridgeCommandException("E_SHELL_IO_ERROR", "Failed to read Shader file: " + exception.Message, "Check file encoding and permissions: " + path);
             }
             var offset = Math.Max(0, request.Offset ?? 0);
             var maxBytes = Math.Max(1, Math.Min(request.MaxBytes ?? 65536, 1024 * 1024));

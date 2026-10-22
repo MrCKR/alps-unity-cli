@@ -540,8 +540,8 @@ async function checkObsoleteLocalState(dataDir: string): Promise<DoctorCheck> {
     : {
         name: "obsolete_local_state",
         status: "fail",
-        message: "E_OBSOLETE_LOCAL_STATE: obsolete active-target or registry files require manual deletion.",
-        details: { code: "E_OBSOLETE_LOCAL_STATE", paths },
+        message: "E_SHELL_LOCAL_STATE_OBSOLETE: obsolete active-target or registry files require manual deletion.",
+        details: { code: "E_SHELL_LOCAL_STATE_OBSOLETE", paths },
       };
 }
 

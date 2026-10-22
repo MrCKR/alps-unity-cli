@@ -159,7 +159,7 @@ namespace UnityCli
             }
             catch (Exception exception)
             {
-                throw new UnityCliBridge.BridgeCommandException("E_IO_ERROR", "Failed to create screenshot output directory: " + exception.Message);
+                throw new UnityCliBridge.BridgeCommandException("E_SHELL_IO_ERROR", "Failed to create screenshot output directory: " + exception.Message);
             }
         }
 

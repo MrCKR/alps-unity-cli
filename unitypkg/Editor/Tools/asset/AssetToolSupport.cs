@@ -141,7 +141,7 @@ namespace UnityCli
             }
             catch (Exception exception)
             {
-                throw new UnityCliBridge.BridgeCommandException("E_IO_ERROR", "Failed to write asset file: " + exception.Message, "Check destination path and permissions: " + path);
+                throw new UnityCliBridge.BridgeCommandException("E_SHELL_IO_ERROR", "Failed to write asset file: " + exception.Message, "Check destination path and permissions: " + path);
             }
         }
 

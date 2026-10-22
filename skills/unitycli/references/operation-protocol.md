@@ -42,7 +42,7 @@ Tool descriptor 常用字段：
 - `error.nextActions`
 - `error.details.blockers`
 
-`nextActions`、`transient` 和 `retryAfterMs` 都是恢复建议，不构成权限、确认或重放门。`E_SCHEMA_INVALID` 可回到 `describe` 修正输入；`E_RUNTIME_NOT_READY`、Editor/PlayMode availability 错误可结合 descriptor 和当前状态处理。
+`nextActions`、`transient` 和 `retryAfterMs` 都是恢复建议，不构成权限、确认或重放门。`E_SCHEMA_INVALID` 可回到 `describe` 修正输入；`E_RUNTIME_UNAVAILABLE`、Editor/PlayMode availability 错误可结合 descriptor 和当前状态处理。
 
 ## Timeout、任务池与调用方决策
 

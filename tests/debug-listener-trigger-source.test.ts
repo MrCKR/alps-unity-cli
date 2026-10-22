@@ -213,7 +213,7 @@ test("one injection budget owner covers listeners and inputs per session", async
   const operations = await source(hooksRoot, "MethodHookHost.Operations.cs");
   assert.match(operations, /DebugTriggerBudget\.TryPlan\(listener\.SessionId, DebugTriggerBudget\.KindListener, triggerPlanId, out used\)/);
   assert.match(operations, /private static void ReleaseTriggerPlan\(/);
-  assert.match(operations, /E_DEBUG_TRIGGER_BUDGET_EXCEEDED/);
+  assert.match(operations, /E_DEBUG_TRIGGER_BUDGET_EXHAUSTED/);
   const sessionHost = await source(debugRoot, "DebugSessionHost.cs");
   assert.match(sessionHost, /DebugTriggerBudget\.Describe\(definition\.SessionId\)/, "session views must report the same ledger");
 });
@@ -351,11 +351,11 @@ test("hook.list reports what hook.remove requires", async () => {
 test("the new trigger error codes are registered once and documented", async () => {
   const output = await readFile(join(repoRoot, "src", "output.ts"), "utf8");
   const docs = await readFile(join(repoRoot, "docs", "error-codes.md"), "utf8");
-  for (const code of ["E_DEBUG_SESSION_NOT_OPEN", "E_DEBUG_TRIGGER_BUDGET_EXCEEDED", "E_DEBUG_SIGNAL_RECURSION", "E_HOOK_OWNED_BY_PROGRAM", "E_HOOK_LISTENER_NOT_REARMED", "E_DEBUG_PLAYER_LOOP_PHASE_UNKNOWN", "E_DEBUG_PLAYER_LOOP_UNAVAILABLE", "E_DEBUG_PHASE_TRIGGER_REQUIRES_INVOCATION"]) {
+  for (const code of ["E_DEBUG_SESSION_NOT_OPEN", "E_DEBUG_TRIGGER_BUDGET_EXHAUSTED", "E_DEBUG_SIGNAL_RECURSION", "E_HOOK_OWNED_BY_PROGRAM", "E_HOOK_LISTENER_NOT_REARMED", "E_DEBUG_PLAYER_LOOP_PHASE_UNKNOWN", "E_DEBUG_PLAYER_LOOP_UNAVAILABLE", "E_DEBUG_PHASE_TRIGGER_REQUIRES_INVOCATION"]) {
     assert.match(output, new RegExp(`^  ${code}: "${code}",$`, "m"), `${code} must be registered in ERROR_CODES`);
     assert.ok(docs.includes(`\`${code}\``), `${code} must be documented`);
   }
-  const declared = new Set(["E_DEBUG_SESSION_NOT_OPEN", "E_DEBUG_TRIGGER_BUDGET_EXCEEDED", "E_DEBUG_SIGNAL_RECURSION", "E_HOOK_OWNED_BY_PROGRAM", "E_HOOK_LISTENER_NOT_REARMED", "E_DEBUG_PROGRAM_SITE_UNAVAILABLE", "E_DEBUG_PROGRAM_SIGNAL_TARGET_UNBOUND", "E_DEBUG_PLAYER_LOOP_PHASE_UNKNOWN", "E_DEBUG_PLAYER_LOOP_UNAVAILABLE", "E_DEBUG_PHASE_TRIGGER_REQUIRES_INVOCATION", "E_SCHEMA_INVALID", "E_DEBUG_SESSION_NOT_FOUND"]);
+  const declared = new Set(["E_DEBUG_SESSION_NOT_OPEN", "E_DEBUG_TRIGGER_BUDGET_EXHAUSTED", "E_DEBUG_SIGNAL_RECURSION", "E_HOOK_OWNED_BY_PROGRAM", "E_HOOK_LISTENER_NOT_REARMED", "E_DEBUG_PROGRAM_SITE_UNAVAILABLE", "E_DEBUG_PROGRAM_SIGNAL_TARGET_UNBOUND", "E_DEBUG_PLAYER_LOOP_PHASE_UNKNOWN", "E_DEBUG_PLAYER_LOOP_UNAVAILABLE", "E_DEBUG_PHASE_TRIGGER_REQUIRES_INVOCATION", "E_SCHEMA_INVALID", "E_DEBUG_SESSION_NOT_FOUND"]);
   for (const file of ["DebugTriggers.cs", "DebugListenerHost.cs", "DebugScheduler.cs", "DebugPlayerLoopHost.cs"]) {
     const text = await source(debugRoot, file);
     for (const match of text.matchAll(/"(E_[A-Z0-9_]+)"/g)) {

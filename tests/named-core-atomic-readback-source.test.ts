@@ -85,7 +85,7 @@ test("shared undo and redo require request-specific read Tool proof", async () =
   for (const [name, tool] of [["UNDO", undo], ["REDO", redo]] as const) {
     assert.match(tool, /\[UnityCliRequired\] public UnityCliCompletionProbe CompletionProbe/);
     assert.match(tool, /ctx\.RunCompletionProbe\(/);
-    assert.match(tool, new RegExp(`E_${name}_NOT_PERFORMED`));
+    assert.match(tool, new RegExp(`E_${name}_NOOP`));
     assert.match(tool, /Completion = completion/);
     assert.doesNotMatch(tool, /BUSINESS_PROOF_UNAVAILABLE/);
   }

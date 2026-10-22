@@ -449,7 +449,7 @@ test("publish failure restores the prior complete bundle and clears fixed worksp
   try {
     await assert.rejects(() => reg.installForAgents(".agents", sourcePath, project), (error: unknown) => {
       assert.ok(error instanceof SkillInstallerError);
-      assert.equal(error.code, "E_SKILL_INSTALL_IO");
+      assert.equal(error.code, "E_SKILL_INSTALL_IO_EXCEPTION");
       return true;
     });
   } finally {
@@ -539,7 +539,7 @@ test("restart keeps a committed target when previous cleanup was interrupted", a
   try {
     await assert.rejects(() => reg.installForAgents(".agents", sourcePath, project), (error: unknown) => {
       assert.ok(error instanceof SkillInstallerError);
-      assert.equal(error.code, "E_SKILL_INSTALL_IO");
+      assert.equal(error.code, "E_SKILL_INSTALL_IO_EXCEPTION");
       return true;
     });
   } finally {

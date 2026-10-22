@@ -48,7 +48,7 @@ test("unknown 与非法 boolean attached value 返回首个结构化 issue", () 
   assert.deepEqual(parseArgs(["--unknown", "tools", "group"], spec), {
     positional: ["tools", "group"],
     flags: {},
-    issue: { code: "E_UNKNOWN_OPTION", option: "unknown" },
+    issue: { code: "E_SHELL_OPTION_UNKNOWN", option: "unknown" },
   });
   assert.deepEqual(parseArgs(["tools", "group", "--help=maybe"], spec), {
     positional: ["tools", "group"],

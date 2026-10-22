@@ -33,10 +33,10 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | 错误码 | 含义 | 恢复 |
 |--------|------|------|
 | `UNKNOWN_COMMAND` | 顶层命令不在冻结的公开命令集合中 | 运行 `unitycli --help` |
-| `E_UNKNOWN_OPTION` | option 未在 CLI arity 表中声明，或不属于当前命令 | 删除该 option 并查看 help |
+| `E_SHELL_OPTION_UNKNOWN` | option 未在 CLI arity 表中声明，或不属于当前命令 | 删除该 option 并查看 help |
 | `E_OPTION_VALUE_REQUIRED` | 带值 option 缺少值；命令 token 不会被当作值消费 | 传 `--option <value>` 或 `--option=<value>` |
 | `E_OPTION_VALUE_INVALID` | boolean option 的 attached value 不是 `true` 或 `false` | 使用 `--option`、`--option=true` 或 `--option=false` |
-| `E_OBSOLETE_OPTION` | option 已从当前公开语义删除 | 按 `nextActions` 删除旧 option |
+| `E_SHELL_OPTION_OBSOLETE` | option 已从当前公开语义删除 | 按 `nextActions` 删除旧 option |
 
 ### Init 安装错误
 
@@ -77,7 +77,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 
 | 错误码 | 含义 | 恢复 |
 |--------|------|------|
-| `E_RUNTIME_NOT_READY` | Runtime 工具需 Play Mode | 先 `tools run editor.play-mode.start`，transient 可重试 |
+| `E_RUNTIME_UNAVAILABLE` | Runtime 工具需 Play Mode | 先 `tools run editor.play-mode.start`，transient 可重试 |
 | `E_RUNTIME_SESSION_STALE` | 运行时会话过期 | 重新进入 Play Mode |
 | `E_RUNTIME_TIMEOUT` | 运行时操作超时 | 增加 `--timeout-ms` 或重试 |
 
@@ -85,13 +85,13 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 
 | 错误码 | 含义 | 恢复 |
 |--------|------|------|
-| `E_TOOL_NOT_FOUND_FOR_TARGET` | 名称不属于当前实例完整 Tool 目录 | 重新运行 `tools group` / `tools search <k1|k2|...>` |
+| `E_TOOL_TARGET_NOT_FOUND` | 名称不属于当前实例完整 Tool 目录 | 重新运行 `tools group` / `tools search <k1|k2|...>` |
 | `E_TOOL_NAME_CONFLICT` | 同一完整 Tool 名称在当前 domain 有多个实现；全部冲突实现不可调用 | 修正重复的命令名后让 Unity 重新编译并 reload domain，再重新 discovery |
 | `E_TOOL_REGISTRATION_FAILED` | 工具已声明但在构建 catalog 时被拒绝 | 读取 `doctor` 的隔离摘要与 `error.details.sources`，修正该工具定义后 reload |
 | `E_TOOL_REGISTRY_UNHEALTHY` | 当前 domain 的 Tool catalog 整体不可用：共享发现基础设施失败，无法构建可信执行表 | 修复后让 Unity 重新编译并 reload domain；局部故障改用 `isolatedCount` 与 `E_TOOL_NAME_CONFLICT` / `E_TOOL_REGISTRATION_FAILED` |
 | `E_SCHEMA_INVALID` | 输入不符合 schema，包括公开数值范围 | 查看对应 `tools describe` 的 inputSchema |
 | `E_REQUEST_BUDGET_INVALID` | request-wide预算为零、负数或超过公开上限 | 传正值且不超过descriptor/schema最大值 |
-| `E_REQUEST_BUDGET_EXCEEDED` | 读取在完整结果前耗尽 scan/node/getter/reflection/time/UTF-8 预算 | 先收紧 selector、减小 pageSize 或传更小的显式 budget；结果含 `nextCursor` 的工具从其续读，没有 `nextCursor` 的工具只接受更窄的 selector（预算只能下调，不能超过绝对上限） |
+| `E_REQUEST_BUDGET_LIMIT_EXCEEDED` | 读取在完整结果前耗尽 scan/node/getter/reflection/time/UTF-8 预算 | 先收紧 selector、减小 pageSize 或传更小的显式 budget；结果含 `nextCursor` 的工具从其续读，没有 `nextCursor` 的工具只接受更窄的 selector（预算只能下调，不能超过绝对上限） |
 | `E_CONTINUATION_STALE` | opaque cursor的selector或Unity/assembly generation已变化 | 删除cursor并开始一次fresh读取 |
 
 ### 可选预览错误
@@ -138,7 +138,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 |--------|------|------|
 | `E_PROJECT_SETTINGS_UNAVAILABLE` | 对应ProjectSettings asset不存在或Unity无法加载 | 检查目标项目和Unity版本后重试 |
 | `E_PROJECT_SETTINGS_VERSION_UNAVAILABLE` | 当前Unity版本、active build target或serialized字段surface未经过支持验证 | 使用descriptor声明的Unity版本；不要猜测字段fallback |
-| `E_PROJECT_SETTINGS_NO_FIELDS` | setter没有提供任何批准字段 | 按`tools describe project.*-settings.set`提供至少一个字段 |
+| `E_PROJECT_SETTINGS_EMPTY` | setter没有提供任何批准字段 | 按`tools describe project.*-settings.set`提供至少一个字段 |
 | `E_PROJECT_SETTINGS_INVALID` | 数值边界、分页、axis或Player enum输入非法 | 按错误中的精确字段约束修正输入 |
 | `E_PROJECT_SETTINGS_LIMIT_EXCEEDED` | legacy Input Manager超过4096个axis，无法在公开有界读取内安全扫描 | 减少Input Manager axis数量后重试 |
 | `E_PROJECT_INPUT_AXIS_NOT_FOUND` | 没有完全同名的legacy Input Manager axis | 先分页读取`project-settings.input-settings`并传精确名称 |
@@ -215,7 +215,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | `E_HOOK_CALLBACK_OVERRUN` | 回调正常返回但超过 overrun 阈值 | 缩短回调耗时；该阈值不是抢占式超时 |
 | `E_DEBUG_RESOURCE_CONFLICT` | 同一 exact target 上已有活动的回调定义；回调体的写范围无法静态证明，因此不允许第二个干预 owner（effect 之前拒绝） | 改用或删除已有的回调定义；需要独立观察时安装 capture-only 观察（可共存且顺序确定） |
 | `E_HOOK_LIMIT_EXCEEDED` | 定义、源码、State 或快照超出已声明的硬上限 | 按上限摘要缩小输入；`disable`/`remove` 仍然可用 |
-| `E_HOOK_COMPILE_BUDGET_EXHAUSTED` | 当前域共享的编译产物预算耗尽（`debug.code.execute`、Hook 回调、program、pause evaluate 共用同一份计数；错误码保留既有名称） | 读取 `error.details` 的占用与剩余额度，停用或删除不再需要的定义，或 reload domain；删除不会回收已加载程序集，不会自动 reload |
+| `E_COMPILER_BUDGET_EXHAUSTED` | 当前域共享的编译产物预算耗尽（`debug.code.execute`、Hook 回调、program、pause evaluate 共用同一份计数；错误码保留既有名称） | 读取 `error.details` 的占用与剩余额度，停用或删除不再需要的定义，或 reload domain；删除不会回收已加载程序集，不会自动 reload |
 | `E_HOOK_EVENT_CURSOR_EXPIRED` | cursor 早于事件保留窗口 | 用返回的 `oldestAvailableCursor` 重新开始读取 |
 | `E_CONTINUATION_STALE` | cursor 绑定的 Editor session 或筛选条件已变化 | 不使用 cursor 重新读取当前尾页 |
 
@@ -245,7 +245,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | 错误码 | 含义 | 恢复 |
 |--------|------|------|
 | `E_DEBUG_RESOURCE_CONFLICT` | 该 exact target 上已有一个活动的任意干预 owner（回调定义或 pause 断点）：`error.details.scope` 为 `arbitrary-intervention`，`ownerKind` 为 `callback` 或 `pause-breakpoint`。pause 断点允许 `debug.pause.evaluate` 改参数、跳过原方法并写结果，因此与回调体共用同一干预权，两个 pause 断点不能落在同一 exact target 上 | 用 `debug.hook.replace` 或 `debug.hook.remove` 把该 target 的 owner 换成唯一的定义；只需要观察时安装 capture-only 或 snapshot 断点 |
-| `E_DEBUG_TRIGGER_BUDGET_EXCEEDED` | 该 session 的计划注入与输入预算已经用尽，listener 在任何 effect 之前被拒绝 | 用 `debug.hook.remove` 释放不再需要的 listener，或用 `debug.session.info` 读取 `handles.listeners` 与 `handles.injections` |
+| `E_DEBUG_TRIGGER_BUDGET_EXHAUSTED` | 该 session 的计划注入与输入预算已经用尽，listener 在任何 effect 之前被拒绝 | 用 `debug.hook.remove` 释放不再需要的 listener，或用 `debug.session.info` 读取 `handles.listeners` 与 `handles.injections` |
 | `E_DEBUG_SIGNAL_RECURSION` | host signal 的同步派发链达到声明递归深度，本次派发被拒绝 | 用 `debug.events.read` 确认哪条信号在自触发；把链式触发改成显式有限步骤，再重新提交 |
 | `E_HOOK_OWNED_BY_PROGRAM` | 该 hook 定义由 program binding 拥有，直接的 `debug.hook.*` 变更会静默改掉 program-owned revision | 用 `debug.program.replace` 修改程序，或用 `debug.program.stop`/`debug.program.remove` 释放 binding |
 | `E_HOOK_LISTENER_NOT_REARMED` | 有限命中 listener 在 Domain Reload 后不会被自动重新武装（旧启动的命中次数不得被当成仍然成立） | 用 `debug.hook.enable` 显式开始新的命中预算，或重新 `debug.hook.replace` 声明 listener |
@@ -264,7 +264,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 |--------|------|
 | `E_DEBUG_SCOPE_UNSUPPORTED` | 本次调用不在 Unity 主线程上，或没有可读的 Game 视图/屏幕尺寸：`error.details.rule` 为 `off-main-thread` 或 `target-space-unresolved`，因此坐标空间无法在 effect 之前固定 |
 | `E_DEBUG_RESOURCE_CONFLICT` | `error.details.reason` 为 `device-name-owned-elsewhere`（同名设备已存在且不是本 owner 建立的）或 `hold-conflict`（同一控制已有不同结束边界的未释放记录） |
-| `E_DEBUG_TRIGGER_BUDGET_EXCEEDED` | 该 session 的计划注入与输入共用预算已用尽；输入下发与 listener 一起计入 |
+| `E_DEBUG_TRIGGER_BUDGET_EXHAUSTED` | 该 session 的计划注入与输入共用预算已用尽；输入下发与 listener 一起计入 |
 | `E_DEBUG_LIMIT_EXCEEDED` | 该 session 的记录预算已满且没有已确认释放的记录可淘汰时拒绝新的按下（`error.details.limit` 为 `input-records`）；分配资源槽位失败同样在此码下报告 |
 
 释放语义不表达为错误码：没有被主线程读回确认的释放一律以 `ok:true` 加 `releaseState:"pending"` 与精确原因返回，因为“还没确认”是事实而不是失败。
@@ -308,7 +308,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | `E_DEBUG_PROGRAM_WAIT_TIMEOUT` | step 声明的等待计划在超时内未被满足，driver 停止 | 用 `debug.program.wait` 读取终态；修正等待条件后重新运行 |
 | `E_DEBUG_PROGRAM_TERMINAL_PENDING` | 终态无法发布，因为原同步代码仍在途；系统不声称已终止 | 稍后用 `debug.program.wait` 重新观察该运行 |
 
-program 的预算拒绝复用 `E_DEBUG_LIMIT_EXCEEDED`（`error.details.limit` 为 `programs`、`active-runs`、`active-resources`、`program-source-bytes`、`program-state-bytes` 或 `program-args-bytes`）；共享编译产物预算耗尽使用 `E_HOOK_COMPILE_BUDGET_EXHAUSTED`；源码编译失败使用 `E_CODE_COMPILE_FAILED`（`error.details.stage` 为 `program` 或 `program-replace`）。
+program 的预算拒绝复用 `E_DEBUG_LIMIT_EXCEEDED`（`error.details.limit` 为 `programs`、`active-runs`、`active-resources`、`program-source-bytes`、`program-state-bytes` 或 `program-args-bytes`）；共享编译产物预算耗尽使用 `E_COMPILER_BUDGET_EXHAUSTED`；源码编译失败使用 `E_CODE_COMPILE_FAILED`（`error.details.stage` 为 `program` 或 `program-replace`）。
 
 ### Debug Thread 与 Value 错误
 
@@ -331,12 +331,12 @@ program 的预算拒绝复用 `E_DEBUG_LIMIT_EXCEEDED`（`error.details.limit` �
 | `E_DEBUG_PAUSE_STALE` | `pauseId` 已 resume、已超时、已被 session stop / hook disable / remove / Play 退出 / 域重载 / Editor 关闭释放，或从未在本 Editor session 与 domain generation 发布过。`error.details.state`/`reason` 给出实际终态；现场永不复活，pauseId 永不复用 | 用 `debug.pause.list` 读取当前仍停住的现场；需要新断点就重新提交 `debug.hook.install` 或 `debug.hook.replace` |
 | `E_DEBUG_PAUSE_OPERATION_FAILED` | 现场操作（`debug.pause.inspect`、`debug.pause.evaluate` 或命名了 `pauseId` 的值读写）在暂停线程上自身抛出；现场保持 paused，用户代码已发生的效果不回滚 | 用 `debug.pause.list` 确认现场仍停住，再用 `debug.pause.inspect` 读取现场后重新提交更小的操作，或 `debug.pause.resume` 释放该现场 |
 | `E_DEBUG_MAIN_THREAD_PAUSED` | 主线程正停在一个 debug pause 断点上，因此本次业务调用在任何 effect 之前被拒绝：因为正常队列由被停住的主线程驱动，排队只会变成无界等待。`error.details` 给出 `pauseId`、`threadId`、`timeoutKind` 与 `remainingMs`，以及 `error.nextActions` 指向的 `debug.pause.list` 与 `debug.pause.resume`。它不是 `E_UNITY_COMPILING`/`E_UNITY_IMPORTING` 的替代说法，也不是排队中 | 先用 `debug.pause.list` 读现场，再按需用 `debug.pause.resume` 释放主线程；等待期间 `debug.pause.list/wait/inspect/evaluate`、`debug.events.read`、`debug.hook.list/info`、`debug.session.list/info`、`debug.program.list/info`、`debug.thread.list`、命名了 `pauseId` 的值读写与 `tools` discovery/describe 仍可用 |
-| `E_DEBUG_COMPILE_BUDGET_EXCEEDED` | 现场求值的共享编译没能在 `DebugLimits.PauseOperationTimeoutMs`（10000 ms）的 on-site 操作预算内产出可用结果，因此本次求值没有编译、加载或运行任何用户代码；`error.details.stage` 为 `reference-resolution`、`compile` 或 `compile-output`，`error.details.budgetMs` 为实际预算。它不是编译失败（源码未报错），也不是用户代码没返回（用户代码从未开始），暂停现场保持安装且 `debug.pause.inspect`/`debug.pause.resume` 仍可达 | 用 `debug.pause.list` 确认现场仍停住；先在非暂停路径用 `debug.code.execute` 以同一源码预热唯一共享编译器，再重新提交 `debug.pause.evaluate`；或 `debug.pause.resume` 释放现场后在非暂停路径求值 |
+| `E_COMPILER_BUDGET_EXHAUSTED` | 现场求值的共享编译没能在 `DebugLimits.PauseOperationTimeoutMs`（10000 ms）的 on-site 操作预算内产出可用结果，因此本次求值没有编译、加载或运行任何用户代码；`error.details.stage` 为 `reference-resolution`、`compile` 或 `compile-output`，`error.details.budgetMs` 为实际预算。它不是编译失败（源码未报错），也不是用户代码没返回（用户代码从未开始），暂停现场保持安装且 `debug.pause.inspect`/`debug.pause.resume` 仍可达 | 用 `debug.pause.list` 确认现场仍停住；先在非暂停路径用 `debug.code.execute` 以同一源码预热唯一共享编译器，再重新提交 `debug.pause.evaluate`；或 `debug.pause.resume` 释放现场后在非暂停路径求值 |
 | `E_DEBUG_CONTROL_PLANE_UNAVAILABLE` | 暂停控制通道尚未在本 domain generation 发布，此时安装 pause 断点会让现场没有可达的解除路径，因此在 effect 之前被拒绝 | 让 Unity 完成编译与 domain reload 使 Bridge 重新发布控制通道后再安装 pause 断点；只需要取值时改用 snapshot 断点 |
 
-pause mailbox 数量上限复用 `E_DEBUG_LIMIT_EXCEEDED`（`error.details.limit` 为 `pause-mailbox-waiting`）；缺少 `pauseTimeout`、`pauseTimeout.durationMs` 为 0 / null / 负数、`unbounded` 携带 `durationMs` 以及 snapshot 断点携带 `pauseTimeout` 都属于 `E_SCHEMA_INVALID`，绝不解释为无限；现场编译与加载产物失败复用 `E_CODE_COMPILE_FAILED`、`E_CODE_ENTRYPOINT_INVALID`、`E_CODE_RUNTIME_EXCEPTION`、`E_UNITY_BUSY` 与 `E_HOOK_COMPILE_BUDGET_EXHAUSTED`；共享编译没在 on-site 操作预算内产出结果使用 `E_DEBUG_COMPILE_BUDGET_EXCEEDED`，绝不复用 `E_EXECUTION_TIMEOUT` 的“用户代码未返回”含义。
+pause mailbox 数量上限复用 `E_DEBUG_LIMIT_EXCEEDED`（`error.details.limit` 为 `pause-mailbox-waiting`）；缺少 `pauseTimeout`、`pauseTimeout.durationMs` 为 0 / null / 负数、`unbounded` 携带 `durationMs` 以及 snapshot 断点携带 `pauseTimeout` 都属于 `E_SCHEMA_INVALID`，绝不解释为无限；现场编译与加载产物失败复用 `E_CODE_COMPILE_FAILED`、`E_CODE_ENTRYPOINT_INVALID`、`E_CODE_RUNTIME_EXCEPTION`、`E_UNITY_BUSY` 与 `E_COMPILER_BUDGET_EXHAUSTED`；共享编译没在 on-site 操作预算内产出结果使用 `E_COMPILER_BUDGET_EXHAUSTED`，绝不复用 `E_EXECUTION_TIMEOUT` 的“用户代码未返回”含义。
 
-共享动态编译预算是 `debug.code.execute`、hook 回调、program 与 `debug.pause.evaluate` 四个编译面共用的唯一预算：每 domain 最多 512 个已加载编译产物、总计 128 MiB，且每个已加载程序集另按 256 KiB 的固定开销折算计入字节预算（CLR/Unity 程序集装载与元数据不体现在产物字节里）。数量上限由该字节预算与单产物固定开销推导，因此不会出现“字节远未用满但数量先撞墙”。已加载程序集无法逐个卸载：`remove`、`stop` 与结束会话都不扣减占用，只有 domain reload 能归零；相同源码（同一候选 identity）重编译会复用已有产物，不重复计费。拒绝复用 `E_HOOK_COMPILE_BUDGET_EXHAUSTED`，`error.details.budget` 给出 `reason`（`artifact-count`、`artifact-bytes` 或 `single-artifact-bytes`）、已用与剩余的数量和字节，`error.transient` 为 false；恢复动作只有“复用同一源码”或“由调用方决定是否 domain reload”，因为 reload 会一并丢弃 hooks、debug sessions 与 Play Mode。同一预算之外另有每 domain 256 个 adapter 类型身份上限，超限后同样只能用已有 target 或重启 Editor。
+共享动态编译预算是 `debug.code.execute`、hook 回调、program 与 `debug.pause.evaluate` 四个编译面共用的唯一预算：每 domain 最多 512 个已加载编译产物、总计 128 MiB，且每个已加载程序集另按 256 KiB 的固定开销折算计入字节预算（CLR/Unity 程序集装载与元数据不体现在产物字节里）。数量上限由该字节预算与单产物固定开销推导，因此不会出现“字节远未用满但数量先撞墙”。已加载程序集无法逐个卸载：`remove`、`stop` 与结束会话都不扣减占用，只有 domain reload 能归零；相同源码（同一候选 identity）重编译会复用已有产物，不重复计费。拒绝复用 `E_COMPILER_BUDGET_EXHAUSTED`，`error.details.budget` 给出 `reason`（`artifact-count`、`artifact-bytes` 或 `single-artifact-bytes`）、已用与剩余的数量和字节，`error.transient` 为 false；恢复动作只有“复用同一源码”或“由调用方决定是否 domain reload”，因为 reload 会一并丢弃 hooks、debug sessions 与 Play Mode。同一预算之外另有每 domain 256 个 adapter 类型身份上限，超限后同样只能用已有 target 或重启 Editor。
 
 主线程暂停期间，控制通道在发起请求的线程上直接服务可达能力，绝不排到被停住的主线程队列后面；不可达的业务 mutation 在任何 effect 之前返回 `E_DEBUG_MAIN_THREAD_PAUSED`。`debug.pause.evaluate` 的现场编译仍在现场线程上按同一有界预算推进，取不到共享编译器时按 `E_UNITY_BUSY` 返回忙并保留现场（仍可 inspect 与 resume），绝不等待旧的主线程 continuation。
 
@@ -364,7 +364,7 @@ deadline 关系与实际约束：`pauseTimeout.durationMs` 只约束暂停现场
 | `E_UNITY_COMPILE_FAILED` | owned compilation cycle 完成且包含 compiler error；details 带本次 diagnostics |
 | `E_CODE_COMPILE_FAILED` | Runtime Code 编译失败 |
 | `E_CODE_RUNTIME_EXCEPTION` | Runtime Code 执行异常；message 指向最深可操作 cause，details.causes 为循环安全且受深度/字节限制的 cause chain |
-| `E_IO_ERROR` | IO 错误 |
+| `E_SHELL_IO_ERROR` | IO 错误 |
 
 ## AI Agent 错误处理流程
 
@@ -389,4 +389,7 @@ deadline 关系与实际约束：`pauseTimeout.durationMs` 只约束暂停现场
 - `retryAfterMs`
 
 错误恢复逻辑必须读取上述 camelCase 字段。
+
+
+每个公开错误码的机器可读登记表与 ffectStarted/	ransient 语义见 [错误码参考（生成）](error-codes-reference.md)。该表由 `scripts/gen-error-codes.mjs` 从源码生成，`npm run architecture:validate` 会在出现未登记、未文档化或事实不闭合的码时失败。
 

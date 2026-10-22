@@ -8,7 +8,7 @@ export interface CliArgsSpec {
 }
 
 export interface ArgParseIssue {
-  code: "E_UNKNOWN_OPTION" | "E_OPTION_VALUE_REQUIRED" | "E_OPTION_VALUE_INVALID";
+  code: "E_SHELL_OPTION_UNKNOWN" | "E_OPTION_VALUE_REQUIRED" | "E_OPTION_VALUE_INVALID";
   option: string;
   expected?: CliOptionArity;
   actual?: string;
@@ -53,7 +53,7 @@ export function parseArgs(argv: string[], spec: CliArgsSpec): ParsedArgs {
     const attachedValue = equalsIndex >= 0 ? withoutPrefix.slice(equalsIndex + 1) : undefined;
     const arity = spec.options[name];
     if (!arity) {
-      issue ??= { code: "E_UNKNOWN_OPTION", option: name || token };
+      issue ??= { code: "E_SHELL_OPTION_UNKNOWN", option: name || token };
       continue;
     }
 

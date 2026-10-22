@@ -39,5 +39,5 @@ function record(value: unknown): Record<string, unknown> {
 }
 
 function invalid(): StructuredToolError {
-  return new StructuredToolError("E_BRIDGE_PROTOCOL", "Durable status returned an invalid state envelope.", ["Inspect UnityCliBridge.log before retrying the same status read."]);
+  return new StructuredToolError("E_BRIDGE_PROTOCOL_INVALID", "Durable status returned an invalid state envelope.", ["Inspect UnityCliBridge.log before retrying the same status read."]);
 }

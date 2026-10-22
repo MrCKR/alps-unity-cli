@@ -80,7 +80,7 @@ yield return DebugFlow.Return(value);                    // 结束并返回值
 结果规则：
 
 - 只有 `completed` 返回 `ok:true`，带 `result`、`steps`、`samples`。
-- `failed`、`timed-out`、`cancelled`、`aborted` 分别返回 `E_DEBUG_FLOW_FAILED`、`E_DEBUG_FLOW_TIMED_OUT`、`E_DEBUG_FLOW_CANCELLED`、`E_DEBUG_FLOW_ABORTED`，`details` 带 `flowId`、`status` 与终态事实。
+- `failed`、`timed-out`、`cancelled`、`aborted` 分别返回 `E_DEBUG_FLOW_FAILED`、`E_DEBUG_FLOW_TIMEOUT`、`E_DEBUG_FLOW_CANCELLED`、`E_DEBUG_FLOW_ABORTED`，`details` 带 `flowId`、`status` 与终态事实。
 - `E_DEBUG_FLOW_PENDING` 只出现在 `wait` 上（请求时间用尽但流还在跑），它**不是失败**；用同一个 flowId 继续等，不要重新提交。
 - 返回值有 262144 字节上限；超出时整体替换为占位字符串并置 `resultTruncated`，因此要结构化结论就写进 check 或事件，不要依赖大返回值。
 

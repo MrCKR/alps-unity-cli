@@ -125,7 +125,7 @@ namespace UnityCli
                 var descriptor = ProjectToolDescriptorData(definition);
                 descriptor["available"] = playModeReady;
                 if (!playModeReady)
-                    descriptor["unavailableReason"] = "E_RUNTIME_NOT_READY: Enter Play Mode before executing this Tool.";
+                    descriptor["unavailableReason"] = "E_RUNTIME_UNAVAILABLE: Enter Play Mode before executing this Tool.";
                 tools.Add(descriptor);
             }
             return new System.Collections.Generic.Dictionary<string, object>
@@ -164,7 +164,7 @@ namespace UnityCli
             if (!playModeReady)
             {
                 WriteLog("runtime_tool_not_ready requestId=" + request.RequestId + " name=" + name + " sessionId=" + (currentPlayModeSessionId ?? "null"));
-                throw new BridgeCommandException("E_RUNTIME_NOT_READY",
+                throw new BridgeCommandException("E_RUNTIME_UNAVAILABLE",
                     "Runtime Tool cannot execute because the selected Editor is not in a ready Play Mode session.",
                     "Run unitycli tools run editor.play-mode.start, wait until editor.state reports ready Play Mode, then retry.");
             }
@@ -204,7 +204,7 @@ namespace UnityCli
                 // Check Play Mode is still ready before executing
                 if (!EditorApplication.isPlaying || !playModeReady)
                 {
-                    throw new BridgeCommandException("E_RUNTIME_NOT_READY",
+                    throw new BridgeCommandException("E_RUNTIME_UNAVAILABLE",
                         "Play Mode session ended before the runtime tool could execute.",
                         "Re-enter Play Mode and retry.");
                 }

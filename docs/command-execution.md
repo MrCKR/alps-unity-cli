@@ -16,7 +16,7 @@ unitycli command --instance <name|alias|projectPath>
 1. native Tool完整精确名优先。
 2. 没有native精确名时，`command <name>`可选择实际注册的`UnityPipeline_<name>` official attribute Tool。
 3. `command UnityPipeline_<name>`显式选择该attribute Tool。
-4. 不做snake_case、camelCase、dotted name、相似能力或语义映射；未注册名称返回`E_TOOL_NOT_FOUND_FOR_TARGET`。
+4. 不做snake_case、camelCase、dotted name、相似能力或语义映射；未注册名称返回`E_TOOL_TARGET_NOT_FOUND`。
 
 `[CliCommand("test")]`在`tools`目录中只显示为`UnityPipeline_test`，group固定为`UnityPipeline`。同名冲突时两个实现都不可调用；native Tool占用`UnityPipeline_`前缀/`UnityPipeline` group时只禁用该实现。两种情形都只隔离受影响的名称，其他工具和Bridge基础观察继续工作，`tools describe`与`doctor`返回有界冲突来源。
 

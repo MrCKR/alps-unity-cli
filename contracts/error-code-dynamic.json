@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "note": "Known runtime-concatenated error codes. Each entry must shrink; a new entry requires an explicit review.",
+  "entries": [
+    {
+      "file": "extensions/hdrp/unitypkg/Editor/Hdrp/HdrpToolSupport.cs",
+      "prefix": "E_HDRP",
+      "suffixes": [
+        "_EFFECT_TYPE_NOT_FOUND",
+        "_EFFECT_TYPE_REQUIRED",
+        "_PROPERTY_TYPE_UNSUPPORTED",
+        "_VALUE_INVALID",
+        "_VOLUME_EFFECT_EXISTS",
+        "_VOLUME_EFFECT_NOT_FOUND",
+        "_VOLUME_NOT_FOUND",
+        "_VOLUME_PROFILE_ASSIGN_FAILED",
+        "_VOLUME_PROFILE_NOT_FOUND",
+        "_VOLUME_PROPERTY_NOT_FOUND",
+        "_VOLUME_PROPERTY_REQUIRED",
+        "_VOLUME_SET_FAILED",
+        "_VOLUME_SYSTEM_NOT_FOUND",
+        "_VOLUME_VERIFY_FAILED",
+        "_WEIGHT_OUT_OF_RANGE"
+      ]
+    },
+    {
+      "file": "extensions/urp/unitypkg/Editor/Urp/UrpToolSupport.cs",
+      "prefix": "E_URP",
+      "suffixes": [
+        "_EFFECT_TYPE_NOT_FOUND",
+        "_EFFECT_TYPE_REQUIRED",
+        "_PRIORITY_INVALID",
+        "_PROPERTY_TYPE_UNSUPPORTED",
+        "_VALUE_INVALID",
+        "_VOLUME_EFFECT_EXISTS",
+        "_VOLUME_EFFECT_NOT_FOUND",
+        "_VOLUME_NOT_FOUND",
+        "_VOLUME_PROFILE_ASSIGN_FAILED",
+        "_VOLUME_PROFILE_NOT_FOUND",
+        "_VOLUME_PROPERTY_NOT_FOUND",
+        "_VOLUME_PROPERTY_REQUIRED",
+        "_VOLUME_SET_FAILED",
+        "_VOLUME_SYSTEM_NOT_FOUND",
+        "_VOLUME_VERIFY_FAILED",
+        "_WEIGHT_OUT_OF_RANGE"
+      ]
+    }
+  ]
+}

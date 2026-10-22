@@ -227,7 +227,7 @@ test("feedback recorder serializes concurrent writers", async () => {
       "-Category", "failure",
       "-Summary", `Concurrent feedback ${index}`,
       "-Capability", "sample.tool",
-      "-ErrorCode", "E_TOOL_NOT_FOUND_FOR_TARGET",
+      "-ErrorCode", "E_TOOL_TARGET_NOT_FOUND",
       "-Phase", "execute",
     ])));
     const path = join(feedbackDir(skillRoot), "feedback.jsonl");

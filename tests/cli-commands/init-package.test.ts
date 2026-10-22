@@ -140,8 +140,8 @@ test("init package rejects missing project, positional arguments, old flags, and
     const cases: Array<{ argv: string[]; code: string }> = [
       { argv: ["init", "package"], code: "E_INIT_PROJECT_REQUIRED" },
       { argv: ["init", "package", "extra", "--project", project], code: "E_INIT_ARGUMENT_UNEXPECTED" },
-      { argv: ["init", "package", "--project", project, "--pkg-only"], code: "E_UNKNOWN_OPTION" },
-      { argv: ["init", "package", "--project", project, "--agent", ".agents"], code: "E_UNKNOWN_OPTION" },
+      { argv: ["init", "package", "--project", project, "--pkg-only"], code: "E_SHELL_OPTION_UNKNOWN" },
+      { argv: ["init", "package", "--project", project, "--agent", ".agents"], code: "E_SHELL_OPTION_UNKNOWN" },
       { argv: ["init", "package", "--project", project, "--timeout-ms", "0"], code: "E_INIT_TIMEOUT_INVALID" },
       { argv: ["init", "package", "--project", project, "--check", "--close-editor"], code: "E_INIT_CLOSE_EDITOR_CHECK_FORBIDDEN" },
     ];

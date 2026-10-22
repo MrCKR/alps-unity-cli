@@ -559,7 +559,7 @@ async function resolveInstanceSelectionIdentity(
   observationDeadlineMs?: number,
 ): Promise<{ identity: ProjectIdentity; matchedBy: InstanceSelection["matchedBy"]; explicit: string | undefined }> {
   if (stringFlag(flags, "bridge-endpoint")) {
-    throw new InstanceRegistryError("E_OBSOLETE_OPTION", "--bridge-endpoint has been removed; transport binding is owned by the session supervisor.", [
+    throw new InstanceRegistryError("E_SHELL_OPTION_OBSOLETE", "--bridge-endpoint has been removed; transport binding is owned by the session supervisor.", [
       "Pass --instance <name|alias|projectPath> or run from the target Unity project directory.",
     ]);
   }

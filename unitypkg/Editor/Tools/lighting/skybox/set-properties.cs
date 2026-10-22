@@ -15,7 +15,7 @@ namespace UnityCli
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var skybox = RenderSettings.skybox;
-            if (skybox == null) throw new UnityCliBridge.BridgeCommandException("E_SKYBOX_NOT_SET", "No skybox material is assigned to RenderSettings.", "Use lighting.skybox.set-material first.");
+            if (skybox == null) throw new UnityCliBridge.BridgeCommandException("E_SKYBOX_UNAVAILABLE", "No skybox material is assigned to RenderSettings.", "Use lighting.skybox.set-material first.");
             var effects = new List<GraphicsPlannedEffect>();
             if (string.IsNullOrEmpty(r.Property) != string.IsNullOrEmpty(r.Value)) throw new UnityCliBridge.BridgeCommandException("E_SKYBOX_PROPERTY_INPUT_INVALID", "property and value must be provided together.", "Pass a material property and value.");
             if (!string.IsNullOrEmpty(r.Property))

@@ -247,7 +247,7 @@ namespace UnityCli
         {
             if (string.Equals(status, DebugFlowHost.StateRunning, StringComparison.Ordinal)) return "E_DEBUG_FLOW_PENDING";
             if (string.Equals(status, DebugFlowHost.StateFailed, StringComparison.Ordinal)) return "E_DEBUG_FLOW_FAILED";
-            if (string.Equals(status, DebugFlowHost.StateTimedOut, StringComparison.Ordinal)) return "E_DEBUG_FLOW_TIMED_OUT";
+            if (string.Equals(status, DebugFlowHost.StateTimedOut, StringComparison.Ordinal)) return "E_DEBUG_FLOW_TIMEOUT";
             if (string.Equals(status, DebugFlowHost.StateCancelled, StringComparison.Ordinal)) return "E_DEBUG_FLOW_CANCELLED";
             return "E_DEBUG_FLOW_ABORTED";
         }

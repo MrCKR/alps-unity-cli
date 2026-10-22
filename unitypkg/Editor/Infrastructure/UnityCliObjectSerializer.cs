@@ -516,7 +516,7 @@ namespace UnityCli
 
             private static BridgeCommandException MetadataLimit(string dimension)
             {
-                return new BridgeCommandException("E_REQUEST_BUDGET_EXCEEDED", "Object member metadata exceeded its bounded " + dimension + ".", "Use paths, nameFilters, or a narrower object type.");
+                return new BridgeCommandException("E_REQUEST_BUDGET_LIMIT_EXCEEDED", "Object member metadata exceeded its bounded " + dimension + ".", "Use paths, nameFilters, or a narrower object type.");
             }
 
             private static void Truncate(SerializedMember member, UnityCliRequestBudget budget, string nextPath)

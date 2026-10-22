@@ -131,7 +131,7 @@ namespace UnityCli
         private static BridgeCommandException TriggerBudgetRejection(MethodHookListenerState listener, string failure, int used)
         {
             return new BridgeCommandException(
-                "E_DEBUG_TRIGGER_BUDGET_EXCEEDED",
+                "E_DEBUG_TRIGGER_BUDGET_EXHAUSTED",
                 "The session has no free planned-injection budget, so this listener was refused before any effect.",
                 new Dictionary<string, object>
                 {

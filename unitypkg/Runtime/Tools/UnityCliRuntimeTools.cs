@@ -60,7 +60,7 @@ namespace UnityCli
         /// <summary>按唯一 canonical name 分派；未批准名称绝不进入反射或任意代码路径。</summary>
         internal static object Execute(string name, Dictionary<string, object> input, bool dryRun)
         {
-            if (!initialized) throw Error("E_RUNTIME_NOT_READY", "Runtime Tool executor is not initialized.");
+            if (!initialized) throw Error("E_RUNTIME_UNAVAILABLE", "Runtime Tool executor is not initialized.");
             if (input == null) throw Error("E_SCHEMA_INVALID", "Runtime Tool input must be an object.");
             switch (name)
             {

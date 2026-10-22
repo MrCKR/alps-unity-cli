@@ -150,7 +150,7 @@ export async function discoverInitEnvironment(cwdInput: string, userHomeInput: s
 export async function handleInitDiscover(args: string[], flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> {
   if (args.length) return failure(requestId, "E_INIT_ARGUMENT_UNEXPECTED", "init discover does not accept positional arguments.", ["Run `unitycli init discover` without additional arguments."]);
   const unknown = Object.keys(flags).find((name) => name !== "pretty");
-  if (unknown) return failure(requestId, "E_UNKNOWN_OPTION", `Unknown option for init discover: --${unknown}.`, ["Run `unitycli init discover` without options."], { option: `--${unknown}` });
+  if (unknown) return failure(requestId, "E_SHELL_OPTION_UNKNOWN", `Unknown option for init discover: --${unknown}.`, ["Run `unitycli init discover` without options."], { option: `--${unknown}` });
   try { return success(requestId, await discoverInitEnvironment(process.cwd(), homedir(), { findUnityProjectProcesses: runtime.findUnityProjectProcesses })); }
   catch (error) { return failure(requestId, "INIT_DISCOVERY_FAILED", error instanceof Error ? error.message : String(error), ["Run `unitycli init discover` from an existing readable working directory."]); }
 }

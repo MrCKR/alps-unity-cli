@@ -33,7 +33,7 @@ test("frozen top-level tools controls remain usable while tools run rejects thei
   for (const name of REMOVED_IDENTITIES.slice(0, 4)) {
     const result = await execute(["tools", "run", name, "--input", "{}"], runtime as never);
     assert.equal(result.ok, false, name);
-    if (!result.ok) assert.equal(result.error.code, "E_TOOL_NOT_FOUND_FOR_TARGET", name);
+    if (!result.ok) assert.equal(result.error.code, "E_TOOL_TARGET_NOT_FOUND", name);
   }
 });
 

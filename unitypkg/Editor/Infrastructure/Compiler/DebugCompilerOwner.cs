@@ -85,7 +85,7 @@ namespace UnityCli
     internal static class DebugCompilerOwner
     {
         /// <summary>已发布的“当前域编译产物预算耗尽”稳定错误码；四个形状共用，不按形状另造码。</summary>
-        internal const string BudgetExhaustedCode = "E_HOOK_COMPILE_BUDGET_EXHAUSTED";
+        internal const string BudgetExhaustedCode = "E_COMPILER_BUDGET_EXHAUSTED";
 
         /// <summary>拒绝加载时给出的 reload 建议；owner 只报告，不自动 reload。</summary>
         internal const string ReloadSuggestion = "Reload the Unity domain to reclaim the loaded assemblies; removing definitions or stopping a session does not unload them.";

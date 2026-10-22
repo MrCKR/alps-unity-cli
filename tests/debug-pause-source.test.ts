@@ -208,7 +208,7 @@ test("honesty rules are frozen in source: pending is explicit and the pause core
 test("a compile that did not finish inside the on-site budget keeps its own stable attribution", async () => {
   const output = await readFile(join(repoRoot, "src", "output.ts"), "utf8");
   const docs = await readFile(join(repoRoot, "docs", "error-codes.md"), "utf8");
-  const code = "E_DEBUG_COMPILE_BUDGET_EXCEEDED";
+  const code = "E_COMPILER_BUDGET_EXHAUSTED";
   assert.match(output, new RegExp(`^  ${code}: "${code}",$`, "m"), `${code} must be registered in ERROR_CODES`);
   assert.ok(docs.includes(`\`${code}\``), `${code} must be documented`);
   const limits = await source(debugRoot, "DebugLimits.cs");

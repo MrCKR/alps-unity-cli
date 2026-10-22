@@ -522,7 +522,7 @@ namespace UnityCli.Tests
         /// <summary>
         /// 值读取的结果 DTO 会随每次读取返回整个命名逻辑时钟注册表，而框架会在同一请求内
         /// 有预算地序列化该结果 ValueReadSerializations 次：注册表被填满时，一次标量读取
-        /// 必须仍然落在默认请求预算内，而不是以 E_REQUEST_BUDGET_EXCEEDED 结束。
+        /// 必须仍然落在默认请求预算内，而不是以 E_REQUEST_BUDGET_LIMIT_EXCEEDED 结束。
         /// </summary>
         [Test]
         public void AValueReadStaysInsideTheDefaultRequestBudgetWithAFullLogicalClockRegistry()

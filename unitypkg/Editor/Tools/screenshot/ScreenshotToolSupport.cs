@@ -53,7 +53,7 @@ namespace UnityCli
         public static void CreateScreenshotDirectory(string outputPath)
         {
             try { Directory.CreateDirectory(Path.GetDirectoryName(outputPath)); }
-            catch (Exception exception) { throw new UnityCliBridge.BridgeCommandException("E_IO_ERROR", "Failed to create screenshot output directory: " + exception.Message); }
+            catch (Exception exception) { throw new UnityCliBridge.BridgeCommandException("E_SHELL_IO_ERROR", "Failed to create screenshot output directory: " + exception.Message); }
         }
 
         /// <summary>按所有图片合计值冻结计划；任何无效或超限输入都在 caller CommitEffect 前失败。</summary>
@@ -125,7 +125,7 @@ namespace UnityCli
             catch (Exception exception)
             {
                 DeleteArtifactNoThrow(outputPath);
-                throw new UnityCliBridge.BridgeCommandException("E_IO_ERROR", "Failed to write screenshot output: " + exception.Message);
+                throw new UnityCliBridge.BridgeCommandException("E_SHELL_IO_ERROR", "Failed to write screenshot output: " + exception.Message);
             }
         }
 

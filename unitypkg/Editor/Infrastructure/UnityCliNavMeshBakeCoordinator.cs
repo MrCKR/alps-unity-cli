@@ -2133,7 +2133,7 @@ namespace UnityCli
                 }
                 private static void EnsureAvailable()
                 {
-                    if (!Available) throw new BridgeCommandException("E_PACKAGE_NOT_AVAILABLE", "navmesh.surface.bake requires com.unity.ai.navigation.", "Install com.unity.ai.navigation, then retry.");
+                    if (!Available) throw new BridgeCommandException("E_PACKAGE_UNAVAILABLE", "navmesh.surface.bake requires com.unity.ai.navigation.", "Install com.unity.ai.navigation, then retry.");
                 }
             }
         }

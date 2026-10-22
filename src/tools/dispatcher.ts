@@ -86,7 +86,7 @@ export async function dispatchTool(
   invocationContext?: ToolInvocationContext,
 ): Promise<CliResult> {
   const dispatchStartedAtMs = Date.now();
-  if (!name) return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", "Tool name is required for tools run.", ["Run unitycli tools group to see tool groups.", "Run unitycli tools search <k1|k2|...> to find related tools."]);
+  if (!name) return failure(requestId, "E_TOOL_TARGET_NOT_FOUND", "Tool name is required for tools run.", ["Run unitycli tools group to see tool groups.", "Run unitycli tools search <k1|k2|...> to find related tools."]);
   if (resolvedTool && resolvedTool.name !== name) return failure(requestId, "E_TOOL_SCHEMA_CONFLICT", `Resolved Tool name ${resolvedTool.name} does not match requested name ${name}.`, [
     "Refresh the selected Unity instance catalog and retry the same command."
   ], { requestedName: name, resolvedName: resolvedTool.name });
@@ -150,7 +150,7 @@ export async function dispatchTool(
   const resolved = await resolveCatalogToolForInvocation(name, catalogFlags, runtime, requestId, started.context);
   if (resolved.ok === false) return enrichTargetFailureWithObservedBlocker(resolved, catalogFlags, runtime, admissionAbsoluteDeadlineMs);
   const tool = resolved.tool;
-  if (!tool) return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found: ${name}.`, ["Run unitycli tools group to see tool groups.", "Run unitycli tools search <k1|k2|...> to find related tools."]);
+  if (!tool) return failure(requestId, "E_TOOL_TARGET_NOT_FOUND", `Tool not found: ${name}.`, ["Run unitycli tools group to see tool groups.", "Run unitycli tools search <k1|k2|...> to find related tools."]);
 
   const input = requestFromInput(tool, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
   return dispatchResolvedTool(tool, input, dispatchFlags, runtime, requestId, admissionTimeoutMs, admissionAbsoluteDeadlineMs, resolved.context.discoveryProvenances);

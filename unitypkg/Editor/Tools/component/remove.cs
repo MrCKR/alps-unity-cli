@@ -129,7 +129,7 @@ namespace UnityCli
                         var field = typeof(RequireComponent).GetField(fieldName, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
                         var requiredType = field == null ? null : field.GetValue(requirement) as System.Type;
                         if (requiredType != null && !remaining.Any(component => requiredType.IsAssignableFrom(component.GetType())))
-                            throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_REMOVE_DEPENDENCY", owner.GetType().Name + " requires " + requiredType.Name + ", so the requested removal is invalid.", "Remove the dependent component in the same request, or keep its required component.");
+                            throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_REMOVE_CONFLICT", owner.GetType().Name + " requires " + requiredType.Name + ", so the requested removal is invalid.", "Remove the dependent component in the same request, or keep its required component.");
                     }
                 }
             }

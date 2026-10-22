@@ -123,7 +123,7 @@ test("Unity Bridge animation-clip, animator, animator-controller and vfx command
   assert.match(source, /E_PARAMETER_EXISTS/);
   assert.match(source, /E_LAYER_NOT_FOUND/);
   assert.match(source, /E_LAYER_BASE_IMMUTABLE/);
-  assert.match(source, /E_NOT_A_BLEND_TREE/);
+  assert.match(source, /E_BLEND_TREE_UNSUPPORTED/);
   assert.match(vfxSource, /FindType\("UnityEngine\.VFX\.VisualEffectAsset"\)/);
   assert.match(vfxSource, /FindType\("UnityEngine\.VFX\.VisualEffect"\)/);
   assert.match(vfxSource, /E_VFX_PACKAGE_MISSING/);
@@ -543,7 +543,7 @@ test("Unity Bridge screenshot validates path, format, overwrite and busy diagnos
   assert.match(source, /E_OUTPUT_EXISTS/);
   assert.match(source, /E_SCREENSHOT_FORMAT_UNSUPPORTED/);
   assert.match(source, /E_SCREENSHOT_SIZE_INVALID/);
-  assert.match(source, /E_IO_ERROR/);
+  assert.match(source, /E_SHELL_IO_ERROR/);
   assert.match(source, /string\.IsNullOrEmpty\(target\)/);
   assert.match(source, /File\.Exists\(outputPath\) && !overwrite/);
   assert.match(source, /CreateScreenshotDirectory\(outputPath\)/);

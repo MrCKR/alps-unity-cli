@@ -285,7 +285,7 @@ namespace UnityCli
         private static BridgeCommandException CompileBudgetExceeded(string stage)
         {
             return new BridgeCommandException(
-                "E_DEBUG_COMPILE_BUDGET_EXCEEDED",
+                "E_COMPILER_BUDGET_EXHAUSTED",
                 "The on-site compilation did not reach a usable result inside the "
                     + DebugLimits.PauseOperationTimeoutMs.ToString(CultureInfo.InvariantCulture)
                     + " ms pause operation budget, so this evaluation compiled, loaded and ran no code. The shared compile was"

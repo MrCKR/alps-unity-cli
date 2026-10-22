@@ -26,7 +26,7 @@ namespace UnityCli
             var state = AnimationToolSupport.FindStateInLayer(sm, r.StateName);
             if (state == null) throw new UnityCliBridge.BridgeCommandException("E_STATE_NOT_FOUND", "State '" + r.StateName + "' not found in layer " + layerIndex + ".", "Run animator-controller.get-info to inspect states.");
             var blendTree = state.motion as BlendTree;
-            if (blendTree == null) throw new UnityCliBridge.BridgeCommandException("E_NOT_A_BLEND_TREE", "State '" + r.StateName + "' does not have a BlendTree motion.", "Use animator-controller.create-blend-tree-1d or create-blend-tree-2d first.");
+            if (blendTree == null) throw new UnityCliBridge.BridgeCommandException("E_BLEND_TREE_UNSUPPORTED", "State '" + r.StateName + "' does not have a BlendTree motion.", "Use animator-controller.create-blend-tree-1d or create-blend-tree-2d first.");
             if (string.IsNullOrEmpty(r.ClipPath)) throw new UnityCliBridge.BridgeCommandException("E_CLIP_PATH_REQUIRED", "animator-controller.add-blend-tree-child requires clipPath.", "Pass an Assets/*.anim AnimationClip path.");
             var clipPath = SceneToolSupport.NormalizeAssetPath(r.ClipPath);
             var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath);

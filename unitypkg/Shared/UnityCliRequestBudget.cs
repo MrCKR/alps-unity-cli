@@ -78,7 +78,7 @@ namespace UnityCli
         public long ElapsedMilliseconds { get { return stopwatch.ElapsedMilliseconds; } }
     }
 
-    /// <summary>遍历预算耗尽；上层将其归约为稳定 E_REQUEST_BUDGET_EXCEEDED。</summary>
+    /// <summary>遍历预算耗尽；上层将其归约为稳定 E_REQUEST_BUDGET_LIMIT_EXCEEDED。</summary>
     public sealed class UnityCliRequestBudgetExceededException : Exception
     {
         public UnityCliRequestBudgetExceededException(string dimension)

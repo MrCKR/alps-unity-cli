@@ -78,7 +78,7 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
   try {
     if (parsed.issue) {
       const option = `--${parsed.issue.option}`;
-      if (parsed.issue.code === "E_UNKNOWN_OPTION") {
+      if (parsed.issue.code === "E_SHELL_OPTION_UNKNOWN") {
         return failure(requestId, parsed.issue.code, `Unknown option: ${option}.`, ["Run unitycli --help for the supported options."], { option });
       }
       if (parsed.issue.code === "E_OPTION_VALUE_REQUIRED") {
@@ -96,25 +96,25 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
 
     const removedExecutionOption = ["job", "wait", "wait-timeout-ms"].find((option) => parsed.flags[option] !== undefined);
     if (removedExecutionOption) {
-      return failure(requestId, "E_OBSOLETE_OPTION", `--${removedExecutionOption} has been removed; every Tool call is direct and terminal.`, [
+      return failure(requestId, "E_SHELL_OPTION_OBSOLETE", `--${removedExecutionOption} has been removed; every Tool call is direct and terminal.`, [
         `Remove --${removedExecutionOption} from the command.`,
         "Use the same tools run invocation and inspect its final success or error envelope."
       ]);
     }
 
     if (parsed.flags["bridge-endpoint"] !== undefined || process.env.UNITY_CLI_BRIDGE_ENDPOINT !== undefined) {
-      return failure(requestId, "E_OBSOLETE_OPTION", "Public Bridge endpoint selection has been removed.", [
+      return failure(requestId, "E_SHELL_OPTION_OBSOLETE", "Public Bridge endpoint selection has been removed.", [
         "Pass --instance <name|alias|projectPath> or run from the target Unity project directory.",
         "Remove UNITY_CLI_BRIDGE_ENDPOINT from the process environment.",
       ]);
     }
     if (parsed.flags.retry !== undefined) {
-      return failure(requestId, "E_OBSOLETE_OPTION", "Public transport retry counts have been removed; the session supervisor owns recoverable Unity lifecycle transitions.", [
+      return failure(requestId, "E_SHELL_OPTION_OBSOLETE", "Public transport retry counts have been removed; the session supervisor owns recoverable Unity lifecycle transitions.", [
         "Remove --retry and use one absolute --timeout-ms budget for the logical request.",
       ]);
     }
     if (parsed.flags.target !== undefined && usesLegacyTargetSelector(group, command)) {
-      return failure(requestId, "E_OBSOLETE_OPTION", "--target is not an instance selector. Use --instance or Unity project CWD.", [
+      return failure(requestId, "E_SHELL_OPTION_OBSOLETE", "--target is not an instance selector. Use --instance or Unity project CWD.", [
         "Pass --instance <name|alias|projectPath>.",
       ]);
     }
@@ -123,7 +123,7 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
     if (allowedOptions) {
       const unknownOption = Object.keys(parsed.flags).find((name) => !allowedOptions.has(name));
       if (unknownOption) {
-        return failure(requestId, "E_UNKNOWN_OPTION", `Unknown option for ${[group, command].filter(Boolean).join(" ")}: --${unknownOption}.`, [
+        return failure(requestId, "E_SHELL_OPTION_UNKNOWN", `Unknown option for ${[group, command].filter(Boolean).join(" ")}: --${unknownOption}.`, [
           "Run unitycli --help for the supported options.",
         ], { option: `--${unknownOption}`, command: [group, command].filter(Boolean).join(" ") });
       }

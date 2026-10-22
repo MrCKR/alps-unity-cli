@@ -24,7 +24,7 @@ echo '{"target":"Main Camera"}' | unitycli tools run screenshot.from-camera --st
 | target 值 | 路由行为 |
 |-----------|---------|
 | `editor` | 直接 Bridge 执行 |
-| `runtime` | 检查 Play Mode 状态，非 Play Mode 返回 `E_RUNTIME_NOT_READY` |
+| `runtime` | 检查 Play Mode 状态，非 Play Mode 返回 `E_RUNTIME_UNAVAILABLE` |
 | `both` | 默认走 editor 通道；`--runtime` 标志强制走 runtime 通道 |
 
 ## 输入校验
@@ -141,8 +141,8 @@ unitycli tools run shader.read --input '{"path":"Assets/Shaders/Probe.shader","m
 
 | 错误码 | 原因 | 恢复方式 |
 |--------|------|---------|
-| `E_TOOL_NOT_FOUND_FOR_TARGET` | 名称不属于当前实例完整 Tool 目录 | 运行 `tools search <k1|k2|...>` 发现相关 Tool，再用 `tools describe` 检查 requiresPackages 和 available |
-| `E_RUNTIME_NOT_READY` | Runtime 工具但非 Play Mode | 先执行 `tools run editor.play-mode.start`，transient 可重试 |
+| `E_TOOL_TARGET_NOT_FOUND` | 名称不属于当前实例完整 Tool 目录 | 运行 `tools search <k1|k2|...>` 发现相关 Tool，再用 `tools describe` 检查 requiresPackages 和 available |
+| `E_RUNTIME_UNAVAILABLE` | Runtime 工具但非 Play Mode | 先执行 `tools run editor.play-mode.start`，transient 可重试 |
 | `E_SCHEMA_INVALID` | 输入缺少 inputSchema.required 字段 | 查看 `tools describe` 的 inputSchema |
 | `E_DRY_RUN_UNSUPPORTED` | 工具不支持 dry-run | 去除可选 `--dry-run` 后直接调用 |
 | `E_INSTANCE_CONFLICT` | 至少两个verified live process claim属于同一canonical project | 关闭重复Editor，只保留目标session |

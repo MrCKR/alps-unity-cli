@@ -381,7 +381,7 @@ function skillInstallIoError(error: unknown, operation: string): SkillInstallerE
   if (error instanceof SkillInstallerError) return error;
   const code = (error as NodeJS.ErrnoException).code;
   return new SkillInstallerError(
-    "E_SKILL_INSTALL_IO",
+    "E_SKILL_INSTALL_IO_EXCEPTION",
     `The UnityCLI Skill bundle could not ${operation}${code ? ` (${code})` : ""}.`,
     ["Close processes holding the installed Skill files, inspect the target bundle, then retry init."]
   );

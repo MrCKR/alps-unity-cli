@@ -247,7 +247,7 @@ namespace UnityCli
             if (failure != null)
             {
                 definition.State = MethodHookState.Faulted;
-                definition.FaultCode = "E_DEBUG_TRIGGER_BUDGET_EXCEEDED";
+                definition.FaultCode = "E_DEBUG_TRIGGER_BUDGET_EXHAUSTED";
                 definition.FaultMessage = "The planned injection budget refused this restored listener: " + failure + ".";
                 return;
             }
@@ -393,7 +393,7 @@ namespace UnityCli
             if (expired != null)
             {
                 foreach (var definition in expired)
-                    FaultDefinition(definition, Volatile.Read(ref definition.Revision), "E_HOOK_RESTORE_BUDGET_EXHAUSTED", "The per-generation restore budget elapsed before this definition was reattached.", 0, "restore");
+                    FaultDefinition(definition, Volatile.Read(ref definition.Revision), "E_COMPILER_RESTORE_BUDGET_EXHAUSTED", "The per-generation restore budget elapsed before this definition was reattached.", 0, "restore");
             }
             if (restoring != null && !restoreCompileInFlight) StartRestoreCompile(restoring);
         }

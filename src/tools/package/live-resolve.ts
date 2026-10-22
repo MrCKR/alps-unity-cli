@@ -90,7 +90,7 @@ export async function runLivePackageResolve<T>(context: ToolContext, operation: 
   if (operation === "resolve") {
     await context.commitEffect?.();
   } else if (root.phase === "awaiting_files") {
-    if (!files) throw new StructuredToolError("E_INTERNAL", "Package file driver is missing.", ["Report this internal package Tool error."]);
+    if (!files) throw new StructuredToolError("E_SHELL_INTERNAL_ERROR", "Package file driver is missing.", ["Report this internal package Tool error."]);
     root = await claimFiles(context, binding, operation, executorCapability, rootInputSha256, rootRequestDigest);
     if (root.terminal) return terminalResult<T>(context.requestId, root);
     if (!root.fileExecutorOwnedByCaller) return waitForTerminal<T>(context, binding, executorCapability, rootInputSha256, rootRequestDigest);
@@ -326,7 +326,7 @@ export async function bindLivePackageProject(context: ToolContext, operation: st
 function rootState(response: BridgeResponse, requestId: string): RootState {
   if (!response.ok) throw bridgeError(response);
   const data = record(response.data);
-  if (!data) throw new StructuredToolError("E_BRIDGE_PROTOCOL", "Package coordinator returned an invalid state envelope.", ["Inspect the Unity bridge and retry with a new requestId."], { requestId });
+  if (!data) throw new StructuredToolError("E_BRIDGE_PROTOCOL_INVALID", "Package coordinator returned an invalid state envelope.", ["Inspect the Unity bridge and retry with a new requestId."], { requestId });
   const nested = record(data.terminalEnvelope);
   const state: RootState = {
     accepted: data.accepted === true,
@@ -346,7 +346,7 @@ function rootState(response: BridgeResponse, requestId: string): RootState {
 
 function terminalResult<T>(rootRequestId: string, root: RootState): T {
   const envelope = root.terminalEnvelope;
-  if (!envelope || envelope.requestId !== rootRequestId || typeof envelope.ok !== "boolean") throw new StructuredToolError("E_BRIDGE_PROTOCOL", "Package root terminal envelope is invalid.", ["Inspect package files before deciding whether to submit a new request."]);
+  if (!envelope || envelope.requestId !== rootRequestId || typeof envelope.ok !== "boolean") throw new StructuredToolError("E_BRIDGE_PROTOCOL_INVALID", "Package root terminal envelope is invalid.", ["Inspect package files before deciding whether to submit a new request."]);
   if (envelope.ok === true) return envelope.data as T;
   const error = record(envelope.error);
   throw new StructuredToolError(

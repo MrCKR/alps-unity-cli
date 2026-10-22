@@ -56,7 +56,7 @@ test("editor mutations prove terminal state before returning", async () => {
   assert.match(pause, /IsPaused = observedPaused/);
   for (const [name, text] of [["Undo", undo], ["Redo", redo]] as const) {
     assert.match(text, new RegExp(`Undo\\.undoRedoPerformed \\+= callback[\\s\\S]*ctx\\.RunCompletionProbe\\([\\s\\S]*Undo\\.Perform${name}\\(\\)[\\s\\S]*finally[\\s\\S]*Undo\\.undoRedoPerformed -= callback`));
-    assert.match(text, new RegExp(`E_${name.toUpperCase()}_NOT_PERFORMED`));
+    assert.match(text, new RegExp(`E_${name.toUpperCase()}_NOOP`));
     assert.match(text, /Completion = completion/);
     assert.doesNotMatch(text, /BUSINESS_PROOF_UNAVAILABLE|Wait\.NextFrame/);
   }

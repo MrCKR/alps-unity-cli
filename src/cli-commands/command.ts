@@ -194,7 +194,7 @@ function parseControl(
   const option = splitOption(tokens[index]);
   if (!option || !options.has(option.name)) {
     const rendered = option ? `--${option.name}` : tokens[index];
-    return { ok: false, result: failure(requestId, "E_UNKNOWN_OPTION", `Unknown option for ${route}: ${rendered}.`, [
+    return { ok: false, result: failure(requestId, "E_SHELL_OPTION_UNKNOWN", `Unknown option for ${route}: ${rendered}.`, [
       "Run unitycli command --help to inspect command-level options.",
     ], { option: rendered, command: route }) };
   }
@@ -277,7 +277,7 @@ function parseCommandInput(tool: ToolMetadata, tokens: string[], requestId: stri
     const option = optionsEnabled ? splitOption(token) : undefined;
     if (option) {
       if (!Object.hasOwn(properties, option.name)) {
-        return { ok: false, result: failure(requestId, "E_UNKNOWN_OPTION", `Unknown option for command ${tool.name}: --${option.name}.`, [
+        return { ok: false, result: failure(requestId, "E_SHELL_OPTION_UNKNOWN", `Unknown option for command ${tool.name}: --${option.name}.`, [
           `Run unitycli command ${tool.name} --help to inspect its input schema.`,
         ], { option: `--${option.name}`, toolName: tool.name }) };
       }
@@ -538,7 +538,7 @@ async function commandHelp(
 }
 
 function commandNotFound(requestId: string, commandName: string): CliResult {
-  return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Command not found: ${commandName}.`, [
+  return failure(requestId, "E_TOOL_TARGET_NOT_FOUND", `Command not found: ${commandName}.`, [
     "Run unitycli command to list commands registered by the selected Unity instance.",
     "Run unitycli tools search <k1|k2|...> to find related Tools.",
   ], { commandName });

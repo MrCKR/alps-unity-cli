@@ -80,7 +80,7 @@ function rejectUnknownToolFlags(
     : pagedDiscovery ? [...common, "page-size", "cursor"] : common;
   const unknown = Object.keys(flags).find((flag) => !allowed.includes(flag));
   if (!unknown) return undefined;
-  return failure(requestId, "E_UNKNOWN_OPTION", `Unknown option for tools ${command ?? ""}: --${unknown}.`, [
+  return failure(requestId, "E_SHELL_OPTION_UNKNOWN", `Unknown option for tools ${command ?? ""}: --${unknown}.`, [
     command === "run" ? "Put business fields inside --input <json>." : "Run unitycli --help for the supported options.",
   ], { option: `--${unknown}`, command: `tools ${command ?? ""}`.trim(), positional });
 }

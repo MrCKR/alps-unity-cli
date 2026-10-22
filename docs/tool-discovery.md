@@ -109,5 +109,5 @@ unitycli tools describe screenshot.from-camera
 - `E_EXTENSION_INVENTORY_MISMATCH`：generated Extension owner、exact compiled assembly、implementation type与manifest contribution无法闭合；重新生成统一 inventory并让 Unity reload。
 - `E_DISCOVERY_CURSOR_INVALID`：cursor损坏或来自其他查询；从当前查询第一页重新读取。
 - `E_TOOL_CATALOG_CHANGED`：continuation绑定的catalog generation已改变；从当前查询第一页重新读取。
-- `E_TOOL_NOT_FOUND_FOR_TARGET`：名称不属于当前实例目录；运行 `tools search <k1|k2|...>` 重新发现相关能力。
-- `E_RUNTIME_NOT_READY`：Runtime Tool 已显示，但执行需要稳定 PlayMode。
+- `E_TOOL_TARGET_NOT_FOUND`：名称不属于当前实例目录；运行 `tools search <k1|k2|...>` 重新发现相关能力。
+- `E_RUNTIME_UNAVAILABLE`：Runtime Tool 已显示，但执行需要稳定 PlayMode。

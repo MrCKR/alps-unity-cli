@@ -112,13 +112,13 @@ test("project Tool parser preserves dynamic availability without using source fo
     availabilityScope: "playModeSession",
     playModeSupport: "runtime-only",
     available: false,
-    unavailableReason: "E_RUNTIME_NOT_READY: Enter Play Mode before executing this Tool.",
+    unavailableReason: "E_RUNTIME_UNAVAILABLE: Enter Play Mode before executing this Tool.",
     source: "project"
   }));
   assert.ok(parsed);
   assert.equal(parsed.available, false);
   assert.equal(parsed.availabilityScope, "playModeSession");
-  assert.match(parsed.unavailableReason ?? "", /^E_RUNTIME_NOT_READY:/);
+  assert.match(parsed.unavailableReason ?? "", /^E_RUNTIME_UNAVAILABLE:/);
 });
 
 test("project Tool parser rejects wrong argv target and invalid example input", () => {

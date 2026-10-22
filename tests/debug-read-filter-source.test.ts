@@ -95,7 +95,7 @@ test("debug.console.read reports a budget-stopped scan instead of failing with n
   assert.match(tool, /public bool ScanExhausted \{ get; set; \}/);
   assert.match(tool, /public long ScannedEntries \{ get; set; \}/);
   assert.match(tool, /ScanExhausted = page\.ScanExhausted/);
-  assert.ok(tool.includes("cannot publish") || tool.includes("fails with E_REQUEST_BUDGET_EXCEEDED"), "describe must state that a fully consumed budget cannot publish a result");
+  assert.ok(tool.includes("cannot publish") || tool.includes("fails with E_REQUEST_BUDGET_LIMIT_EXCEEDED"), "describe must state that a fully consumed budget cannot publish a result");
   assert.ok(tool.includes("can only be lowered"), "describe must state that the budget can only be lowered");
   assert.ok(!tool.includes("larger count or budget"), "describe must not promise a larger budget");
 });

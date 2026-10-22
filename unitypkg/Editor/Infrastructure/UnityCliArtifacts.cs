@@ -40,7 +40,7 @@ namespace UnityCli
             }
             catch (Exception exception)
             {
-                throw new BridgeCommandException("E_IO_ERROR", "Failed to resolve screenshot output path: " + exception.Message);
+                throw new BridgeCommandException("E_SHELL_IO_ERROR", "Failed to resolve screenshot output path: " + exception.Message);
             }
         }
 
@@ -63,7 +63,7 @@ namespace UnityCli
             }
             catch (Exception exception)
             {
-                throw new BridgeCommandException("E_IO_ERROR", "Failed to create screenshot output directory: " + exception.Message);
+                throw new BridgeCommandException("E_SHELL_IO_ERROR", "Failed to create screenshot output directory: " + exception.Message);
             }
         }
 
@@ -75,7 +75,7 @@ namespace UnityCli
             }
             catch (Exception exception)
             {
-                throw new BridgeCommandException("E_IO_ERROR", "Failed to write screenshot output: " + exception.Message);
+                throw new BridgeCommandException("E_SHELL_IO_ERROR", "Failed to write screenshot output: " + exception.Message);
             }
         }
 

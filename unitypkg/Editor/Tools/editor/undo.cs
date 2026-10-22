@@ -45,7 +45,7 @@ namespace UnityCli
                 var completion = ctx.RunCompletionProbe(r == null ? null : r.CompletionProbe, () =>
                 {
                     Undo.PerformUndo();
-                    if (!performed) throw new UnityCliBridge.BridgeCommandException("E_UNDO_NOT_PERFORMED", "Unity did not perform an Undo operation.", "Ensure the shared Undo stack contains an entry, then retry.");
+                    if (!performed) throw new UnityCliBridge.BridgeCommandException("E_UNDO_NOOP", "Unity did not perform an Undo operation.", "Ensure the shared Undo stack contains an entry, then retry.");
                 });
                 return new System.Threading.Tasks.ValueTask<Result>(new Result { Performed = true, State = EditorToolSupport.BuildEditorState(), Completion = completion, PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "undo-redo-replay", Action = "undo" } } });
             }

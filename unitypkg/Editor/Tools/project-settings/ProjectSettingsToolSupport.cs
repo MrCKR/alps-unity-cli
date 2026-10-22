@@ -573,7 +573,7 @@ namespace UnityCli
 
         private static UnityCliBridge.BridgeCommandException NoFields(string toolName)
         {
-            return new UnityCliBridge.BridgeCommandException("E_PROJECT_SETTINGS_NO_FIELDS", toolName + " requires at least one approved setting field.", "Pass one or more fields shown by tools describe " + toolName + ".");
+            return new UnityCliBridge.BridgeCommandException("E_PROJECT_SETTINGS_EMPTY", toolName + " requires at least one approved setting field.", "Pass one or more fields shown by tools describe " + toolName + ".");
         }
 
         private static UnityCliBridge.BridgeCommandException Invalid(string field, string message)

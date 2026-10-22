@@ -43,7 +43,7 @@ namespace UnityCli
             var serialized = new SerializedObject(asset);
             var property = serialized.FindProperty(layer ? "layers" : "tags");
             if (property == null)
-                throw new UnityCliBridge.BridgeCommandException("E_TAG_MANAGER_SCHEMA", "Unity TagManager schema was not recognized.", "Use the Unity Editor Project Settings UI.");
+                throw new UnityCliBridge.BridgeCommandException("E_EDITOR_TAG_MANAGER_SCHEMA_INVALID", "Unity TagManager schema was not recognized.", "Use the Unity Editor Project Settings UI.");
 
             var existingIndex = -1;
             var start = layer ? 8 : 0;

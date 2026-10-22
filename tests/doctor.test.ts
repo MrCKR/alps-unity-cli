@@ -374,6 +374,6 @@ test("doctor reports obsolete local state without deleting it", async () => {
   const result = await handleDoctorCommand({}, { dataDir }, "req_doctor_obsolete");
   const check = checks(result).find((entry) => entry.name === "obsolete_local_state");
   assert.equal(check?.status, "fail");
-  assert.equal(check?.details?.code, "E_OBSOLETE_LOCAL_STATE");
+  assert.equal(check?.details?.code, "E_SHELL_LOCAL_STATE_OBSOLETE");
   assert.ok((check?.details?.paths as string[] | undefined)?.some((path) => path.endsWith("config.json")));
 });

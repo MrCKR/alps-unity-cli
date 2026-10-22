@@ -54,7 +54,7 @@ test("durable status fails closed on malformed state and preserves bridge errors
   assert.ok(tool);
   await assert.rejects(
     async () => await tool.execute({ requestId: "root-invalid" }, context(async (payload: BridgeRequest): Promise<BridgeResponse> => ({ ok: true, requestId: payload.requestId, data: { state: "completed" } }))),
-    (error: unknown) => error instanceof StructuredToolError && error.code === "E_BRIDGE_PROTOCOL",
+    (error: unknown) => error instanceof StructuredToolError && error.code === "E_BRIDGE_PROTOCOL_INVALID",
   );
   await assert.rejects(
     async () => await tool.execute({ requestId: "root-missing" }, context(async (payload: BridgeRequest): Promise<BridgeResponse> => ({ ok: false, requestId: payload.requestId, error: { code: "E_REQUEST_NOT_FOUND", message: "missing", nextActions: ["Check requestId."], transient: false, retryAfterMs: 0 } }))),

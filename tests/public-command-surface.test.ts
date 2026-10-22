@@ -43,7 +43,7 @@ test("removed deferred execution flags fail before discovery or dispatch", async
     for (const argv of [["tools", "group", flag], ["doctor", flag]]) {
       const result = await execute(argv);
       assert.equal(result.ok, false);
-      assert.equal(result.error.code, "E_OBSOLETE_OPTION");
+      assert.equal(result.error.code, "E_SHELL_OPTION_OBSOLETE");
       assert.match(result.error.message, /has been removed; every Tool call is direct and terminal/);
     }
   }
@@ -76,6 +76,6 @@ test("init rejects bare invocation and every removed mixed-install flag", async 
   ]) {
     const result = await execute(argv);
     assert.equal(result.ok, false, argv.join(" "));
-    assert.equal(result.error.code, "E_UNKNOWN_OPTION", argv.join(" "));
+    assert.equal(result.error.code, "E_SHELL_OPTION_UNKNOWN", argv.join(" "));
   }
 });

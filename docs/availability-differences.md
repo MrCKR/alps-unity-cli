@@ -63,7 +63,7 @@ Editor 与 Runtime 能力在两种模式中都保持可发现。`available`、`u
 
 | 当前模式 | `target: editor` | `target: runtime` |
 |---------|------------------|-------------------|
-| EditMode | 通常可执行 | 显示但通常 `available:false`；执行返回 `E_RUNTIME_NOT_READY` |
+| EditMode | 通常可执行 | 显示但通常 `available:false`；执行返回 `E_RUNTIME_UNAVAILABLE` |
 | PlayMode | 依据 `playModeSupport` 执行或拒绝 | 可执行；结果通常限于当前 PlayMode session |
 
 进入 PlayMode 的标准步骤：

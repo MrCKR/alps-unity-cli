@@ -18,7 +18,7 @@ const commands = {
 export function handleInitHelp(args: string[], flags: Record<string, string | boolean>, requestId: string): CliResult {
   if (args.length) return failure(requestId, "E_INIT_ARGUMENT_UNEXPECTED", "init help does not accept positional arguments.", ["Run `unitycli init help` without additional arguments."]);
   const unknown = Object.keys(flags).find((name) => name !== "pretty");
-  if (unknown) return failure(requestId, "E_UNKNOWN_OPTION", `Unknown option for init help: --${unknown}.`, ["Run `unitycli init help` without options."], { option: `--${unknown}` });
+  if (unknown) return failure(requestId, "E_SHELL_OPTION_UNKNOWN", `Unknown option for init help: --${unknown}.`, ["Run `unitycli init help` without options."], { option: `--${unknown}` });
   return success(requestId, {
     action: "init_help",
     audience: "ai",

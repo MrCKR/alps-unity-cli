@@ -96,7 +96,7 @@ test("版本、enum与数值边界在effect前fail closed", () => {
   assert.match(support, /double\.IsNaN/);
   assert.match(support, /maximumDeltaTime must be greater than or equal/);
   assert.match(support, /E_PROJECT_SETTINGS_INVALID/);
-  assert.match(support, /E_PROJECT_SETTINGS_NO_FIELDS/);
+  assert.match(support, /E_PROJECT_SETTINGS_EMPTY/);
   assert.match(support, /E_PROJECT_SETTINGS_LIMIT_EXCEEDED/);
   assert.match(support, /E_PROJECT_INPUT_AXIS_NOT_FOUND/);
   assert.match(support, /E_PROJECT_SETTINGS_TARGET_CHANGED/);
