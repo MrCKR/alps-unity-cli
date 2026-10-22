@@ -37,7 +37,7 @@ namespace UnityCli.Tests
 
             var budget = DebugCompilerOwner.Budget();
             Assert.That(budget.Count, Is.EqualTo(2), "both shapes must share one artifact counter");
-            Assert.That(budget.Bytes, Is.EqualTo(6144L), "both shapes must share one byte counter");
+            Assert.That(budget.Bytes, Is.EqualTo(6144L + 2L * DebugLimits.MaxCompiledArtifactOverheadBytes), "both shapes must share one byte counter, each charged the per-assembly allowance");
             Assert.That(DebugCompilerOwner.IsLoaded("code-candidate"), Is.True);
             Assert.That(DebugCompilerOwner.IsLoaded("hook-candidate"), Is.True);
         }
@@ -48,11 +48,11 @@ namespace UnityCli.Tests
             DebugCompilerOwner.CommitLoadedArtifact("same-candidate", 1024L, "UnityCli.Same");
             DebugCompilerOwner.CommitLoadedArtifact("same-candidate", 1024L, "UnityCli.Same");
             Assert.That(DebugCompilerOwner.Budget().Count, Is.EqualTo(1), "recompiling the identical candidate must not double-count");
-            Assert.That(DebugCompilerOwner.Budget().Bytes, Is.EqualTo(1024L));
+            Assert.That(DebugCompilerOwner.Budget().Bytes, Is.EqualTo(1024L + DebugLimits.MaxCompiledArtifactOverheadBytes));
 
             DebugCompilerOwner.CommitLoadedArtifact("different-candidate", 2048L, "UnityCli.Different");
             Assert.That(DebugCompilerOwner.Budget().Count, Is.EqualTo(2), "a genuinely different artifact must consume a new slot");
-            Assert.That(DebugCompilerOwner.Budget().Bytes, Is.EqualTo(3072L));
+            Assert.That(DebugCompilerOwner.Budget().Bytes, Is.EqualTo(3072L + 2L * DebugLimits.MaxCompiledArtifactOverheadBytes));
         }
 
         [Test]
@@ -62,16 +62,19 @@ namespace UnityCli.Tests
                 DebugCompilerOwner.CommitLoadedArtifact("candidate-" + index.ToString(CultureInfo.InvariantCulture), 1L, "UnityCli.Generated" + index.ToString(CultureInfo.InvariantCulture));
 
             var admission = DebugCompilerOwner.TryAdmitCandidate("candidate-new", 0L);
+            var chargedPerArtifact = 1L + DebugLimits.MaxCompiledArtifactOverheadBytes;
             Assert.That(admission.Admitted, Is.False, "the count budget must refuse before an unrecoverable load");
             Assert.That(admission.Reason, Is.EqualTo("artifact-count"));
             Assert.That(admission.Report.Count, Is.EqualTo(DebugLimits.MaxCompiledArtifacts));
             Assert.That(admission.Report.RemainingCount, Is.EqualTo(0));
-            Assert.That(admission.Report.Bytes, Is.EqualTo((long)DebugLimits.MaxCompiledArtifacts));
+            Assert.That(admission.Report.Bytes, Is.EqualTo((long)DebugLimits.MaxCompiledArtifacts * chargedPerArtifact));
             var details = admission.Report.ToData();
             Assert.That(details["compiledArtifacts"], Is.EqualTo(DebugLimits.MaxCompiledArtifacts));
-            Assert.That(details["compiledArtifactBytes"], Is.EqualTo((long)DebugLimits.MaxCompiledArtifacts));
+            Assert.That(details["compiledArtifactBytes"], Is.EqualTo((long)DebugLimits.MaxCompiledArtifacts * chargedPerArtifact));
             Assert.That(details["remainingArtifacts"], Is.EqualTo(0));
-            Assert.That(details["remainingBytes"], Is.EqualTo(DebugLimits.MaxCompiledArtifactBytes - DebugLimits.MaxCompiledArtifacts));
+            // 数量上限由字节预算与固定开销推导，两者在同一尺度上同时到达；超出部分按 0 剩余上报。
+            Assert.That(details["compiledArtifactBytes"], Is.GreaterThanOrEqualTo(DebugLimits.MaxCompiledArtifactBytes));
+            Assert.That(details["remainingBytes"], Is.EqualTo(0));
             Assert.That(details["maxSingleArtifactBytes"], Is.EqualTo(DebugLimits.MaxSingleArtifactBytes));
             // 判定发生在加载之前：拒绝不改变状态，也不自动 reload 或扣减已加载占用。
             Assert.That(DebugCompilerOwner.Budget().Count, Is.EqualTo(DebugLimits.MaxCompiledArtifacts));
@@ -79,7 +82,7 @@ namespace UnityCli.Tests
             Assert.That(DebugCompilerOwner.ReloadSuggestion, Does.Contain("Reload the Unity domain"));
 
             DebugCompilerOwner.ResetDomain();
-            DebugCompilerOwner.CommitLoadedArtifact("filled-byte-candidate", DebugLimits.MaxCompiledArtifactBytes - 1L, "UnityCli.Filled");
+            DebugCompilerOwner.CommitLoadedArtifact("filled-byte-candidate", DebugLimits.MaxCompiledArtifactBytes - DebugLimits.MaxCompiledArtifactOverheadBytes - 1L, "UnityCli.Filled");
             var byteRefusal = DebugCompilerOwner.TryAdmitCandidate("byte-candidate", 2L);
             Assert.That(byteRefusal.Admitted, Is.False, "the cumulative byte budget must refuse before an unrecoverable load");
             Assert.That(byteRefusal.Reason, Is.EqualTo("artifact-bytes"));
@@ -112,7 +115,7 @@ namespace UnityCli.Tests
             // 已经加载但 ABI 校验失败的候选仍然计入：字节已经进入 Mono，无法逐个卸载。
             DebugCompilerOwner.CommitLoadedArtifact("abi-failed-candidate", 512L, "UnityCli.RuntimeCode");
             Assert.That(DebugCompilerOwner.Budget().Count, Is.EqualTo(1));
-            Assert.That(DebugCompilerOwner.Budget().Bytes, Is.EqualTo(512L));
+            Assert.That(DebugCompilerOwner.Budget().Bytes, Is.EqualTo(512L + DebugLimits.MaxCompiledArtifactOverheadBytes));
         }
 
         [Test]
@@ -203,7 +206,7 @@ namespace UnityCli.Tests
             }
 
             Assert.That(DebugCompilerOwner.Budget().Count, Is.EqualTo(1), "cancel must not credit back an already loaded artifact");
-            Assert.That(DebugCompilerOwner.Budget().Bytes, Is.EqualTo(777L));
+            Assert.That(DebugCompilerOwner.Budget().Bytes, Is.EqualTo(777L + DebugLimits.MaxCompiledArtifactOverheadBytes));
         }
 
         [Test]

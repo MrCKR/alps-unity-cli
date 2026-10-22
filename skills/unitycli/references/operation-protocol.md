@@ -50,7 +50,7 @@ Tool descriptor 常用字段：
 
 `--timeout-ms T`先提供一份最多`T`的准入预算。CLI在其中等待首次ready记录、当前编译/导入/重载和任务池；证明Unity未运行时立即返回。准入deadline的`E_UNITY_BUSY`明确证明业务Bridge请求未发送、effect未开始，可以稍后提交新root。获得grant后再创建一份完整`T`的execution预算；token重取、status、rebind、reload、terminal recovery和blocker诊断都只能消费该预算，不能刷新第三份预算。blocker补充最多把现有deadline缩短到10秒；没有剩余时间或没有proof时保持主错误不变。
 
-`E_EXECUTION_TIMEOUT`、放行后的transport丢失、进程中断或没有可信terminal envelope时，只能确定本次调用没有返回可信终态，不能据此判断mutation是否发生。先读取对象、场景、Package、build/test状态或artifact manifest；只有形成新的业务决策后才提交新请求，不把outcome unknown自动重放。
+`E_EXECUTION_TIMEOUT`、放行后的transport丢失、进程中断或没有可信terminal envelope时，只能确定本次调用没有返回可信终态，不能据此判断mutation是否发生。先读取对象、场景、Package、build/test状态或artifact manifest；只有形成新的业务决策后才提交新请求，不把outcome unknown自动重放。同session的exact terminal只保留有界的最近一批完整信封，域专用终态账本按同一规则只保留原调用execution deadline内的identity；两类记录到期后自行裁剪。所以重投一个已被挤出的identity得到`E_EXECUTION_TIMEOUT`与`details.replay="blocked"`且永不重放effect，而重投历史本身满额时准入前返回`E_UNITY_BUSY`（`details.reason="terminal-replay-history-capacity"`或`"navmesh-terminal-ledger-capacity"`），等`retryAfterMs`后即可重提，不需要重启Editor。
 
 调用公开CLI的命令host必须等待进程退出；传入`--timeout-ms T`时至少等待`2 * T + 5000`毫秒，不得后台分离。CLI只输出一个terminal envelope，并在stdout完成且已注册的local owner都settle后退出，或在唯一的1000ms宽限期到达时退出；local settlement cleanup只处理仍未消费的lease，永不settle的本地Promise不能延长该宽限。CLI timeout不会强停Unity中已开始的effect，host提前退出也不能作为停止证明。
 

@@ -76,21 +76,26 @@ test("the reference snapshot and its fingerprint are declared once", async () =>
 test("the artifact budget is declared only in DebugLimits", async () => {
   const [owner, compiler, hookHost, limits] = await Promise.all([read(OWNER), read(COMPILER), read(HOOK_HOST), read("unitypkg/Editor/Infrastructure/Debug/DebugLimits.cs")]);
 
-  for (const declaration of [/const int MaxCompiledArtifacts/, /const long MaxCompiledArtifactBytes/, /const long MaxSingleArtifactBytes/]) {
+  for (const declaration of [/const int MaxCompiledArtifacts/, /const long MaxCompiledArtifactBytes/, /const long MaxSingleArtifactBytes/, /const long MaxCompiledArtifactOverheadBytes/]) {
     for (const text of [owner, compiler, hookHost]) assert.doesNotMatch(text, declaration, "compiler budget values must only be declared in DebugLimits");
   }
-  // 三个声明的数值只在 DebugLimits 出现，owner 侧只引用常量名。
-  assert.match(limits, /MaxCompiledArtifacts = 64;/);
+  // 三个声明的数值只在 DebugLimits 出现，owner 侧只引用常量名；数量上限由字节预算与单产物固定开销推导。
+  assert.match(limits, /MaxCompiledArtifacts = \(int\)\(MaxCompiledArtifactBytes \/ MaxCompiledArtifactOverheadBytes\);/);
   assert.match(limits, /MaxCompiledArtifactBytes = 128L \* 1024 \* 1024;/);
   assert.match(limits, /MaxSingleArtifactBytes = 8L \* 1024 \* 1024;/);
+  assert.match(limits, /MaxCompiledArtifactOverheadBytes = 256L \* 1024;/);
   for (const text of [owner, compiler, hookHost]) {
-    for (const restated of [/MaxCompiledArtifacts\s*=\s*64/, /MaxCompiledArtifactBytes\s*=\s*128/, /MaxSingleArtifactBytes\s*=\s*8/]) {
+    for (const restated of [/MaxCompiledArtifacts\s*=\s*\d/, /MaxCompiledArtifactBytes\s*=\s*128/, /MaxSingleArtifactBytes\s*=\s*8/, /MaxCompiledArtifactOverheadBytes\s*=\s*\d/]) {
       assert.doesNotMatch(text, restated, "the owner set must reference the declared limits instead of restating them");
     }
   }
   assert.match(owner, /DebugLimits\.MaxCompiledArtifacts/);
   assert.match(owner, /DebugLimits\.MaxCompiledArtifactBytes/);
   assert.match(owner, /DebugLimits\.MaxSingleArtifactBytes/);
+  // 准入与记账必须用同一口径把每个程序集的固定开销算进字节预算。
+  assert.match(owner, /report\.Bytes \+ ChargedArtifactBytes\(artifactBytes\) > DebugLimits\.MaxCompiledArtifactBytes/);
+  assert.match(owner, /loadedArtifactBytes \+= ChargedArtifactBytes\(artifactBytes\)/);
+  assert.match(owner, /\+ DebugLimits\.MaxCompiledArtifactOverheadBytes/);
 });
 
 test("refusal reports occupancy and never reloads the domain automatically", async () => {
@@ -98,6 +103,8 @@ test("refusal reports occupancy and never reloads the domain automatically", asy
 
   assert.match(owner, /internal const string BudgetExhaustedCode = "E_HOOK_COMPILE_BUDGET_EXHAUSTED";/);
   assert.match(owner, /internal const string ReloadSuggestion = "[^"]*Reload the Unity domain/);
+  // describe 与实现共用同一上限来源：不仅公布数量/字节，还公布单产物固定开销与可回收、可复用的事实。
+  assert.match(owner, /BudgetExhaustedCode/);
   assert.match(owner, /\{ "compiledArtifacts", Count \}/);
   assert.match(owner, /\{ "compiledArtifactBytes", Bytes \}/);
   assert.match(owner, /\{ "remainingArtifacts", RemainingCount \}/);

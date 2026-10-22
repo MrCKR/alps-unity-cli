@@ -62,7 +62,11 @@ test("NavMesh terminal uses exact durable replay and first-envelope-wins", () =>
   assert.match(coordinator, /TerminalLedgerScope = "navmesh-bake-terminal-ledger"[\s\S]*TerminalLedgerCapacity = 128/);
   assert.match(coordinator, /RecoveredLedgerTerminal\(request\.RequestId, digest\)[\s\S]*EnsureTerminalLedgerCapacity[\s\S]*CreateFirst/);
   assert.match(coordinator, /StoreTerminalLedger[\s\S]*TerminalLedgerProofSha256[\s\S]*HmacSha256/);
-  assert.doesNotMatch(coordinator, /TerminalLedgerCapacity[\s\S]*RemoveAt|TerminalLedgerCapacity[\s\S]*Skip\(/);
+  // 容量只由未到期的重投窗口决定：条目按 retainUntilUtcMs 裁剪，满额时在 effect 前返回 busy。
+  assert.match(coordinator, /PruneTerminalLedger\(ledger\["entries"\] as IList\)/);
+  assert.match(coordinator, /Long\(entry, "retainUntilUtcMs"\) > now/);
+  assert.match(coordinator, /"E_UNITY_BUSY"[\s\S]*navmesh-terminal-ledger-capacity[\s\S]*ownEffectStarted/);
+  assert.doesNotMatch(coordinator, /restart the Editor before starting another bake/);
   assert.match(coordinator, /EvaluateTerminalCleanupRoot[\s\S]*TerminalCleanupDecision\.Retry/);
   assert.match(coordinator, /LoadActiveForStatus[\s\S]*UnityCliActiveOperation\.Load\(ActiveScope\)[\s\S]*snapshot cannot be verified/);
   const publicSnapshot = coordinator.slice(coordinator.indexOf("internal static Dictionary<string, object> PublicStatus()"), coordinator.indexOf("private static Dictionary<string, object> PublicStatusFromStored"));

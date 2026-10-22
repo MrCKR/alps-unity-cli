@@ -198,19 +198,41 @@ namespace UnityCli
         private const int MaxTerminalEntryBytes = 2 * 1024 * 1024;
         private const int MaxRetiredTerminalIdentities = 4096;
         private const int TerminalAdmissionIdentityReserve = 8;
+        private const int TerminalCacheVersion = 3;
+        // 过期identity只在原调用的重投窗口内保留；deadline之后admission本身已拒绝重投。
+        private const long RetiredRetentionGraceMs = 5 * 60 * 1000;
+        private const long RetiredRetentionFallbackMs = 24 * 60 * 60 * 1000;
 
         private sealed class TerminalCacheState
         {
             internal List<Dictionary<string, object>> Entries = new List<Dictionary<string, object>>();
-            internal HashSet<string> RetiredIdentities = new HashSet<string>(StringComparer.Ordinal);
+            internal Dictionary<string, long> RetiredIdentities = new Dictionary<string, long>(StringComparer.Ordinal);
         }
 
-        /// <summary>exact retired history满载后在新lease发布前关闭admission，已有effect仍可写terminal。</summary>
+        /// <summary>兜底容量检查：重投窗口内identity超额时不启动新mutation，窗口自然到期后自动恢复。</summary>
         internal static void EnsureTerminalAdmission()
         {
             var cache = LoadTerminalCache();
-            if (cache.Entries.Count + cache.RetiredIdentities.Count + TerminalAdmissionIdentityReserve >= MaxRetiredTerminalIdentities)
-                throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Durable terminal history reached its fixed exact-identity limit; restart the Editor session before submitting another mutation.");
+            if (cache.RetiredIdentities.Count + TerminalAdmissionIdentityReserve < MaxRetiredTerminalIdentities) return;
+            var retryAfterMs = (int)Math.Max(0, Math.Min(int.MaxValue, cache.RetiredIdentities.Values.Min() - UtcNowMs()));
+            throw new BridgeCommandException(
+                "E_UNITY_BUSY",
+                "Durable terminal replay history is full of unexpired identities; no mutation was started.",
+                new Dictionary<string, object>
+                {
+                    { "reason", "terminal-replay-history-capacity" },
+                    { "retiredCount", (long)cache.RetiredIdentities.Count },
+                    { "capacity", (long)MaxRetiredTerminalIdentities },
+                    { "ownEffectStarted", false },
+                    { "retryAfterMs", (long)retryAfterMs }
+                },
+                new[]
+                {
+                    "Wait for the reported retryAfterMs, then submit a new request; the replay history prunes itself and no Editor restart is required.",
+                    "Run unitycli tools run editor.state to confirm the Editor is ready before resubmitting."
+                },
+                true,
+                retryAfterMs);
         }
 
         /// <summary>读取当前Editor session内的exact terminal；同requestId不同digest稳定拒绝。</summary>
@@ -317,34 +339,33 @@ namespace UnityCli
                 return stored;
             }
             RejectRetiredTerminal(cache.RetiredIdentities, scope, requestId);
-            if (cache.Entries.Count + cache.RetiredIdentities.Count >= MaxRetiredTerminalIdentities)
-                throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Durable terminal exact history has no reserved identity slot; outcome is unknown.");
+            if (cache.RetiredIdentities.Count >= MaxRetiredTerminalIdentities)
+                throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Durable terminal exact history has no reserved identity slot; outcome is unknown.", "Inspect the affected business state before submitting a new request; the replay history frees itself when its retry windows expire.");
             var added = new Dictionary<string, object>
             {
                 { "scope", scope }, { "requestId", requestId }, { "requestDigest", requestDigest },
-                { "storedAt", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture) }, { "envelope", envelope }
+                { "storedAt", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture) },
+                { "retainUntilUtcMs", RetiredRetentionUntilMs(requestId) }, { "envelope", envelope }
             };
             if (!string.IsNullOrEmpty(selectorDigest)) added["selectorDigest"] = selectorDigest;
             if (!string.IsNullOrEmpty(statusDomain)) added["statusDomain"] = statusDomain;
             if (Encoding.UTF8.GetByteCount(UnityCliSerializer.Serialize(added)) > MaxTerminalEntryBytes)
-                throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Durable terminal envelope exceeds its fixed size limit; outcome is unknown.");
+                throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Durable terminal envelope exceeds its fixed size limit; outcome is unknown.", "Inspect the affected business state before submitting a new request; the effect already ran.");
             cache.Entries.Add(added);
             var serialized = SerializeTerminalCache(cache);
             while (cache.Entries.Count > 100 || Encoding.UTF8.GetByteCount(serialized) > MaxTerminalCacheBytes)
             {
                 if (cache.Entries.Count <= 1)
-                    throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Durable terminal cache cannot retain the new terminal within its fixed size limit; outcome is unknown.");
+                    throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Durable terminal cache cannot retain the new terminal within its fixed size limit; outcome is unknown.", "Inspect the affected business state before submitting a new request; the effect already ran.");
                 var retired = cache.Entries[0];
-                if (cache.RetiredIdentities.Count >= MaxRetiredTerminalIdentities)
-                    throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Durable terminal exact history cannot retire another identity; outcome is unknown.");
-                cache.RetiredIdentities.Add(TerminalIdentityHash(Text(retired, "scope"), Text(retired, "requestId")));
+                RetireTerminalEntry(cache, retired);
                 cache.Entries.RemoveAt(0);
                 serialized = SerializeTerminalCache(cache);
             }
             try { DurableWriteText(TerminalCachePath(), serialized); }
             catch (Exception)
             {
-                throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Durable terminal cache could not be written; outcome is unknown.");
+                throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Durable terminal cache could not be written; outcome is unknown.", "Inspect the affected business state before submitting a new request; the effect already ran.");
             }
             return envelope;
         }
@@ -358,10 +379,10 @@ namespace UnityCli
             catch (DirectoryNotFoundException) { return new TerminalCacheState(); }
             catch (Exception)
             {
-                throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Durable terminal cache cannot be read; outcome is unknown.");
+                throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Durable terminal cache cannot be read; outcome is unknown.", "Inspect the affected business state before submitting a new request.");
             }
             if (bytes.Length > 8 * 1024 * 1024)
-                throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Durable terminal cache exceeds its fixed size limit; outcome is unknown.");
+                throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Durable terminal cache exceeds its fixed size limit; outcome is unknown.", "Inspect the affected business state before submitting a new request.");
             try
             {
                 var root = UnityCliSerializer.Parse(new UTF8Encoding(false, true).GetString(bytes)) as Dictionary<string, object>;
@@ -369,7 +390,11 @@ namespace UnityCli
                 object entriesValue;
                 object retiredValue;
                 object versionValue;
-                if (root == null || !root.TryGetValue("version", out versionValue) || !(versionValue is long) || (long)versionValue != 2
+                if (root != null && root.TryGetValue("version", out versionValue) && versionValue is long
+                    && (long)versionValue != TerminalCacheVersion)
+                    // 机制状态格式不匹配时按重启作废处理，不迁移也不报错。
+                    return new TerminalCacheState();
+                if (root == null || !root.TryGetValue("version", out versionValue) || !(versionValue is long)
                     || !root.TryGetValue("editorSessionId", out sessionValue)
                     || !root.TryGetValue("entries", out entriesValue) || !(entriesValue is List<object>)
                     || !root.TryGetValue("retiredIdentities", out retiredValue) || !(retiredValue is List<object>))
@@ -377,11 +402,19 @@ namespace UnityCli
                 if (!string.Equals(sessionValue as string, UnityCliBridge.EditorSessionId(), StringComparison.Ordinal))
                     return new TerminalCacheState();
                 var result = new TerminalCacheState();
+                var now = UtcNowMs();
                 foreach (var value in (List<object>)retiredValue)
                 {
-                    var identity = value as string;
-                    if (identity == null || identity.Length != 64 || !identity.All(Uri.IsHexDigit) || !result.RetiredIdentities.Add(identity))
+                    var record = value as Dictionary<string, object>;
+                    var identity = record == null ? null : Text(record, "identity");
+                    object retainUntilValue;
+                    if (identity == null || identity.Length != 64 || !identity.All(Uri.IsHexDigit)
+                        || !record.TryGetValue("retainUntilUtcMs", out retainUntilValue) || !(retainUntilValue is long))
                         throw new InvalidDataException("Durable terminal retired identity is invalid.");
+                    // 重投窗口已过的identity不再保留，缓存按真实重投可能性收缩。
+                    if ((long)retainUntilValue <= now) continue;
+                    if (result.RetiredIdentities.ContainsKey(identity)) throw new InvalidDataException("Durable terminal retired identity is duplicated.");
+                    result.RetiredIdentities.Add(identity, (long)retainUntilValue);
                 }
                 if (result.RetiredIdentities.Count > MaxRetiredTerminalIdentities) throw new InvalidDataException("Durable terminal retired identity limit was exceeded.");
                 var identities = new HashSet<string>(StringComparer.Ordinal);
@@ -393,7 +426,10 @@ namespace UnityCli
                     var scope = Text(entry, "scope");
                     var requestId = Text(entry, "requestId");
                     ValidateTerminalIdentity(scope, requestId, Text(entry, "requestDigest"));
-                    if (!identities.Add(scope + "\0" + requestId) || result.RetiredIdentities.Contains(TerminalIdentityHash(scope, requestId)))
+                    object retainUntilValue;
+                    if (!entry.TryGetValue("retainUntilUtcMs", out retainUntilValue) || !(retainUntilValue is long))
+                        throw new InvalidDataException("Durable terminal cache entry replay window is invalid.");
+                    if (!identities.Add(scope + "\0" + requestId) || result.RetiredIdentities.ContainsKey(TerminalIdentityHash(scope, requestId)))
                         throw new InvalidDataException("Durable terminal cache contains a duplicate or retired request identity.");
                     object selectorValue;
                     if (entry.TryGetValue("selectorDigest", out selectorValue)) ValidateTerminalIdentity(scope, requestId, selectorValue as string);
@@ -412,6 +448,7 @@ namespace UnityCli
                     DateTimeOffset storedAt;
                     if (!DateTimeOffset.TryParse(Text(entry, "storedAt"), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out storedAt))
                         throw new InvalidDataException("Durable terminal cache timestamp is invalid.");
+                    // 窗口已过的entry仍可读回，但退役后不再写入重投历史。
                     result.Entries.Add(entry);
                 }
                 if (result.Entries.Count > 100) throw new InvalidDataException("Durable terminal cache entry limit was exceeded.");
@@ -420,7 +457,7 @@ namespace UnityCli
             catch (BridgeCommandException) { throw; }
             catch (Exception)
             {
-                throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Durable terminal cache is corrupt; outcome is unknown.");
+                throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Durable terminal cache is corrupt; outcome is unknown.", "Inspect the affected business state before submitting a new request.");
             }
         }
 
@@ -428,23 +465,68 @@ namespace UnityCli
         {
             return UnityCliSerializer.Serialize(new Dictionary<string, object>
             {
-                { "version", 2L }, { "editorSessionId", UnityCliBridge.EditorSessionId() },
-                { "retiredIdentities", SortedRetiredIdentities(cache.RetiredIdentities) },
+                { "version", (long)TerminalCacheVersion }, { "editorSessionId", UnityCliBridge.EditorSessionId() },
+                { "retiredIdentities", SerializeRetiredIdentities(cache.RetiredIdentities) },
                 { "entries", cache.Entries.ConvertAll<object>(entry => entry) }
             }) + "\n";
         }
 
-        private static void RejectRetiredTerminal(HashSet<string> retired, string scope, string requestId)
+        /// <summary>把被挤出终态缓存的entry写入重投历史；窗口已过的identity不再占位。</summary>
+        private static void RetireTerminalEntry(TerminalCacheState cache, Dictionary<string, object> entry)
         {
-            if (!retired.Contains(TerminalIdentityHash(scope, requestId))) return;
-            throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "The request terminal was retired from the bounded exact cache; replay is forbidden.");
+            object retainUntilValue;
+            var retainUntilUtcMs = entry.TryGetValue("retainUntilUtcMs", out retainUntilValue) && retainUntilValue is long
+                ? (long)retainUntilValue
+                : UtcNowMs() + RetiredRetentionFallbackMs;
+            if (retainUntilUtcMs <= UtcNowMs()) return;
+            if (cache.RetiredIdentities.Count >= MaxRetiredTerminalIdentities)
+                throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Durable terminal exact history cannot retire another identity; outcome is unknown.", "Inspect the affected business state before submitting a new request; the effect already ran.");
+            cache.RetiredIdentities[TerminalIdentityHash(Text(entry, "scope"), Text(entry, "requestId"))] = retainUntilUtcMs;
         }
 
-        private static List<object> SortedRetiredIdentities(HashSet<string> retired)
+        /// <summary>重投历史只活到原调用的execution deadline之后；没有admission记录时使用有界兜底窗口。</summary>
+        private static long RetiredRetentionUntilMs(string requestId)
         {
-            var values = new List<string>(retired);
-            values.Sort(StringComparer.Ordinal);
-            return values.ConvertAll<object>(value => value);
+            long executionDeadlineMs;
+            return UnityCliBridge.TryCaptureAdmissionDeadlineMs(requestId, out executionDeadlineMs)
+                ? executionDeadlineMs + RetiredRetentionGraceMs
+                : UtcNowMs() + RetiredRetentionFallbackMs;
+        }
+
+        private static long UtcNowMs()
+        {
+            return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        }
+
+        private static void RejectRetiredTerminal(Dictionary<string, long> retired, string scope, string requestId)
+        {
+            if (!retired.ContainsKey(TerminalIdentityHash(scope, requestId))) return;
+            throw new BridgeCommandException(
+                "E_EXECUTION_TIMEOUT",
+                "The request terminal was retired from the bounded exact cache; the original outcome is unknown and the effect is never replayed.",
+                new Dictionary<string, object>
+                {
+                    { "outcome", "unknown" },
+                    { "replay", "blocked" },
+                    { "reason", "terminal-evicted" }
+                },
+                new[]
+                {
+                    "Read the affected business state before deciding whether to submit a new request.",
+                    "Run unitycli tools run editor.state to confirm the Editor is ready."
+                },
+                false,
+                0);
+        }
+
+        private static List<object> SerializeRetiredIdentities(Dictionary<string, long> retired)
+        {
+            var identities = new List<string>(retired.Keys);
+            identities.Sort(StringComparer.Ordinal);
+            return identities.ConvertAll<object>(identity => new Dictionary<string, object>
+            {
+                { "identity", identity }, { "retainUntilUtcMs", retired[identity] }
+            });
         }
 
         private static string TerminalIdentityHash(string scope, string requestId)

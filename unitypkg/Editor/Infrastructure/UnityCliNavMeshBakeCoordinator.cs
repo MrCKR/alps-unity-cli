@@ -36,6 +36,9 @@ namespace UnityCli
             private const string StatusScope = "navmesh-bake-status";
             private const string TerminalLedgerScope = "navmesh-bake-terminal-ledger";
             private const int TerminalLedgerCapacity = 128;
+            // terminal 只在原调用的重投窗口内保留；窗口关闭后不再占容量。
+            private const long TerminalLedgerRetentionGraceMs = 5 * 60 * 1000;
+            private const long TerminalLedgerFallbackWindowMs = 60 * 60 * 1000;
             private const string StatusSessionInitializedKey = "UnityCli.NavMeshBake.StatusSessionInitialized";
             private const string StatusWrittenThisSessionKey = "UnityCli.NavMeshBake.StatusWrittenThisSession";
             private const string TerminalLedgerWrittenThisSessionKey = "UnityCli.NavMeshBake.TerminalLedgerWrittenThisSession";
@@ -1362,7 +1365,7 @@ namespace UnityCli
                 LastStatusLoadOutcome = StatusLoadOutcome.Loaded;
             }
 
-            /// <summary>terminal ledger是单文件、固定容量、session-scoped；不淘汰已记录identity。</summary>
+            /// <summary>terminal ledger是单文件、固定容量、session-scoped；只保留重投窗口内的identity。</summary>
             private static Dictionary<string, object> LoadTerminalLedger()
             {
                 try
@@ -1379,6 +1382,7 @@ namespace UnityCli
                     var ledger = UnityCliActiveOperation.Load(TerminalLedgerScope);
                     if (!ValidateTerminalLedger(ledger))
                         throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "NavMesh terminal ledger is corrupt; outcome is unknown.");
+                    PruneTerminalLedger(ledger["entries"] as IList);
                     return ledger;
                 }
                 catch (BridgeCommandException) { throw; }
@@ -1414,6 +1418,7 @@ namespace UnityCli
                     string requestId;
                     if (entry == null || !TryNonEmptyString(entry, "requestId", out requestId) || !requestIds.Add(requestId)
                         || !IsSha256Text(Text(entry, "requestDigest")) || !ValidateTimestamp(Text(entry, "storedAt"))
+                        || !LedgerRetentionValid(entry)
                         || envelope == null || !envelope.TryGetValue("ok", out ok) || !(ok is bool)
                         || !string.Equals(Text(envelope, "requestId"), requestId, StringComparison.Ordinal)) return false;
                 }
@@ -1447,12 +1452,75 @@ namespace UnityCli
                 return null;
             }
 
-            private static void EnsureTerminalLedgerCapacity()
+            internal static void EnsureTerminalLedgerCapacity()
             {
                 var ledger = LoadTerminalLedger();
                 var entries = ledger["entries"] as IList;
-                if (entries != null && entries.Count >= TerminalLedgerCapacity)
-                    throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "NavMesh terminal ledger reached its session capacity; restart the Editor before starting another bake.");
+                if (entries == null || entries.Count < TerminalLedgerCapacity) return;
+                var retryAfterMs = (int)Math.Max(0, Math.Min(int.MaxValue, EarliestLedgerRetentionMs(entries) - UtcNowMs()));
+                throw new BridgeCommandException(
+                    "E_UNITY_BUSY",
+                    "NavMesh bake terminal ledger is full of unexpired entries; no bake was started.",
+                    new Dictionary<string, object>
+                    {
+                        { "reason", "navmesh-terminal-ledger-capacity" },
+                        { "entriesUsed", (long)entries.Count },
+                        { "capacity", (long)TerminalLedgerCapacity },
+                        { "ownEffectStarted", false },
+                        { "retryAfterMs", (long)retryAfterMs }
+                    },
+                    new[]
+                    {
+                        "Wait for the reported retryAfterMs, then submit a new request; expired terminal entries are pruned by themselves and no Editor restart is required.",
+                        "Run unitycli tools run editor.state to confirm the Editor is ready before resubmitting."
+                    },
+                    true,
+                    retryAfterMs);
+            }
+
+            /// <summary>只保留原调用重投窗口内的identity；缺少窗口的旧条目视为已过期。</summary>
+            private static void PruneTerminalLedger(IList entries)
+            {
+                if (entries == null) return;
+                var now = UtcNowMs();
+                for (var index = entries.Count - 1; index >= 0; index--)
+                {
+                    var entry = entries[index] as IDictionary<string, object>;
+                    if (entry != null && Long(entry, "retainUntilUtcMs") > now) continue;
+                    entries.RemoveAt(index);
+                }
+            }
+
+            private static bool LedgerRetentionValid(IDictionary<string, object> entry)
+            {
+                object value;
+                return !entry.TryGetValue("retainUntilUtcMs", out value) || value is long;
+            }
+
+            private static long EarliestLedgerRetentionMs(IList entries)
+            {
+                var earliest = long.MaxValue;
+                foreach (var value in entries)
+                {
+                    var entry = value as IDictionary<string, object>;
+                    var retainUntil = entry == null ? 0L : Long(entry, "retainUntilUtcMs");
+                    if (retainUntil > 0 && retainUntil < earliest) earliest = retainUntil;
+                }
+                return earliest == long.MaxValue ? UtcNowMs() : earliest;
+            }
+
+            /// <summary>重投窗口取原调用的execution deadline；没有admission记录时使用有界兜底窗口。</summary>
+            private static long LedgerRetentionUntilMs(string requestId)
+            {
+                long executionDeadlineMs;
+                return UnityCliBridge.TryCaptureAdmissionDeadlineMs(requestId, out executionDeadlineMs)
+                    ? executionDeadlineMs + TerminalLedgerRetentionGraceMs
+                    : UtcNowMs() + TerminalLedgerFallbackWindowMs;
+            }
+
+            private static long UtcNowMs()
+            {
+                return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             }
 
             private static void StoreTerminalLedger(Dictionary<string, object> root, object envelope)
@@ -1462,7 +1530,7 @@ namespace UnityCli
                 StoreTerminalLedgerIdentity(Text(root, "requestId"), Text(root, "requestDigest"), envelope);
             }
 
-            private static void StoreTerminalLedgerIdentity(string requestId, string requestDigest, object envelope)
+            internal static void StoreTerminalLedgerIdentity(string requestId, string requestDigest, object envelope, long retainUntilUtcMs = 0)
             {
                 if (string.IsNullOrWhiteSpace(requestId) || !IsSha256Text(requestDigest))
                     throw new InvalidOperationException("NavMesh terminal ledger identity is invalid.");
@@ -1480,12 +1548,14 @@ namespace UnityCli
                         throw new InvalidOperationException("NavMesh terminal ledger entry cannot be overwritten.");
                     return;
                 }
+                if (retainUntilUtcMs <= 0) retainUntilUtcMs = LedgerRetentionUntilMs(requestId);
                 if (entries.Count >= TerminalLedgerCapacity)
-                    throw new InvalidOperationException("NavMesh terminal ledger capacity was exhausted before publication.");
+                    throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "NavMesh bake terminal ledger is full; the effect outcome is unknown.", "Inspect the NavMesh bake state before submitting a new request; the effect already ran.");
                 entries.Add(new Dictionary<string, object>
                 {
                     { "requestId", requestId }, { "requestDigest", requestDigest },
-                    { "storedAt", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) }, { "rootEnvelope", parsedEnvelope }
+                    { "storedAt", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) },
+                    { "retainUntilUtcMs", retainUntilUtcMs }, { "rootEnvelope", parsedEnvelope }
                 });
                 ledger["entries"] = entries;
                 SaveTerminalLedger(ledger);

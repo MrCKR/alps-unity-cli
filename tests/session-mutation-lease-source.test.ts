@@ -161,10 +161,12 @@ test("C# mutation execution uses the shared instance lease owner protocol", asyn
   assert.match(reloadOperation, /internal virtual void Tick\(\)[\s\S]*tickSchedule\.TryEnter\(\)[\s\S]*RetryPreEffectCleanup\(\)[\s\S]*RetryTerminalCleanup\(\)[\s\S]*TryResumePublishedTerminal\(root\)[\s\S]*tickSchedule\.UtcNow >= Time\(root, "deadline"\)/);
   assert.doesNotMatch(reloadOperation, /nextTickUtc|DateTime\.UtcNow < nextTick/);
   assert.match(activeOperation, /TryGetTerminal\(string scope, string requestId, string requestDigest, out object envelope\)/);
-  assert.match(activeOperation, /StoreTerminalFirst[\s\S]*MaxTerminalEntryBytes[\s\S]*while \(cache\.Entries\.Count > 100 \|\| Encoding\.UTF8\.GetByteCount\(serialized\) > MaxTerminalCacheBytes\)[\s\S]*RetiredIdentities\.Add\(TerminalIdentityHash[\s\S]*DurableWriteText\(TerminalCachePath\(\), serialized\)/);
+  assert.match(activeOperation, /StoreTerminalFirst[\s\S]*MaxTerminalEntryBytes[\s\S]*while \(cache\.Entries\.Count > 100 \|\| Encoding\.UTF8\.GetByteCount\(serialized\) > MaxTerminalCacheBytes\)[\s\S]*RetireTerminalEntry\(cache, retired\)[\s\S]*DurableWriteText\(TerminalCachePath\(\), serialized\)/);
   assert.match(activeOperation, /retiredIdentities[\s\S]*RejectRetiredTerminal[\s\S]*TerminalIdentityHash[\s\S]*SHA256\.Create/);
+  assert.match(activeOperation, /E_UNITY_BUSY[\s\S]*TryCaptureAdmissionDeadlineMs[\s\S]*RetiredRetentionGraceMs/);
   assert.match(lease, /!allowValidatedActiveRoot\) UnityCliActiveOperation\.EnsureTerminalAdmission\(\)/);
-  assert.match(activeOperation, /HashSet<string>[\s\S]*duplicate or retired request identity[\s\S]*Durable terminal cache envelope is invalid/);
+  assert.match(activeOperation, /Dictionary<string, long> RetiredIdentities[\s\S]*retainUntilUtcMs[\s\S]*duplicate or retired request identity[\s\S]*Durable terminal cache envelope is invalid/);
+  assert.doesNotMatch(activeOperation, /restart the Editor session before submitting another mutation/);
   assert.match(activeOperation, /Active operation state exceeds its fixed size limit/);
   assert.match(operation, /DirectMutationEffectCommittedSessionKey[\s\S]*TryGetTerminal\(DirectMutationTerminalScope[\s\S]*PersistDirectMutationTerminal[\s\S]*TryIsOwnedBy\(requestId, requestDigest/);
   assert.match(activeOperation, /editorSessionId[\s\S]*UnityCliBridge\.EditorSessionId\(\)/);

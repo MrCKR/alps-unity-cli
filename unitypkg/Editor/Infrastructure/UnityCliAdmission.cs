@@ -642,6 +642,23 @@ namespace UnityCli
             return ToAdmissionOwner(identity, requestDigest);
         }
 
+        /// <summary>读取已消费admission的execution deadline；无owner时不抛错，供终态重投窗口计算使用。</summary>
+        internal static bool TryCaptureAdmissionDeadlineMs(string requestId, out long executionDeadlineMs)
+        {
+            return TryCaptureAdmissionDeadlineMs(ProductionQueueState, requestId, out executionDeadlineMs);
+        }
+
+        internal static bool TryCaptureAdmissionDeadlineMs(BridgeQueueState state, string requestId, out long executionDeadlineMs)
+        {
+            executionDeadlineMs = 0;
+            var pool = state == null ? null : state.AdmissionPool;
+            UnityCliAdmissionPool.ConsumedIdentity identity;
+            if (pool == null || string.IsNullOrEmpty(requestId) || !pool.TryGetConsumedIdentity(requestId, out identity)) return false;
+            if (identity.ExecutionDeadlineMs <= 0) return false;
+            executionDeadlineMs = identity.ExecutionDeadlineMs;
+            return true;
+        }
+
         /// <summary>先落exact completion intent，再在state锁内完成pool memory与map裁决。</summary>
         internal static bool CompleteAdmissionRoot(AdmissionOwnerIdentity identity)
         {

@@ -296,6 +296,7 @@ namespace UnityCli
 
         /// <summary>
         /// 加载前的准入判定。artifactBytes 为 0 表示编译前的粗判，为真实长度表示加载前的精确判定。
+        /// 新产物额外计入每个程序集的固定开销折算，使字节预算而非数量成为真实稀缺资源。
         /// 拒绝时返回当前占用（数量、字节、剩余）与 reload 建议，且不改变任何状态；owner 不自动 reload。
         /// </summary>
         internal static DebugCompilerAdmission TryAdmitCandidate(string identity, long artifactBytes)
@@ -310,9 +311,15 @@ namespace UnityCli
                 if (!alreadyLoaded && report.Count >= DebugLimits.MaxCompiledArtifacts) return DebugCompilerAdmission.Refuse("artifact-count", report);
                 // 同一候选的数量与字节都已在账上，重编译相同候选不重复占用。
                 if (alreadyLoaded) return DebugCompilerAdmission.Admit(report);
-                if (report.Bytes + artifactBytes > DebugLimits.MaxCompiledArtifactBytes) return DebugCompilerAdmission.Refuse("artifact-bytes", report);
+                if (report.Bytes + ChargedArtifactBytes(artifactBytes) > DebugLimits.MaxCompiledArtifactBytes) return DebugCompilerAdmission.Refuse("artifact-bytes", report);
                 return DebugCompilerAdmission.Admit(report);
             }
+        }
+
+        /// <summary>产物字节加上每个程序集的固定开销折算；准入与记账必须使用同一口径。</summary>
+        private static long ChargedArtifactBytes(long artifactBytes)
+        {
+            return (artifactBytes < 0L ? 0L : artifactBytes) + DebugLimits.MaxCompiledArtifactOverheadBytes;
         }
 
         /// <summary>
@@ -325,7 +332,7 @@ namespace UnityCli
             lock (Gate)
             {
                 if (!LoadedArtifactIdentities.Add(identity)) return;
-                loadedArtifactBytes += artifactBytes < 0L ? 0L : artifactBytes;
+                loadedArtifactBytes += ChargedArtifactBytes(artifactBytes);
                 if (!string.IsNullOrEmpty(assemblySimpleName)) GeneratedAssemblyNames.Add(assemblySimpleName);
             }
         }

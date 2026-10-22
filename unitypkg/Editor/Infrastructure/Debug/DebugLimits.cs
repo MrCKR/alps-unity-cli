@@ -32,14 +32,17 @@ namespace UnityCli
 
         // ---- 动态回调编译产物 ----
 
-        /// <summary>当前域曾加载过的独特回调编译产物数量上限。</summary>
-        internal const int MaxCompiledArtifacts = 64;
-
         /// <summary>当前域累计加载的回调程序集字节上限。</summary>
         internal const long MaxCompiledArtifactBytes = 128L * 1024 * 1024;
 
         /// <summary>单个回调编译产物字节上限。</summary>
         internal const long MaxSingleArtifactBytes = 8L * 1024 * 1024;
+
+        /// <summary>每个已加载程序集的固定开销折算：CLR/Unity 程序集装载与元数据不计入产物字节。</summary>
+        internal const long MaxCompiledArtifactOverheadBytes = 256L * 1024;
+
+        /// <summary>当前域曾加载过的独特回调编译产物数量上限；由字节预算与单产物固定开销推导，避免数量上限远早于内存上限触发。</summary>
+        internal const int MaxCompiledArtifacts = (int)(MaxCompiledArtifactBytes / MaxCompiledArtifactOverheadBytes);
 
         /// <summary>当前域允许建立的独特 Adapter 返回类型身份上限。</summary>
         internal const int MaxAdapterIdentities = 256;
@@ -770,8 +773,10 @@ namespace UnityCli
             return "Limits: " + MaxDefinitionsPerSession.ToString(CultureInfo.InvariantCulture) + " definitions ("
                 + MaxDefinitionsPerTarget.ToString(CultureInfo.InvariantCulture) + " per target), "
                 + (MaxCallbackSourceBytes / 1024).ToString(CultureInfo.InvariantCulture) + " KiB per callback source, "
-                + MaxCompiledArtifacts.ToString(CultureInfo.InvariantCulture) + " loaded compile artifacts and "
+                + MaxCompiledArtifacts.ToString(CultureInfo.InvariantCulture) + " loaded compile artifacts (each charged a "
+                + (MaxCompiledArtifactOverheadBytes / 1024).ToString(CultureInfo.InvariantCulture) + " KiB per-assembly allowance) and "
                 + (MaxCompiledArtifactBytes / (1024 * 1024)).ToString(CultureInfo.InvariantCulture) + " MiB per domain across all compile shapes (code execution, hook callbacks, programs, pause evaluate), "
+                + MaxAdapterIdentities.ToString(CultureInfo.InvariantCulture) + " distinct adapter identities per domain; only a domain reload reclaims them, while a repeated identical source reuses its artifact, "
                 + MaxEventsPerSession.ToString(CultureInfo.InvariantCulture) + " events / "
                 + (MaxEventBytesPerSession / (1024 * 1024)).ToString(CultureInfo.InvariantCulture) + " MiB per session ("
                 + (MaxEventBytesGlobal / (1024 * 1024)).ToString(CultureInfo.InvariantCulture) + " MiB global), "

@@ -336,6 +336,8 @@ program 的预算拒绝复用 `E_DEBUG_LIMIT_EXCEEDED`（`error.details.limit` �
 
 pause mailbox 数量上限复用 `E_DEBUG_LIMIT_EXCEEDED`（`error.details.limit` 为 `pause-mailbox-waiting`）；缺少 `pauseTimeout`、`pauseTimeout.durationMs` 为 0 / null / 负数、`unbounded` 携带 `durationMs` 以及 snapshot 断点携带 `pauseTimeout` 都属于 `E_SCHEMA_INVALID`，绝不解释为无限；现场编译与加载产物失败复用 `E_CODE_COMPILE_FAILED`、`E_CODE_ENTRYPOINT_INVALID`、`E_CODE_RUNTIME_EXCEPTION`、`E_UNITY_BUSY` 与 `E_HOOK_COMPILE_BUDGET_EXHAUSTED`；共享编译没在 on-site 操作预算内产出结果使用 `E_DEBUG_COMPILE_BUDGET_EXCEEDED`，绝不复用 `E_EXECUTION_TIMEOUT` 的“用户代码未返回”含义。
 
+共享动态编译预算是 `debug.code.execute`、hook 回调、program 与 `debug.pause.evaluate` 四个编译面共用的唯一预算：每 domain 最多 512 个已加载编译产物、总计 128 MiB，且每个已加载程序集另按 256 KiB 的固定开销折算计入字节预算（CLR/Unity 程序集装载与元数据不体现在产物字节里）。数量上限由该字节预算与单产物固定开销推导，因此不会出现“字节远未用满但数量先撞墙”。已加载程序集无法逐个卸载：`remove`、`stop` 与结束会话都不扣减占用，只有 domain reload 能归零；相同源码（同一候选 identity）重编译会复用已有产物，不重复计费。拒绝复用 `E_HOOK_COMPILE_BUDGET_EXHAUSTED`，`error.details.budget` 给出 `reason`（`artifact-count`、`artifact-bytes` 或 `single-artifact-bytes`）、已用与剩余的数量和字节，`error.transient` 为 false；恢复动作只有“复用同一源码”或“由调用方决定是否 domain reload”，因为 reload 会一并丢弃 hooks、debug sessions 与 Play Mode。同一预算之外另有每 domain 256 个 adapter 类型身份上限，超限后同样只能用已有 target 或重启 Editor。
+
 主线程暂停期间，控制通道在发起请求的线程上直接服务可达能力，绝不排到被停住的主线程队列后面；不可达的业务 mutation 在任何 effect 之前返回 `E_DEBUG_MAIN_THREAD_PAUSED`。`debug.pause.evaluate` 的现场编译仍在现场线程上按同一有界预算推进，取不到共享编译器时按 `E_UNITY_BUSY` 返回忙并保留现场（仍可 inspect 与 resume），绝不等待旧的主线程 continuation。
 
 已接受的长任务在读取自身状态时命中该拒绝，只表示这次观察暂时不可用，而不是任务失败：`test.run` 的 `internal.test.run.status` 读取会继续轮询到本次请求的 immutable deadline，因为解除路径在任何 pause 资源安装之前就已发布，有限暂停还会按自己的声明边界自动解除。只有该暂停在 deadline 结束时仍在，调用方才收到原始 `E_DEBUG_MAIN_THREAD_PAUSED`（含实际 `pauseId`、`remainingMs` 与 `debug.pause.list`/`debug.pause.resume` 路由）；解除现场后用同一 `requestId` 重提即可取回该 run 的 durable terminal，不丢已确认的运行。
@@ -353,9 +355,9 @@ deadline 关系与实际约束：`pauseTimeout.durationMs` 只约束暂停现场
 | 错误码 | 含义 |
 |--------|------|
 | `E_UNITY_BLOCKED` | effect 前已证明 Unity/UI blocker；原错误的 `details.blockers` 含结构化弹窗摘要 |
-| `E_UNITY_BUSY` | 任务池、修改owner或实例清理owner正在工作；按message与`nextActions`区分是否尚未发送业务请求，`instances prune`可按`retryAfterMs`稍后重试 |
+| `E_UNITY_BUSY` | 任务池、修改owner或实例清理owner正在工作，或`details.reason="terminal-replay-history-capacity"`/`"navmesh-terminal-ledger-capacity"`表示有界终态历史里仍有未到期的identity；带这两个`reason`时`details.ownEffectStarted`为false且`retryAfterMs`指向最早到期时间，历史自行裁剪，不需要重启Editor；其余情况按message与`nextActions`区分是否尚未发送业务请求，`instances prune`可按`retryAfterMs`稍后重试 |
 | `E_UNITY_TRANSITION_TIMEOUT` | 首次ready记录或可恢复状态变化未在原命令截止时间内稳定；确认Unity仍在推进后才使用更大的timeout重试 |
-| `E_EXECUTION_TIMEOUT` | 已放行调用或本地执行未在既有absolute deadline内返回终态、连接提前断开，或首次mutation POST后Editor session改变；outcome unknown，公开terminal固定且迟到settlement不能改写或重投effect |
+| `E_EXECUTION_TIMEOUT` | 已放行调用或本地执行未在既有absolute deadline内返回终态、连接提前断开、首次mutation POST后Editor session改变，或`details.replay="blocked"`表示该identity的终态已被有界缓存挤出所以不重放；outcome unknown，公开terminal固定且迟到settlement不能改写或重投effect |
 | `E_REQUEST_ID_REUSED` | 同一 root request ID 被不同 exact request bytes 使用 |
 | `E_TOOL_COMPLETION_PROOF_INVALID` | Tool 返回值不满足其 completion contract 或 proof 校验 |
 | `E_UNITY_COMPILE_REQUIRES_EDIT_MODE` | `editor.compile` 在稳定 Play Mode 或 queued-before-effect PlayMode 中被拒绝 |
@@ -368,7 +370,7 @@ deadline 关系与实际约束：`pauseTimeout.durationMs` 只约束暂停现场
 
 1. 读取 `error.code` 确定错误类别
 2. 将 `transient`、`retryAfterMs` 和 `nextActions` 作为恢复建议，不把它们当成权限门
-3. 任务池准入`E_UNITY_BUSY`且message证明`no business request was sent`时，可以稍后提交新root；mutation lease busy不得声称effect未开始
+3. 任务池准入`E_UNITY_BUSY`且message证明`no business request was sent`时，可以稍后提交新root；mutation lease busy不得声称effect未开始；`details.reason`为`terminal-replay-history-capacity`或`navmesh-terminal-ledger-capacity`时只说明本次mutation没有开始，等`retryAfterMs`后即可重提，不需要重启Editor
 4. `E_EXECUTION_TIMEOUT`只说明没有可信终态；先观察业务状态，再形成全新提交决策
 5. 同session的compile/import/reload/listener transition由supervisor在放行后的同一execution deadline内处理；cross-session mutation禁止自动重投
 
