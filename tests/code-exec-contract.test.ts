@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import codeExecute from "../src/tools/debug/code-execute.js";
+import codeFlowRun from "../src/tools/debug/code-flow-run.js";
+import codeFlowSubmit from "../src/tools/debug/code-flow-submit.js";
 
 test("debug.code.execute publishes direct examples with and without a completion probe", () => {
   const plainExample = codeExecute.examples?.[0];
@@ -33,6 +35,17 @@ test("debug.code.execute clearly preserves necessary hazardous code and disclose
   assert.match(codeExecute.description, /wait for this CLI process to exit and allow at least 5000ms beyond --timeout-ms/);
   assert.match(codeExecute.description, /Dry-run reports source hash/);
   assert.doesNotMatch(codeExecute.description, /reject(?:s|ed)? (?:dangerous|hazardous) code/i);
+});
+
+test("every Tool that compiles user code discloses the default reference set and its CS0433 consequence", () => {
+  // 引用集来自运行期 AppDomain 快照且只能追加；不披露时调用方只有编译失败后才知道类型名歧义。
+  for (const tool of [codeExecute, codeFlowRun, codeFlowSubmit]) {
+    assert.match(tool.description, /every locatable assembly already loaded in the Editor AppDomain is referenced/, tool.name);
+    assert.match(tool.description, /refs only appends more; nothing can be removed/, tool.name);
+    assert.match(tool.description, /CS0433/, tool.name);
+    assert.match(tool.description, /System\.Tuple exists in both mscorlib and ExCSS\.Unity/, tool.name);
+    assert.match(tool.description, /use object\[\] or a type you declare/, tool.name);
+  }
 });
 
 test("debug.code.execute publishes the exact wrapper declaration and never cuts a returned value silently", async () => {

@@ -127,8 +127,9 @@ test("debug.code.execute discovery keeps critical execution boundaries within it
   assert.match(tool.description, /completionProbe is optional/i);
   assert.match(tool.description, /Dry-run reports source hash/i);
   // 该描述必须同时公布 typed partial outcome 的信封形状、30000 ms off-main 控制等待边界、
-  // 确切包裹声明与返回值截断事实，因此预算从 1536 提升到 2304 UTF-8 字节；上限本身仍然被强制。
-  assert.ok(Buffer.byteLength(tool.description, "utf8") <= 2304, "debug.code.execute description must remain within 2304 UTF-8 bytes");
+  // 确切包裹声明、返回值截断事实与默认引用集，因此预算从 1536 提升到 2304、再提升到 2688 UTF-8 字节；上限本身仍然被强制。
+  assert.ok(Buffer.byteLength(tool.description, "utf8") <= 2688, "debug.code.execute description must remain within 2688 UTF-8 bytes");
+  assert.match(tool.description, /every locatable assembly already loaded in the Editor AppDomain is referenced/);
   assert.match(tool.description, /error\.details\.outcome/i);
   assert.match(tool.description, /30000 ms/);
   assert.match(tool.description, /dispatch site whose creation result is answered before the pause starts/i);
