@@ -582,10 +582,13 @@ const contractCsharpTools = new Set(contract.commands
 const csharpDescriptorTools = new Set(capabilityFiles
   .filter((entry) => entry.toolCount === 1)
   .flatMap((entry) => entry.names));
+// hybrid Tool 的 C# 面是 Bridge command face（registry.Register），不是 IUnityCliTool descriptor。
+const csharpBridgeCommandNames = new Set(csharpFiles.flatMap((path) => [...readText(path).matchAll(/\bRegister\s*(?:<[^<>()]*>)?\s*\(\s*"([a-z0-9][a-z0-9.-]*)"/g)]
+  .map((match) => match[1])));
 const missingCsharpDescriptors = [...contractCsharpTools]
-  .filter((name) => !csharpDescriptorTools.has(name))
+  .filter((name) => !csharpDescriptorTools.has(name) && !csharpBridgeCommandNames.has(name))
   .sort()
-  .map((name) => ({ path: "contracts/command-contract.json", count: 1, expected: `C# descriptor for ${name}` }));
+  .map((name) => ({ path: "contracts/command-contract.json", count: 1, expected: `C# descriptor or Bridge command for ${name}` }));
 const unknownCsharpDescriptors = [...csharpDescriptorTools]
   .filter((name) => !contractCsharpTools.has(name))
   .sort()
