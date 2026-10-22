@@ -597,7 +597,7 @@ package assembly closure 与文件 inventory 的 exact-set/hash 是新增二进�
 | 临时资源 | 高次数 install/replace/remove、reload、restart，盘点文件/bytes | 固定路径/常数文件数/硬上限，机制状态重启作废 |
 | 安装闭包 | 干净 Dev 安装、缺 DLL/hash 错、冲突 identity | 不完整安装不启用 hook；不破坏其他正式项目/依赖 |
 
-多实例需要两个真实 Dev Editor。现有治理只允许自动化代管 `Dev/UnityProject`，不能因为另一个项目也在 Dev 目录就默认拥有进程控制授权。建议把 B 固定为 `D:/workspace/alps-unity-cli/Dev/UnityProject-HookPeer`；在实施前须由所有者明确允许这一准确项目以及本次所需启动、正常关闭/重启动作。计划批准本身不代替该授权。
+多实例需要两个真实 Dev Editor。现有治理只允许自动化代管 `Dev/UnityProject`，不能因为另一个项目也在 Dev 目录就默认拥有进程控制授权。建议把 B 固定为 `Dev/UnityProject-HookPeer`；在实施前须由所有者明确允许这一准确项目以及本次所需启动、正常关闭/重启动作。计划批准本身不代替该授权。
 
 取得明确授权后，B 的创建/安装仍用公开流程和同一隔离根，不用真实用户项目，不按日期生成无限副本；未取得授权或缺少可隔离的 B 时，多实例 Live 项保持 BLOCKED，不能以假 registry 或单进程单元测试替代。最低 Unity 版本若另需固定 baseline 项目，同样执行准确项目/动作授权规则。
 

@@ -164,9 +164,9 @@
 passed=50 failed=9
 mechanismVerdict=PASS
 directPassFailures=9 reflectPassFailures=0
-env :: unity=2022.3.61f1 | framework=Mono 6.13.0 (Visual Studio built mono) | dataDir=C:\Users\<user>\AppData\Local\UnityCli-Dev
-harmonyDll :: D:\workspace\alps-unity-cli\Dev\UnityProject\Library\UnityCli\hook-probe\0Harmony.dll | bytes=2461696
-harmonyAssembly :: 0Harmony, Version=2.4.2.0, Culture=neutral, PublicKeyToken=null | location=D:\workspace\alps-unity-cli\Dev\UnityProject\Library\UnityCli\hook-probe\0Harmony.dll
+env :: unity=2022.3.61f1 | framework=Mono 6.13.0 (Visual Studio built mono) | dataDir=%LOCALAPPDATA%\UnityCli-Dev
+harmonyDll :: Dev\UnityProject\Library\UnityCli\hook-probe\0Harmony.dll | bytes=2461696
+harmonyAssembly :: 0Harmony, Version=2.4.2.0, Culture=neutral, PublicKeyToken=null | location=Dev\UnityProject\Library\UnityCli\hook-probe\0Harmony.dll
 harmonyInstance :: id=unitycli.hookprobe | type=HarmonyLib.Harmony
 resolve-targets :: PASS | add=True describe=True bump=True secretMul(private)=True staticTag=True
 direct.baseline.Add :: PASS | Add(2,3)=5
