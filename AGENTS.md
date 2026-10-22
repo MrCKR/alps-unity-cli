@@ -69,7 +69,7 @@ CLI控制面：
 - README、docs、Skill、tests、contract和源码只能使用当前CLI形态，不得保留旧顶层命令、迁移语义或兼容说明。
 - `skills/unitycli/` 的职责是引导已经具备本 Skill 的 AI 使用已安装的公开 `unitycli` CLI：负责直接文件处理与 Live Unity 调用之间的路由、Tool catalog 的按需发现、少量跨 Tool 通用调用规则、必要 reference 的条件分流，以及开发期 `FeedbackMode` 反馈入口。它不是安装/配置协议、项目开发规范、发布或测试门禁、内部 Bridge 实现手册、完整 Tool 清单或逐能力操作手册。
 - Skill 主入口应只描述稳定的运行时路由和通用不变量；安装生命周期使用 CLI 自身的 `init help` 协议，具体协议和实现细节不得复制到 `SKILL.md`。新增 Unity 机制只有在确实改变 AI 的公开运行时路由或跨 Tool 调用规则时，才评估是否进入 Skill；单个 Tool 的参数、能力细节和内部实现应留在 live descriptor、CLI help 或按需 reference。
-- `skills/unitycli/` 是受保护的用户授权内容。Agent可以读取、审计和验证，但除非用户在当前请求中对明确的单次修改作出明确授权，不得修改、重写、删除、生成或自动同步其中任何内容，包括`SKILL.md`、`references/`、`manifest.json`、`evals/`、`reports/`和`scripts/`。普通功能开发、测试失败、版本发布或“保持同步”等泛化授权不构成该授权；授权仅覆盖用户指定的文件和本次变更，不得扩展到其他Skill文件或后续任务。
+- `skills/unitycli/` 是受保护的用户授权内容。Agent可以读取、审计和验证，但除非用户在当前请求中对明确的单次修改作出明确授权，不得修改、重写、删除、生成或自动同步其中任何内容，包括`SKILL.md`、`references/`和`scripts/`。同一保护范围覆盖`skill-factory/unitycli/`下的`manifest.json`、`agents/`、`evals/`、`examples/`、`reports/`和`security/`。普通功能开发、测试失败、版本发布或“保持同步”等泛化授权不构成该授权；授权仅覆盖用户指定的文件和本次变更，不得扩展到其他Skill文件或后续任务。
 
 ## 能力基本边界
 
@@ -102,7 +102,7 @@ CLI控制面：
 
 项目 Skill 是硬规范，不是可选参考。命中任务后必须在实施前使用 `read` 完整读取对应 `SKILL.md`；系统提示中的 name/description 元数据不能替代正文。一个任务命中多个领域时必须全部加载。
 
-`.pi/skills/unity-cli-*` 只约束本仓库内的开发、验证与发布，不是安装产物。`skills/unitycli/SKILL.md` 及其 `manifest.json` 允许投影的 references/scripts 才是 `init` 安装后提供给陌生 AI 的公开 `unitycli` Skill；公开调用、等待、错误恢复或 host 预算变化时，必须在产品实现完成后同步更新该 Skill，禁止提前描述尚未实现的行为。
+`.pi/skills/unity-cli-*` 只约束本仓库内的开发、验证与发布，不是安装产物。`skills/unitycli/SKILL.md` 与由其安装投影决定的 references/scripts 才是 `init` 安装后提供给陌生 AI 的公开 `unitycli` Skill；`skill-factory/unitycli/` 保存其治理资产，不进入安装投影。公开调用、等待、错误恢复或 host 预算变化时，必须在产品实现完成后同步更新该 Skill，禁止提前描述尚未实现的行为。
 
 ### `unity-cli-issue-lifecycle`
 

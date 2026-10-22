@@ -6,6 +6,7 @@ import test from "node:test";
 import { AgentSkillInstallerRegistry } from "../src/cli-commands/skill-installer.js";
 
 const skillRoot = resolve("skills", "unitycli");
+const factoryRoot = resolve("skill-factory", "unitycli");
 
 /** 递归列出相对文件路径，统一使用正斜杠。 */
 async function listFiles(root: string, directory = ""): Promise<string[]> {
@@ -21,7 +22,7 @@ async function listFiles(root: string, directory = ""): Promise<string[]> {
 }
 
 test("governed manifest declares ownership, runtime projection, contracts, and missing evidence", async () => {
-  const manifest = JSON.parse(await readFile(join(skillRoot, "manifest.json"), "utf8")) as Record<string, any>;
+  const manifest = JSON.parse(await readFile(join(factoryRoot, "manifest.json"), "utf8")) as Record<string, any>;
   const packageJson = JSON.parse(await readFile(resolve("package.json"), "utf8")) as { version: string };
   const skill = await readFile(join(skillRoot, "SKILL.md"), "utf8");
   assert.match(skill, /^---\r?\nname: unitycli\r?$/m);
@@ -31,12 +32,18 @@ test("governed manifest declares ownership, runtime projection, contracts, and m
   assert.equal(manifest.review_cadence, "per-release");
   assert.equal(manifest.maturity_tier, "governed");
   // 信任报告声明 per-release 节奏，因此必须提到当前发布版本，否则会被静默跳过刷新。
-  const trustReport = await readFile(join(skillRoot, "reports", "trust-report.md"), "utf8");
+  const trustReport = await readFile(join(factoryRoot, "reports", "trust-report.md"), "utf8");
   const escapedVersion = packageJson.version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   assert.match(trustReport, new RegExp(`for release ${escapedVersion}\\b`), "trust report must be reviewed for the current release");
   assert.equal(manifest.lifecycle_stage, "governed");
   assert.deepEqual(manifest.runtime_projection.include, ["SKILL.md", "references/**", "scripts/**"]);
-  assert.ok(manifest.runtime_projection.exclude.includes("manifest.json"));
+  assert.equal(manifest.factory_root, "skill-factory/unitycli");
+  // 安装投影以外的治理资产必须位于 factory root；Skill 目录只保留运行时入口与投影。
+  // experience/ 是安装后的本地反馈状态，不属于版本控制内容。
+  const runtimeTopLevel = new Set((await listFiles(skillRoot))
+    .filter((file) => !file.startsWith("experience/"))
+    .map((file) => (file.includes("/") ? file.split("/")[0] : file)));
+  assert.deepEqual([...runtimeTopLevel].sort(), ["SKILL.md", "references", "scripts"]);
   assert.ok(manifest.input_files["file-backed fixture"].length >= 3);
   assert.ok(manifest.output_contract.feedback_summary_condition);
   assert.ok(manifest.rollback_boundary.skill_install);
@@ -70,7 +77,7 @@ test("public runtime Skill routes operations without embedding the setup workflo
 });
 
 test("agent interface is broad-triggered, PowerShell-local, and network-denied", async () => {
-  const text = await readFile(join(skillRoot, "agents", "interface.yaml"), "utf8");
+  const text = await readFile(join(factoryRoot, "agents", "interface.yaml"), "utf8");
   assert.match(text, /display_name: "UnityCLI"/);
   assert.match(text, /Use \$unitycli for every Unity task/);
   assert.match(text, /mode: "automatic"/);
@@ -82,7 +89,7 @@ test("agent interface is broad-triggered, PowerShell-local, and network-denied",
 });
 
 test("file-backed output evals and governed reports are internally reachable", async () => {
-  const casesPath = join(skillRoot, "evals", "output", "cases.jsonl");
+  const casesPath = join(factoryRoot, "evals", "output", "cases.jsonl");
   const cases = (await readFile(casesPath, "utf8")).split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as Record<string, any>);
   assert.equal(cases.length, 7);
   const fileBacked = cases.filter((item) => Array.isArray(item.input_files) && item.input_files.length > 0);
@@ -90,8 +97,8 @@ test("file-backed output evals and governed reports are internally reachable", a
   for (const item of fileBacked) {
     for (const input of item.input_files as string[]) await access(join(dirname(casesPath), input));
   }
-  const trust = await readFile(join(skillRoot, "reports", "trust-report.md"), "utf8");
-  const scorecard = await readFile(join(skillRoot, "reports", "output_quality_scorecard.md"), "utf8");
+  const trust = await readFile(join(factoryRoot, "reports", "trust-report.md"), "utf8");
+  const scorecard = await readFile(join(factoryRoot, "reports", "output_quality_scorecard.md"), "utf8");
   assert.match(trust, /trust report/i);
   assert.match(trust, /rollback boundary/i);
   assert.match(trust, /missing evidence/i);

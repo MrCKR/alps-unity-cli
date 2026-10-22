@@ -126,7 +126,8 @@ Dev Unity validation uses `%LOCALAPPDATA%\UnityCli-Dev` and must not change the 
 - `AGENTS.md`: repository engineering constraints
 - `contracts/`: generated and hand-governed machine contracts
 - `schemas/`: public and internal JSON schemas
-- `skills/unitycli/`: public AI Skill source
+- `skills/unitycli/`: public AI Skill runtime projection (`SKILL.md`, `references/`, `scripts/`)
+- `skill-factory/unitycli/`: Skill governance assets that never install (`manifest.json`, `agents/`, `evals/`, `examples/`, `reports/`, `security/`)
 - `unitypkg/`: canonical Unity Bridge package
 - `extensions/`: optional extension sources
 - `docs/`: public operational and architectural documentation

@@ -30,14 +30,8 @@
       "references/**",
       "scripts/**"
     ],
-    "exclude": [
-      "agents/**",
-      "evals/**",
-      "examples/**",
-      "experience/**",
-      "security/**",
-      "reports/**",
-      "manifest.json"
+    "runtime_state": [
+      "experience/**"
     ],
     "local_override": "SKILL.md:FeedbackMode",
     "local_override_values": [
@@ -45,6 +39,7 @@
       "on"
     ]
   },
+  "factory_root": "skill-factory/unitycli",
   "input_files": {
     "required": [
       "SKILL.md"
@@ -55,9 +50,9 @@
       "references/custom-tools.md"
     ],
     "file-backed fixture": [
-      "evals/output/fixtures/feedback-scenario.json",
-      "examples/feedback-event.input.json",
-      "examples/feedback-record.output.json"
+      "skill-factory/unitycli/evals/output/fixtures/feedback-scenario.json",
+      "skill-factory/unitycli/examples/feedback-event.input.json",
+      "skill-factory/unitycli/examples/feedback-record.output.json"
     ],
     "runtime_observation": "Current unitycli JSON envelopes and connected-instance descriptors"
   },

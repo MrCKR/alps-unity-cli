@@ -42,4 +42,5 @@
 ## 相关目录
 
 - `schemas/`：公开 JSON Schema 契约。
-- `skills/unitycli/`：AI Agent 入口 Skill、按需引文与 `examples/` 示例。
+- `skills/unitycli/`：AI Agent 入口 Skill 的安装投影，只含`SKILL.md`、`references/`与`scripts/`。
+- `skill-factory/unitycli/`：Skill 治理资产（`manifest.json`、`agents/`、`evals/`、`examples/`、`reports/`、`security/`），不进入安装投影。

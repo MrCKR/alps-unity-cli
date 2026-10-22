@@ -8,7 +8,7 @@ import test from "node:test";
 
 const execFileAsync = promisify(execFile);
 const skillPath = resolve("skills", "unitycli", "SKILL.md");
-const skillManifestPath = resolve("skills", "unitycli", "manifest.json");
+const skillManifestPath = resolve("skill-factory", "unitycli", "manifest.json");
 const operationProtocolPath = resolve("skills", "unitycli", "references", "operation-protocol.md");
 const feedbackReferencePath = resolve("skills", "unitycli", "references", "feedback.md");
 const scriptName = "record-feedback.ps1";
@@ -300,7 +300,7 @@ test("Skill feedback contract is opt-in, local, and preserves the cross-session 
   const manifest = JSON.parse(await readFile(skillManifestPath, "utf8")) as {
     output_contract: { feedback_summary_condition: string };
     permissions: { file_write: string[]; file_write_scope?: string };
-    runtime_projection: { exclude: string[] };
+    runtime_projection: { runtime_state: string[] };
   };
   assert.match(manifest.output_contract.feedback_summary_condition, /the user explicitly asked for a record in the current request/);
   // 经验库是安装目录内的状态区：写入面是相对路径，且不进入投影清单。
@@ -311,7 +311,7 @@ test("Skill feedback contract is opt-in, local, and preserves the cross-session 
     "experience/feedback.3.jsonl",
   ]);
   assert.equal(manifest.permissions.file_write_scope, "installed Skill directory");
-  assert.ok(manifest.runtime_projection.exclude.includes("experience/**"));
+  assert.ok(manifest.runtime_projection.runtime_state.includes("experience/**"));
   assert.match(feedbackReference, /experience\\/);
   assert.match(feedbackReference, /状态区/);
 

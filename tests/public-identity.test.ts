@@ -4,7 +4,7 @@ import { extname, join, resolve } from "node:path";
 import test from "node:test";
 
 const textExtensions = new Set([".cjs", ".cs", ".json", ".md", ".mjs", ".ps1", ".ts", ".yaml", ".yml"]);
-const publicRoots = ["src", "unitypkg", "extensions", "docs", "schemas", "contracts", "scripts", "skills/unitycli", ".pi"];
+const publicRoots = ["src", "unitypkg", "extensions", "docs", "schemas", "contracts", "scripts", "skills/unitycli", "skill-factory", ".pi"];
 const publicRootFiles = ["AGENTS.md", "README.md", "package.json", "package-lock.json"];
 
 /** 递归收集会进入产品、公开契约或仓库治理投影的文本文件。 */
@@ -21,9 +21,9 @@ async function collectTextFiles(root: string): Promise<string[]> {
 test("public package, executable, UPM, and Skill identities are unified", async () => {
   const npmManifest = JSON.parse(await readFile("package.json", "utf8")) as { name: string; bin: Record<string, string> };
   const upmManifest = JSON.parse(await readFile("unitypkg/package.json", "utf8")) as { name: string; displayName: string };
-  const skillManifest = JSON.parse(await readFile("skills/unitycli/manifest.json", "utf8")) as { name: string };
+  const skillManifest = JSON.parse(await readFile("skill-factory/unitycli/manifest.json", "utf8")) as { name: string };
   const skill = await readFile("skills/unitycli/SKILL.md", "utf8");
-  const agent = await readFile("skills/unitycli/agents/interface.yaml", "utf8");
+  const agent = await readFile("skill-factory/unitycli/agents/interface.yaml", "utf8");
 
   assert.equal(npmManifest.name, "@alpsckr/unitycli");
   assert.deepEqual(npmManifest.bin, { unitycli: "dist/cli.js" });

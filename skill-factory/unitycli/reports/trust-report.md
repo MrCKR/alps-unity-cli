@@ -7,7 +7,7 @@ Reviewed: 2026-10-22 for release 0.9.0
 
 ## Scope
 
-This trust report covers the source Skill package, the installed runtime projection (`SKILL.md`, `references/**`, `scripts/**`), and `scripts/record-feedback.ps1`. Governed assets under `agents/**`, `evals/**`, `examples/**`, `security/**`, `reports/**`, and `manifest.json` are not installed into Agent runtime folders.
+This trust report covers the source Skill package, the installed runtime projection (`SKILL.md`, `references/**`, `scripts/**`), and `scripts/record-feedback.ps1`. Governed assets live in `skill-factory/unitycli/` (`agents/**`, `evals/**`, `examples/**`, `security/**`, `reports/**`, and `manifest.json`); they are outside the Skill directory and never install into Agent runtime folders.
 
 ## Permission Surface
 

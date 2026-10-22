@@ -51,6 +51,7 @@ function allDocFiles(): string[] {
     ...listPublicTextFiles("docs"),
     ...listPublicTextFiles("examples"),
     ...listPublicTextFiles("skills/unitycli"),
+    ...listPublicTextFiles("skill-factory"),
     ...listPublicTextFiles("extensions/probuilder/docs"),
     ...listPublicTextFiles("extensions/cinemachine/docs"),
     ...listPublicTextFiles("extensions/urp/docs"),
