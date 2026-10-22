@@ -1,6 +1,7 @@
 ---
 name: unitycli
 description: 所有涉及 Unity、Unity Editor 或 UnityPipeline 的任务都优先使用本 Skill，用于判断直接处理项目文件，或通过`unitycli` 入口发现当前 Editor 能力。
+license: MIT
 ---
 # UnityCLI
 
