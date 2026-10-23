@@ -9,6 +9,14 @@ import type { Runtime } from "./types.js";
 
 export type SkillScope = "workspace" | "user";
 
+/** 受管理目录移除旧投影时提示用户：自有内容应放在 user/。 */
+function skillRemovalWarnings(changes: { removedFiles?: string[] }[]): string[] {
+  const removed = changes.flatMap((change) => change.removedFiles ?? []);
+  if (removed.length === 0) return [];
+  const sample = removed.slice(0, 5).join(", ");
+  return [`Removed ${removed.length} managed Skill file(s) no longer projected: ${sample}. Keep custom Skill content under user/ (entry user/ROUTING.md).`];
+}
+
 export function resolveInitSkillTarget(agent: AgentKind, scope: SkillScope, workspace: string | undefined, userHome: string): { basePath: string; targetPath: string } {
   const basePath = scope === "user" ? resolve(userHome) : resolve(workspace!);
   return { basePath, targetPath: resolveSkillTarget(basePath, agent) };
@@ -120,7 +128,8 @@ export async function handleInitSkill(args: string[], flags: Record<string, stri
       const inspection = await inspectSkillTarget(sourcePath, targetPath);
       if (inspection.status !== "installed") throw new SkillInstallerError("E_SKILL_INSTALL_PROJECTION_INVALID", "Skill installation did not reach an installed readback state.", ["Inspect the reported target before retrying."]);
       await rm(installRoot, { recursive: true, force: true });
-      return success(requestId, { action: "init_skill", target: targetPath, changes: [change], skill: inspection, nextActions: [`${installCommand} --check`] });
+      const warnings = skillRemovalWarnings([change]);
+      return success(requestId, { action: "init_skill", target: targetPath, changes: [change], skill: inspection, nextActions: [`${installCommand} --check`] }, warnings.length > 0 ? { warnings } : undefined);
     }
 
     let agent: AgentKind;
@@ -154,7 +163,8 @@ export async function handleInitSkill(args: string[], flags: Record<string, stri
     const inspection = await inspectSkillTarget(sourcePath, targetPath);
     if (inspection.status !== "installed") throw new SkillInstallerError("E_SKILL_INSTALL_PROJECTION_INVALID", "Skill installation did not reach an installed readback state.", ["Inspect the reported target before retrying."]);
     await rm(installRoot, { recursive: true, force: true });
-    return success(requestId, { action: "init_skill", agent, scope, ...(scope === "workspace" ? { workspace: basePath } : {}), changes, skill: inspection, nextActions: ["Run the same init skill command with --check."] });
+    const warnings = skillRemovalWarnings(changes);
+    return success(requestId, { action: "init_skill", agent, scope, ...(scope === "workspace" ? { workspace: basePath } : {}), changes, skill: inspection, nextActions: ["Run the same init skill command with --check."] }, warnings.length > 0 ? { warnings } : undefined);
   } catch (error) {
     if (error instanceof SkillInstallerError) return failure(requestId, error.code, error.message, error.nextActions);
     return failure(requestId, "INIT_SKILL_FAILED", error instanceof Error ? error.message : String(error), ["Inspect the Skill source and selected target before retrying."]);

@@ -781,6 +781,57 @@ test("installForAgents throws for unknown agent kind", async () => {
   await rm(project, { recursive: true });
 });
 
+// ─── User extension area ─────────────────────────────────────────────────────
+
+test("reinstall keeps user-owned extension files and ignores them in status", async () => {
+  const reg = registry();
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nuser extension test");
+  const project = await makeProject();
+
+  const first = await reg.installForAgents("claude", sourcePath, project);
+  assert.equal(first[0].status, "installed");
+
+  const targetRoot = join(project, ".claude", "skills", "unitycli");
+  await mkdir(join(targetRoot, "user"), { recursive: true });
+  await writeFile(join(targetRoot, "user", "ROUTING.md"), "# 用户附加正文\n", "utf8");
+  await writeFile(join(targetRoot, "user", "notes.md"), "# notes\n", "utf8");
+
+  // 源码前进一版，走真实更新路径。
+  await writeFile(sourcePath, skillText("# UnityCLI Skill\nuser extension test v2"), "utf8");
+  const second = await reg.installForAgents("claude", sourcePath, project);
+  assert.equal(second[0].status, "updated");
+
+  assert.equal(await readFile(join(targetRoot, "user", "ROUTING.md"), "utf8"), "# 用户附加正文\n");
+  await access(join(targetRoot, "user", "notes.md"));
+
+  // user/ 不参与哈希：用户扩展不影响已安装判定。
+  const checked = await reg.checkForAgents("claude", sourcePath, project);
+  assert.equal(checked[0].status, "installed");
+
+  await rm(dirname(sourcePath), { recursive: true });
+  await rm(project, { recursive: true });
+});
+
+test("update reports managed files it removes so callers know the projection shrank", async () => {
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nv1");
+  const project = await makeProject();
+  const reg = registry();
+
+  await reg.installForAgents("claude", sourcePath, project);
+
+  // 新版本不再投影 references/guide.md。
+  await rm(join(dirname(sourcePath), "references", "guide.md"));
+  await writeFile(sourcePath, skillText("# UnityCLI Skill\nv2"), "utf8");
+  const updated = await reg.installForAgents("claude", sourcePath, project);
+
+  assert.equal(updated[0].status, "updated");
+  assert.deepEqual(updated[0].removedFiles, ["references/guide.md"]);
+  await assert.rejects(() => access(join(project, ".claude", "skills", "unitycli", "references", "guide.md")));
+
+  await rm(dirname(sourcePath), { recursive: true });
+  await rm(project, { recursive: true });
+});
+
 // ─── findSkillSourcePath ─────────────────────────────────────────────────────
 
 test("findSkillSourcePath resolves skills/unitycli/SKILL.md from package root", async () => {

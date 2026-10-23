@@ -126,7 +126,7 @@ Dev Unity validation uses `%LOCALAPPDATA%\UnityCli-Dev` and must not change the 
 - `AGENTS.md`: repository engineering constraints
 - `contracts/`: generated and hand-governed machine contracts
 - `schemas/`: public and internal JSON schemas
-- `skills/unitycli/`: public AI Skill runtime projection (`SKILL.md`, `references/`, `scripts/`)
+- `skills/unitycli/`: public AI Skill runtime projection (`SKILL.md`, `references/`, `scripts/`). 安装后的目录另外可以存在用户拥有的 `user/` 扩展区（入口 `user/ROUTING.md`）：它不属于安装投影，安装器不创建、不读取、不哈希、不删除，`init skill --check` 的已安装判定也不受其影响。
 - `skill-factory/unitycli/`: Skill governance assets that never install (`manifest.json`, `agents/`, `evals/`, `examples/`, `reports/`, `security/`)
 - `unitypkg/`: canonical Unity Bridge package
 - `extensions/`: optional extension sources

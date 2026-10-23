@@ -42,5 +42,5 @@
 ## 相关目录
 
 - `schemas/`：公开 JSON Schema 契约。
-- `skills/unitycli/`：AI Agent 入口 Skill 的安装投影，只含`SKILL.md`、`references/`与`scripts/`。
+- `skills/unitycli/`：AI Agent 入口 Skill 的安装投影，只含`SKILL.md`、`references/`与`scripts/`。安装后的目录可以另有用户自己的`user/`扩展区（入口`user/ROUTING.md`）：安装器不创建、不读取、不哈希、不删除，更新与`--check`都不影响它。
 - `skill-factory/unitycli/`：Skill 治理资产（`manifest.json`、`agents/`、`evals/`、`examples/`、`reports/`、`security/`），不进入安装投影。

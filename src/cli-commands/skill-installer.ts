@@ -19,6 +19,8 @@ export interface SkillTargetInstallResult {
   hash?: string;
   previousHash?: string;
   newHash?: string;
+  /** 本次更新从受管理目录移除的旧投影文件；用于告知用户自有内容应放在 `user/`。 */
+  removedFiles?: string[];
 }
 
 /** 一个预设agent目标的安装结果。 */
@@ -528,7 +530,7 @@ async function materializeBundle(bundle: SkillBundle, feedbackMode: FeedbackMode
  * 逐文件原子替换已校验 staging，最后发布 SKILL.md，再删除新入口不再引用的旧文件。
  * target 根目录与每个既有文件在 update 期间始终存在，外部读取者不会遇到目录隔离窗口。
  */
-async function publishStagedFiles(bundle: SkillBundle, stagingRoot: string, targetRoot: string, deadlineMs: number): Promise<void> {
+async function publishStagedFiles(bundle: SkillBundle, stagingRoot: string, targetRoot: string, deadlineMs: number): Promise<string[]> {
   await mkdir(targetRoot, { recursive: true });
   const ordered = [...bundle.files].sort((left, right) => {
     if (left.path === "SKILL.md") return 1;
@@ -545,11 +547,14 @@ async function publishStagedFiles(bundle: SkillBundle, stagingRoot: string, targ
 
   const desiredPaths = new Set(bundle.files.map((file) => file.path));
   const publishedFiles = await collectRuntimeFiles(targetRoot);
+  const removed: string[] = [];
   for (const file of publishedFiles) {
     if (desiredPaths.has(file.path)) continue;
     assertInstallDeadline(deadlineMs);
     await retrySharingViolation(deadlineMs, () => rm(join(targetRoot, ...file.path.split("/")), { force: true }));
+    removed.push(file.path);
   }
+  return removed;
 }
 
 /** previous 始终保留到旧 bundle 原位恢复并通过 readback；失败时不得删除备份。 */
@@ -617,9 +622,10 @@ async function publishBundle(
   targetRoot: string,
   workspace: InstallWorkspace,
   deadlineMs: number,
-): Promise<void> {
+): Promise<string[]> {
   let freshPublished = false;
   let targetCommitted = false;
+  let removedFiles: string[] = [];
   try {
     await mkdir(dirname(targetRoot), { recursive: true });
     if (existing) {
@@ -635,7 +641,7 @@ async function publishBundle(
     await beforeSkillPublishForTest?.();
     assertInstallDeadline(deadlineMs);
     if (existing) {
-      await publishStagedFiles(source, workspace.stagingRoot, targetRoot, deadlineMs);
+      removedFiles = await publishStagedFiles(source, workspace.stagingRoot, targetRoot, deadlineMs);
     } else {
       await retrySharingViolation(deadlineMs, () => rename(workspace.stagingRoot, targetRoot));
       freshPublished = true;
@@ -676,6 +682,7 @@ async function publishBundle(
     const cleanupDeadlineMs = Math.max(deadlineMs, Date.now() + 5_000);
     await retrySharingViolation(cleanupDeadlineMs, () => rm(workspace.stagingRoot, { recursive: true, force: true })).catch(() => undefined);
   }
+  return removedFiles;
 }
 
 // ─── Installer interface ─────────────────────────────────────────────────────
@@ -717,11 +724,12 @@ async function installBundleAtTarget(
         await retrySharingViolation(absoluteDeadlineMs, () => rm(workspace.previousRoot, { recursive: true, force: true }));
       }
       const feedbackMode = existing?.feedbackMode ?? source.feedbackMode;
-      await publishBundle(source, existing, feedbackMode, targetRoot, workspace, absoluteDeadlineMs);
+      const removedFiles = await publishBundle(source, existing, feedbackMode, targetRoot, workspace, absoluteDeadlineMs);
+      const removed = removedFiles.length > 0 ? { removedFiles } : {};
       if (existing || replacedDamaged) {
-        return { targetPath, status: "updated", ...(existing ? { previousHash: existing.hash } : {}), newHash: source.hash };
+        return { targetPath, status: "updated", ...(existing ? { previousHash: existing.hash } : {}), newHash: source.hash, ...removed };
       }
-      return { targetPath, status: "installed", hash: source.hash };
+      return { targetPath, status: "installed", hash: source.hash, ...removed };
     } catch (error) {
       throw skillInstallIoError(error, "complete its runtime bundle installation");
     }

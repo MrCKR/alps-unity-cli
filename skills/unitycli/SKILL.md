@@ -1,6 +1,6 @@
 ---
 name: unitycli
-description: 所有涉及 Unity、Unity Editor 或 UnityPipeline 的任务都优先使用本 Skill，用于判断直接处理项目文件，或通过`unitycli` 入口发现当前 Editor 能力。
+description: `unitycli` 是操作 Unity Editor 的能力通道，提供这些能力域：Editor 状态与 PlayMode、场景与层级、GameObject 与组件、资产导入与检索、Prefab、材质与 Shader、纹理与 ScriptableObject、UI、相机与截图、动画与 Animator、Timeline、光照与烘焙、NavMesh 与遮挡剔除、物理、渲染与 Volume、序列化字段、离线文档与类型查询、构建与 Build Profile、测试、Profiler、包、扩展与项目设置、Player 运行时、运行时调试，以及已装扩展带来的域（Cinemachine、ProBuilder、URP/HDRP、VFX Graph）；完整分组与可用状态在运行时用 `tools group` 读取。任务涉及这些域，或需要操作、观察、验证已打开的 Unity Editor 时，先读本 Skill。
 license: MIT
 ---
 # UnityCLI
@@ -9,12 +9,30 @@ FeedbackMode: off
 
 `unitycli` 是 AI 操作已打开 Unity Editor 的运行时导航入口，不是固定工具手册。根据任务发现当前 catalog，读取所选 descriptor，再构造调用。
 
+## 与 `unity pipeline` 的关系
+
+两者都是“Agent 操作 Unity Editor 的入口”，是同一类东西，但不是同一个东西。
+
+| 实现 | 组成 |
+|---|---|
+| `unitycli`（本 Skill） | `@alpsckr/unitycli` CLI + 工程内 Bridge |
+| `unity pipeline` | `com.unity.pipeline` 包的 Editor 服务 + `unity command` CLI |
+
+- **兼容**：本通道兼容 `unity pipeline`，同一项目可以同时使用两者。
+- **同类**：都是告诉 Editor 做什么的入口；项目命令在两侧调用同一个 C# 方法，所以业务语义与业务坑点一致。catalog 里的 `UnityPipeline_*` 工具就是项目侧 `[CliCommand]` 注册后被本通道投影出来的，前缀只说明来源，不表示要换通道。
+- **不同物**：实现、可发现能力、输出信封、超时与中断语义不同，一条通道的完成判据不能套到另一条。
+- **不混称**：`pipeline` 在本工程还指 `com.unity.scriptablebuildpipeline`（AssetBundle 构建）与「导表 → Json → bytes」的生成链，二者与通道无关。
+- **不混用**：一个任务固定在一条通道发起写入，不交替使用。
+
+领域 Skill 引用本通道时只写业务参数，不重述上表。
+
 ## 按需读取的 reference
 
 - 运行时调试（行为与预期不符、要运行时验收或验证行为、要证明业务接收输入、要调用边界参数、要暂停现场、要同输入复测）→ [运行时调试闭环](references/debugging.md)
 - 用户明确要求安装、更新或管理扩展，或需要诊断扩展状态 → [安装、更新与扩展管理](references/installation.md)
 - 分页、artifact、大输出、弹窗与长操作 → [操作协议](references/operation-protocol.md)
 - 需要稳定发现、typed schema、结构化结果、明确副作用、重复使用或团队共享 → [自定义 Tool](references/custom-tools.md)
+- 用户附加正文与扩展 → 若同级 `user/ROUTING.md` 存在，按其中路由继续；该目录归用户所有，安装器不读、不哈希、不删除
 - marker 为 `on` 且真实遇到摩擦，或用户在当前请求中明确要求记录 → [问题反馈](references/feedback.md)
 
 这些 reference 给出方法与判断；具体 Tool、参数与可用状态仍从当前 catalog 发现。调试能力族的执行域是 Editor 与其 Play 模式；Player 构建提供的是另一组运行期能力。
@@ -109,6 +127,17 @@ PowerShell 中以单引号包住内联 JSON 和 `tools search '<k1|k2|...>'`。�
 跨帧流的等待原语、结果规则、并发额度与存活边界读 `references/debugging.md`。
 
 需要项目自定义能力时读取 `references/custom-tools.md` 并实现 `IUnityCliTool<TReq,TRes>`。自定义 Tool 仍从当前 catalog 发现、describe 和调用，不假设名称、group 或输入。
+
+## 用户扩展
+
+`SKILL.md`、`references/` 与 `scripts/` 由安装器拥有：更新会替换它们，并移除不再投影的旧文件。自定义内容放同级 `user/` 目录，入口固定为 `user/ROUTING.md`。
+
+- 存在 `user/ROUTING.md` 时按其中路由执行；与本文件冲突时以本文件的安全与调用规则为准。
+- 安装器对 `user/` 零动作：不创建、不读取、不哈希、不删除，`--check` 的已安装判定也不受其影响。
+- `user/` 与 Skill 目录同生共死：更换安装位置或删除目录会一并丢失；需要版本管理的内容放项目里。
+- 把自有文件放进 `references/` 或 `scripts/` 会被当作安装投影处理，更新时替换或移除。
+
+`user/ROUTING.md` 自己负责登记该目录内文件的增删改，本文件不维护那份清单。
 
 ## 问题反馈
 
