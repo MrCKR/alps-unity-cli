@@ -187,7 +187,7 @@ export interface UnityCliPackageRemoval {
 
 const bridgePackageName = "com.alpsckr.unitycli";
 /** Bridge 包声明的 CLI 兼容范围；安装结果与 check 共用同一声明。 */
-export const cliCompatibilityRange = ">=0.9.0 <0.10.0";
+export const cliCompatibilityRange = ">=0.10.0 <0.11.0";
 const installMetadataFileName = "unitycli.install.json";
 const fileManifestFileName = "unitycli.files.json";
 const deploymentMetadataFileName = "unitycli.package-deployments.json";
