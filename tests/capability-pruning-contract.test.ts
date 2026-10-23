@@ -51,9 +51,9 @@ test("all 18 removed identities are absent from canonical source and runtime rou
 test("replacement mutations expose fresh readback for the removed duplicate surfaces", async () => {
   const [buildState, buildAdd, buildRemove, consoleClear, packageLive] = await Promise.all([
     readFile("unitypkg/Editor/Tools/build/BuildSceneStateTool.cs", "utf8"),
-    readFile("unitypkg/Editor/Tools/build/scene/add.cs", "utf8"),
-    readFile("unitypkg/Editor/Tools/build/scene/remove.cs", "utf8"),
-    readFile("unitypkg/Editor/Tools/debug/console/clear.cs", "utf8"),
+    readFile("unitypkg/Editor/Tools/build/scene-add.cs", "utf8"),
+    readFile("unitypkg/Editor/Tools/build/scene-remove.cs", "utf8"),
+    readFile("unitypkg/Editor/Tools/debug/console-clear.cs", "utf8"),
     readFile("src/tools/package/live-resolve.ts", "utf8"),
   ]);
   assert.match(buildState, /Scene = BuildEntry\(scenes\[index\], index\)/);

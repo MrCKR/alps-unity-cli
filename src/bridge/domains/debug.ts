@@ -88,24 +88,24 @@ function numberValue(value: unknown): number | undefined {
  * debug 域 spec：本地 typed code 工具保留内部 transport 名，其余 13 项经通用 catalog transport 路由。
  */
 export const debugBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "debug", command: "code.execute", bridgeCommand: "code.execute", toolName: "debug.code.execute", buildArgs: codeArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "debug", command: "code.flow.submit", bridgeCommand: "code.flow.submit", toolName: "debug.code.flow.submit", buildArgs: structuredPassthrough, destructiveHint: true, supportsDryRun: true },
-  { group: "debug", command: "code.flow.run", bridgeCommand: "code.flow.run", toolName: "debug.code.flow.run", buildArgs: structuredPassthrough, destructiveHint: true, supportsDryRun: true },
-  { group: "debug", command: "code.flow.wait", bridgeCommand: "code.flow.wait", toolName: "debug.code.flow.wait", buildArgs: structuredPassthrough },
-  { group: "debug", command: "code.flow.cancel", bridgeCommand: "code.flow.cancel", toolName: "debug.code.flow.cancel", buildArgs: structuredPassthrough, destructiveHint: true },
-  { group: "debug", command: "console.read", bridgeCommand: "catalog.editor.run", toolName: "debug.console.read", buildArgs: consoleReadArgs },
-  { group: "debug", command: "console.clear", bridgeCommand: "catalog.editor.run", toolName: "debug.console.clear", buildArgs: ({ flags }) => compactArgs({ dryRun: boolFlag(flags, "dry-run") }), supportsDryRun: true },
-  { group: "debug", command: "method.find", bridgeCommand: "catalog.editor.run", toolName: "debug.method.find", buildArgs: methodFindArgs },
-  { group: "debug", command: "method.invoke", bridgeCommand: "catalog.editor.run", toolName: "debug.method.invoke", buildArgs: methodInvokeArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "debug", command: "type.schema", bridgeCommand: "catalog.editor.run", toolName: "debug.type.schema", buildArgs: typeSchemaArgs },
-  { group: "debug", command: "hook.install", bridgeCommand: "catalog.editor.run", toolName: "debug.hook.install", buildArgs: structuredPassthrough },
-  { group: "debug", command: "hook.replace", bridgeCommand: "catalog.editor.run", toolName: "debug.hook.replace", buildArgs: structuredPassthrough },
-  { group: "debug", command: "hook.enable", bridgeCommand: "catalog.editor.run", toolName: "debug.hook.enable", buildArgs: structuredPassthrough },
-  { group: "debug", command: "hook.disable", bridgeCommand: "catalog.editor.run", toolName: "debug.hook.disable", buildArgs: structuredPassthrough },
-  { group: "debug", command: "hook.remove", bridgeCommand: "catalog.editor.run", toolName: "debug.hook.remove", buildArgs: structuredPassthrough },
-  { group: "debug", command: "hook.list", bridgeCommand: "catalog.editor.run", toolName: "debug.hook.list", buildArgs: structuredPassthrough },
-  { group: "debug", command: "hook.info", bridgeCommand: "catalog.editor.run", toolName: "debug.hook.info", buildArgs: structuredPassthrough },
-  { group: "debug", command: "events.read", bridgeCommand: "catalog.editor.run", toolName: "debug.events.read", buildArgs: structuredPassthrough }
+  { group: "debug", command: "code-execute", bridgeCommand: "code-execute", toolName: "debug.code-execute", buildArgs: codeArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "debug", command: "code-flow-submit", bridgeCommand: "code-flow-submit", toolName: "debug.code-flow-submit", buildArgs: structuredPassthrough, destructiveHint: true, supportsDryRun: true },
+  { group: "debug", command: "code-flow-run", bridgeCommand: "code-flow-run", toolName: "debug.code-flow-run", buildArgs: structuredPassthrough, destructiveHint: true, supportsDryRun: true },
+  { group: "debug", command: "code-flow-wait", bridgeCommand: "code-flow-wait", toolName: "debug.code-flow-wait", buildArgs: structuredPassthrough },
+  { group: "debug", command: "code-flow-cancel", bridgeCommand: "code-flow-cancel", toolName: "debug.code-flow-cancel", buildArgs: structuredPassthrough, destructiveHint: true },
+  { group: "debug", command: "console-read", bridgeCommand: "catalog.editor.run", toolName: "debug.console-read", buildArgs: consoleReadArgs },
+  { group: "debug", command: "console-clear", bridgeCommand: "catalog.editor.run", toolName: "debug.console-clear", buildArgs: ({ flags }) => compactArgs({ dryRun: boolFlag(flags, "dry-run") }), supportsDryRun: true },
+  { group: "debug", command: "method-find", bridgeCommand: "catalog.editor.run", toolName: "debug.method-find", buildArgs: methodFindArgs },
+  { group: "debug", command: "method-invoke", bridgeCommand: "catalog.editor.run", toolName: "debug.method-invoke", buildArgs: methodInvokeArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "debug", command: "type-schema", bridgeCommand: "catalog.editor.run", toolName: "debug.type-schema", buildArgs: typeSchemaArgs },
+  { group: "debug", command: "hook-install", bridgeCommand: "catalog.editor.run", toolName: "debug.hook-install", buildArgs: structuredPassthrough },
+  { group: "debug", command: "hook-replace", bridgeCommand: "catalog.editor.run", toolName: "debug.hook-replace", buildArgs: structuredPassthrough },
+  { group: "debug", command: "hook-enable", bridgeCommand: "catalog.editor.run", toolName: "debug.hook-enable", buildArgs: structuredPassthrough },
+  { group: "debug", command: "hook-disable", bridgeCommand: "catalog.editor.run", toolName: "debug.hook-disable", buildArgs: structuredPassthrough },
+  { group: "debug", command: "hook-remove", bridgeCommand: "catalog.editor.run", toolName: "debug.hook-remove", buildArgs: structuredPassthrough },
+  { group: "debug", command: "hook-list", bridgeCommand: "catalog.editor.run", toolName: "debug.hook-list", buildArgs: structuredPassthrough },
+  { group: "debug", command: "hook-info", bridgeCommand: "catalog.editor.run", toolName: "debug.hook-info", buildArgs: structuredPassthrough },
+  { group: "debug", command: "events-read", bridgeCommand: "catalog.editor.run", toolName: "debug.events-read", buildArgs: structuredPassthrough }
 ];
 
 /** hook/events 的 typed input 由 live schema 投影，spec 只搬运结构化字段。 */

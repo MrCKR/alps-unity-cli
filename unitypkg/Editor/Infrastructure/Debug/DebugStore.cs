@@ -137,7 +137,7 @@ namespace UnityCli
                             { "expectedPublication", expected.Publication },
                             { "observedPublication", current.Publication }
                         },
-                        new[] { "Run tools run debug.session.info to read the current state, then submit a new request." });
+                        new[] { "Run tools run debug.session-info to read the current state, then submit a new request." });
                 var publication = Math.Max(expected == null ? 0L : expected.Publication, current.Publication) + 1L;
                 var payload = new Dictionary<string, object>(StringComparer.Ordinal)
                 {

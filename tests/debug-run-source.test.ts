@@ -19,9 +19,9 @@ const READERS = ["wait", "info", "list", "compare"];
 
 test("the five debug.run tools exist with the declared descriptor shape", async () => {
   for (const tool of TOOLS) {
-    const text = await source(runToolsRoot, `${tool}.cs`);
+    const text = await source(runToolsRoot, `../run-${tool}.cs`);
     assert.match(text, /IUnityCliTool<DebugRun\w+Request, DebugRun\w+Result>/, `${tool}.cs must implement the typed Tool interface`);
-    assert.match(text, new RegExp(`Name = "debug\\.run\\.${tool}"`), `${tool}.cs must declare its exact public name`);
+    assert.match(text, new RegExp(`Name = "debug\\.run-${tool}"`), `${tool}.cs must declare its exact public name`);
     assert.match(text, /Group = "debug"/);
     assert.match(text, /Target = "editor"/);
     assert.match(text, /PlayModeSupport = "supported"/);
@@ -31,16 +31,16 @@ test("the five debug.run tools exist with the declared descriptor shape", async 
     assert.doesNotMatch(text, /MaxRunSummariesPerSession = |MaxDetailedRunWindowsPerSession = |MaxDetailedRunBytesGlobal = /, `${tool}.cs must not restate a run limit`);
   }
   // begin 是唯一跨效果屏障并声明副作用的 run Tool；其余是纯读取。
-  assert.match(await source(runToolsRoot, "begin.cs"), /SideEffects = new\[\] \{ "debug-session" \}/);
-  assert.match(await source(runToolsRoot, "begin.cs"), /ctx\.CommitEffect\(\);/);
+  assert.match(await source(runToolsRoot, "../run-begin.cs"), /SideEffects = new\[\] \{ "debug-session" \}/);
+  assert.match(await source(runToolsRoot, "../run-begin.cs"), /ctx\.CommitEffect\(\);/);
   for (const reader of READERS) {
-    const text = await source(runToolsRoot, `${reader}.cs`);
+    const text = await source(runToolsRoot, `../run-${reader}.cs`);
     assert.doesNotMatch(text, /SideEffects =/, `${reader}.cs is a pure read and must declare no side effect`);
     assert.doesNotMatch(text, /ctx\.CommitEffect\(\)/, `${reader}.cs must not cross an effect barrier`);
   }
-  const end = await source(runToolsRoot, "end.cs");
-  assert.doesNotMatch(end, /SideEffects =/, "debug.run.end seals evidence and declares no side effect");
-  assert.doesNotMatch(end, /ctx\.CommitEffect\(\)/, "debug.run.end must not cross an effect barrier");
+  const end = await source(runToolsRoot, "../run-end.cs");
+  assert.doesNotMatch(end, /SideEffects =/, "debug.run-end seals evidence and declares no side effect");
+  assert.doesNotMatch(end, /ctx\.CommitEffect\(\)/, "debug.run-end must not cross an effect barrier");
 });
 
 test("the run domain declares every budget in the single debug limit owner", async () => {
@@ -116,7 +116,7 @@ test("an assertion failure is never expressed as an error code", async () => {
   const files = [
     "src/output.ts",
     "docs/error-codes.md",
-    `${await source(runToolsRoot, "begin.cs")}${await source(runToolsRoot, "end.cs")}${await source(runToolsRoot, "wait.cs")}${await source(runToolsRoot, "info.cs")}`,
+    `${await source(runToolsRoot, "../run-begin.cs")}${await source(runToolsRoot, "../run-end.cs")}${await source(runToolsRoot, "../run-wait.cs")}${await source(runToolsRoot, "../run-info.cs")}`,
     await source(debugRoot, "DebugRunHost.cs"),
   ];
   assert.ok(!files.join("\n").includes("E_DEBUG_ASSERTION_FAILED"), "no assertion-failed error code may exist");
@@ -178,9 +178,9 @@ test("the evidence kernel requires coverage proof for negative and whole-window 
 test("coverage proof is consumed only by the quantifiers the descriptor names", async () => {
   const evidence = await source(debugRoot, "DebugRunEvidence.cs");
   const host = await source(debugRoot, "DebugRunHost.cs");
-  const begin = await source(runToolsRoot, "begin.cs");
-  const end = await source(runToolsRoot, "end.cs");
-  const info = await source(runToolsRoot, "info.cs");
+  const begin = await source(runToolsRoot, "../run-begin.cs");
+  const end = await source(runToolsRoot, "../run-end.cs");
+  const info = await source(runToolsRoot, "../run-info.cs");
   const shared = await source(sharedRoot, "UnityCliDebugRuns.cs");
   const dtos = await source(runToolsRoot, "DebugRunDtos.cs");
   // 判定内核只在消费覆盖的量词缺少申报时给出 coverage-not-required；来源评估不再把它当判定原因。
@@ -206,14 +206,14 @@ test("coverage proof is consumed only by the quantifiers the descriptor names", 
 test("the run tools are registered in the generated command contract", async () => {
   const contract = JSON.parse(await readFile(join(repoRoot, "contracts", "command-contract.json"), "utf8")) as { commands: Array<{ bridgeCommand: string; group: string }> };
   for (const tool of TOOLS) {
-    const name = `debug.run.${tool}`;
+    const name = `debug.run-${tool}`;
     assert.ok(contract.commands.some((entry) => entry.bridgeCommand === name), `${name} must be in the generated command contract`);
   }
   const completion = JSON.parse(await readFile(join(repoRoot, "contracts", "tool-completion-contract.json"), "utf8")) as { tools: Array<{ toolName: string; executionClass: string }> };
   for (const tool of TOOLS) {
-    assert.ok(completion.tools.some((entry) => entry.toolName === `debug.run.${tool}`), `debug.run.${tool} needs one completion contract`);
+    assert.ok(completion.tools.some((entry) => entry.toolName === `debug.run-${tool}`), `debug.run-${tool} needs one completion contract`);
   }
-  const compare = completion.tools.find((entry) => entry.toolName === "debug.run.compare");
+  const compare = completion.tools.find((entry) => entry.toolName === "debug.run-compare");
   assert.equal(compare?.executionClass, "observed-state", "compare reads observed evidence state");
 });
 
@@ -229,7 +229,7 @@ test("a sealed window retains its bounded evidence and releases only the payload
 });
 
 test("compare requires every caller-declared dimension and assumes no alignment", async () => {
-  const tool = await source(runToolsRoot, "compare.cs");
+  const tool = await source(runToolsRoot, "../run-compare.cs");
   const dtos = await source(runToolsRoot, "DebugRunDtos.cs");
   const kernel = await source(debugRoot, "DebugRunCompare.cs");
   assert.match(dtos, /\[UnityCliRequired\] public DebugRunCompareAlignmentSpec Alignment \{ get; set; \}/, "alignment is a required input");
@@ -256,7 +256,7 @@ test("compare reads the one event store and the published event projection", asy
   for (const forbidden of ["EditorApplication.update +=", "new Thread(", "new Task(", "Application.logMessageReceived", "class UnityCliDebugEventBuffer", "EnqueueDelivery", "TryClaimDelivery"]) {
     assert.ok(!kernel.includes(forbidden), `the compare kernel must not use ${forbidden}`);
   }
-  assert.doesNotMatch(kernel, /debug\.run\.compare[\s\S]{0,200}CommitEffect/, "compare is a pure read and crosses no effect barrier");
+  assert.doesNotMatch(kernel, /debug\.run-compare[\s\S]{0,200}CommitEffect/, "compare is a pure read and crosses no effect barrier");
 });
 
 test("only a proven difference decides divergence and absence alone never does", async () => {
@@ -304,7 +304,7 @@ test("the compare bounds live only in the single debug limit owner", async () =>
   }
   assert.match(limits, /internal static string RunCompareSummary\(\)/);
   const kernel = await source(debugRoot, "DebugRunCompare.cs");
-  const tool = await source(runToolsRoot, "compare.cs");
+  const tool = await source(runToolsRoot, "../run-compare.cs");
   for (const text of [kernel, tool]) {
     assert.doesNotMatch(text, /MaxRunCompare\w+ = \d/, "compare bounds must only be declared in DebugLimits");
     assert.doesNotMatch(text, /RunCompareDefaultContext = \d/, "the default context must come from DebugLimits");

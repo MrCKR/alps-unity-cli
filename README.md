@@ -22,7 +22,7 @@ Start your AI in the directory where you normally work and tell it:
 
 > 执行 unitycli init help，然后照做。
 
-`init help` contains the complete AI installation protocol. Read-only discovery uses the unique current Unity project and workspace without asking you to repeat them, reports the installed and available Bridge versions, and accepts any exact Skill directory you already named. It asks only when a real choice remains, including permission to normally close the exact target Unity Editor before replacing an in-use Bridge. It never force-terminates Unity or decides an unsaved-scene prompt.
+`init help` contains the complete AI installation protocol. Read-only discovery uses the unique current Unity project and workspace without asking you to repeat them, reports the installed and available Bridge versions, and accepts any exact Skill directory you already named. It asks only when a real choice remains, such as which of several discovered Unity projects receives the Bridge. An open Unity Editor is a normal installation state: the Bridge is replaced in place. Closing is a fallback: only after the publish reports a real directory lock may the AI normally close that exact project, and only after the user approves it. It never force-terminates Unity or decides an unsaved-scene prompt.
 
 ## Manual Setup
 
@@ -33,7 +33,7 @@ unitycli init help
 unitycli init discover
 ```
 
-Install or repair the Bridge in one explicit Unity project. Use `--close-editor` only after the user approves normally closing that exact project:
+Install or repair the Bridge in one explicit Unity project. Keep the Editor open: the package is replaced in place while Unity runs. Use `--close-editor` only after a reported directory lock and after the user approves normally closing that exact project:
 
 ```powershell
 unitycli init package --project C:\path\UnityProject
@@ -135,22 +135,22 @@ In PowerShell, quote pipe-separated search keywords with single quotes.
 
 ## Live Method Hooks
 
-The `debug` group hosts the live interceptor tools: `debug.hook.*` installs interceptors on an exact managed method of the current Editor domain before a Play run, observes calls, modifies behaviour, or executes bounded C# callbacks, and keeps those definitions across Play sessions and domain reloads within one Editor session:
+The `debug` group hosts the live interceptor tools: `debug.hook-*` installs interceptors on an exact managed method of the current Editor domain before a Play run, observes calls, modifies behaviour, or executes bounded C# callbacks, and keeps those definitions across Play sessions and domain reloads within one Editor session:
 
 ```powershell
-unitycli command debug.hook.install --label ai-movement-order --target '{"assemblyName":"Assembly-CSharp","typeName":"Game.AiController","methodName":"BeginMovement","parameterTypes":[],"returnType":"System.Void","isStatic":false}' --capture '{"arguments":true}' --instance C:\path\UnityProject
-unitycli command debug.hook.list --instance C:\path\UnityProject
-unitycli command debug.events.read --hook-id hook-0123456789abcdef --instance C:\path\UnityProject
+unitycli command debug.hook-install --label ai-movement-order --target '{"assemblyName":"Assembly-CSharp","typeName":"Game.AiController","methodName":"BeginMovement","parameterTypes":[],"returnType":"System.Void","isStatic":false}' --capture '{"arguments":true}' --instance C:\path\UnityProject
+unitycli command debug.hook-list --instance C:\path\UnityProject
+unitycli command debug.events-read --hook-id hook-0123456789abcdef --instance C:\path\UnityProject
 ```
 
 Boundaries worth knowing before using the group:
 
 - Definitions belong to one Editor session and are discarded on Editor restart; installing a hook is not persistent authorization for arbitrary code.
-- Call sites compiled before the patch keep the original behaviour, so an installed definition can legitimately produce no hits. Use `debug.events.read` or a real business readback to prove a hit.
+- Call sites compiled before the patch keep the original behaviour, so an installed definition can legitimately produce no hits. Use `debug.events-read` or a real business readback to prove a hit.
 - Callback source is compiled on demand through the editor-bundled C# compiler and loaded into the current domain; this is not a project compile, but it costs a compiler subprocess and cannot be unloaded individually.
 - `disable` and `remove` stop future dispatch and restore the original behaviour; they do not roll back effects that earlier invocations already produced.
 
-`unitycli tools describe debug.hook.install` documents the exact target identity, capture options, callback context API, resource budgets and error recovery for the selected instance. Pure observation with capture options starts no compiler, because a definition without callback source does not need one.
+`unitycli tools describe debug.hook-install` documents the exact target identity, capture options, callback context API, resource budgets and error recovery for the selected instance. Pure observation with capture options starts no compiler, because a definition without callback source does not need one.
 
 ## Output
 

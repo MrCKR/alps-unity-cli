@@ -12,20 +12,20 @@ const readSources = [
   read("unitypkg/Editor/Tools/project-settings/time-settings.cs"),
 ];
 const setSources = [
-  read("unitypkg/Editor/Tools/project-settings/audio-settings/set.cs"),
-  read("unitypkg/Editor/Tools/project-settings/input-settings/set.cs"),
-  read("unitypkg/Editor/Tools/project-settings/player-settings/set.cs"),
-  read("unitypkg/Editor/Tools/project-settings/time-settings/set.cs"),
+  read("unitypkg/Editor/Tools/project-settings/audio-settings-set.cs"),
+  read("unitypkg/Editor/Tools/project-settings/input-settings-set.cs"),
+  read("unitypkg/Editor/Tools/project-settings/player-settings-set.cs"),
+  read("unitypkg/Editor/Tools/project-settings/time-settings-set.cs"),
 ];
 const names = [
   "project-settings.audio-settings",
-  "project-settings.audio-settings.set",
+  "project-settings.audio-settings-set",
   "project-settings.input-settings",
-  "project-settings.input-settings.set",
+  "project-settings.input-settings-set",
   "project-settings.player-settings",
-  "project-settings.player-settings.set",
+  "project-settings.player-settings-set",
   "project-settings.time-settings",
-  "project-settings.time-settings.set",
+  "project-settings.time-settings-set",
 ];
 const completion = JSON.parse(read("contracts/tool-completion-contract.json")) as { tools: Array<{ toolName: string }> };
 
@@ -109,7 +109,7 @@ test("Player reload风险和调用方fresh-read责任被明确投影", () => {
   assert.match(source, /"domain-reload"/);
   assert.match(source, /may trigger a domain reload/);
   assert.match(source, /read project-settings\.player-settings before deciding whether to retry/);
-  const entry = completion.tools.find((item) => item.toolName === "project-settings.player-settings.set") as Record<string, unknown> | undefined;
+  const entry = completion.tools.find((item) => item.toolName === "project-settings.player-settings-set") as Record<string, unknown> | undefined;
   assert.ok(entry);
   assert.equal(entry?.executionClass, "atomic");
   assert.match(JSON.stringify(entry), /project-settings\.player-settings/);

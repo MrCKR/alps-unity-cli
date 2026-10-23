@@ -218,7 +218,7 @@ namespace UnityCli
             if (publicProperty != null && publicProperty.CanWrite && publicProperty.GetIndexParameters().Length == 0) return new SettingMutationPlan { Pipeline = pipeline, PropertyName = propertyName, PublicProperty = publicProperty, ExpectedValue = ConvertValue(value, publicProperty.PropertyType) };
             var serialized = new SerializedObject(pipeline);
             var property = serialized.FindProperty(propertyName) ?? serialized.FindProperty("m_" + char.ToUpper(propertyName[0]) + propertyName.Substring(1));
-            if (property == null) { serialized.Dispose(); throw new UnityCliBridge.BridgeCommandException("E_HDRP_SETTING_NOT_FOUND", "HDRP setting not found: " + propertyName, "Run hdrp.settings.get to inspect readable settings."); }
+            if (property == null) { serialized.Dispose(); throw new UnityCliBridge.BridgeCommandException("E_HDRP_SETTING_NOT_FOUND", "HDRP setting not found: " + propertyName, "Run hdrp.settings-get to inspect readable settings."); }
             var expected = ConvertScalar(property, value);
             return new SettingMutationPlan { Pipeline = pipeline, PropertyName = propertyName, SerializedObject = serialized, SerializedProperty = property, SerializedPropertyPath = property.propertyPath, SerializedPropertyType = property.propertyType, ExpectedValue = expected, ExpectedReadback = FormatScalar(property.propertyType, expected) };
         }
@@ -261,7 +261,7 @@ namespace UnityCli
 
         public static void ValidateSerializedPropertyValue(SerializedProperty property, string value)
         {
-            if (property == null) throw new UnityCliBridge.BridgeCommandException("E_HDRP_SETTING_NOT_FOUND", "HDRP setting not found.", "Run hdrp.settings.get to inspect readable settings.");
+            if (property == null) throw new UnityCliBridge.BridgeCommandException("E_HDRP_SETTING_NOT_FOUND", "HDRP setting not found.", "Run hdrp.settings-get to inspect readable settings.");
             try
             {
                 switch (property.propertyType)
@@ -415,7 +415,7 @@ namespace UnityCli
             var profile = HdrpToolSupport.GetProfileForPlanning(volume.GetComponent(HdrpToolSupport.VolumeType)) as VolumeProfile;
             var addMethod = HdrpToolSupport.VolumeProfileType.GetMethod("Add", new[] { typeof(Type), typeof(bool) });
             if (profile == null || addMethod == null) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_PROFILE_NOT_FOUND", "The target Volume has no writable Add API.", "Create a Volume or assign a profile before adding an effect.");
-            if (profile.components.Any(component => component != null && effectType.IsInstanceOfType(component))) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_EFFECT_EXISTS", "The requested effect is already present: " + effectTypeName, "Use hdrp.volume.set to modify the existing effect.");
+            if (profile.components.Any(component => component != null && effectType.IsInstanceOfType(component))) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_EFFECT_EXISTS", "The requested effect is already present: " + effectTypeName, "Use hdrp.volume-set to modify the existing effect.");
         }
 
         internal sealed class VolumeSetMutationPlan { internal int GameObjectId { get; set; } internal int PlanningProfileId { get; set; } internal int SharedProfileId { get; set; } internal Type EffectType { get; set; } internal string PropertyPath { get; set; } internal SerializedPropertyType PropertyType { get; set; } internal object ExpectedValue { get; set; } internal string ExpectedReadback { get; set; } }
@@ -486,9 +486,9 @@ namespace UnityCli
             if (effectType == null) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_EFFECT_TYPE_NOT_FOUND", "Volume effect type not found: " + effectTypeName, "Ensure the effect type is correct and the render pipeline package is fully imported.");
             var profile = HdrpToolSupport.GetVolumeProfile(gameObject.GetComponent(HdrpToolSupport.VolumeType)) as VolumeProfile;
             var addMethod = HdrpToolSupport.VolumeProfileType.GetMethod("Add", new[] { typeof(Type), typeof(bool) });
-            if (profile == null || addMethod == null) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_PROFILE_NOT_FOUND", "The target Volume has no writable in-memory profile.", "Create a Volume with hdrp.volume.create or assign a profile before adding an effect.");
+            if (profile == null || addMethod == null) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_PROFILE_NOT_FOUND", "The target Volume has no writable in-memory profile.", "Create a Volume with hdrp.volume-create or assign a profile before adding an effect.");
             var countBefore = profile.components.Count(component => component != null && effectType.IsInstanceOfType(component));
-            if (countBefore != 0) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_EFFECT_EXISTS", "The requested effect is already present: " + effectTypeName, "Use hdrp.volume.set to modify the existing effect.");
+            if (countBefore != 0) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_EFFECT_EXISTS", "The requested effect is already present: " + effectTypeName, "Use hdrp.volume-set to modify the existing effect.");
             addMethod.Invoke(profile, new object[] { effectType, true });
             var observedObject = ResolveVolume(gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture), errorPrefix);
             var observedProfile = HdrpToolSupport.GetVolumeProfile(observedObject.GetComponent(HdrpToolSupport.VolumeType)) as VolumeProfile;

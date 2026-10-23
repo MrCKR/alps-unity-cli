@@ -22,9 +22,9 @@ const DESTRUCTIVE = ["install", "replace", "run"];
 
 test("the eight debug.program tools exist with the declared descriptor shape", async () => {
   for (const tool of TOOLS) {
-    const text = await source(programToolsRoot, `${tool}.cs`);
+    const text = await source(programToolsRoot, `../program-${tool}.cs`);
     assert.match(text, /IUnityCliTool<DebugProgram\w+Request, DebugProgram\w+Result>/, `${tool}.cs must implement the typed Tool interface`);
-    assert.match(text, new RegExp(`Name = "debug\\.program\\.${tool}"`), `${tool}.cs must declare its exact public name`);
+    assert.match(text, new RegExp(`Name = "debug\\.program-${tool}"`), `${tool}.cs must declare its exact public name`);
     assert.match(text, /Group = "debug"/);
     assert.match(text, /Target = "editor"/);
     assert.match(text, /PlayModeSupport = "supported"/);
@@ -33,26 +33,26 @@ test("the eight debug.program tools exist with the declared descriptor shape", a
     assert.doesNotMatch(text, /MaxProgramsPerSession = |MaxProgramsGlobal = |MaxProgramSourceBytes =/, `${tool}.cs must not restate a program limit`);
   }
   for (const writer of WRITERS) {
-    const text = await source(programToolsRoot, `${writer}.cs`);
+    const text = await source(programToolsRoot, `../program-${writer}.cs`);
     assert.match(text, /ctx\.CommitEffect\(\);/, `${writer}.cs must cross the single effect barrier`);
     assert.match(text, /SideEffects = new\[\] \{/, `${writer}.cs must declare its side effects`);
   }
   for (const reader of READERS) {
-    const text = await source(programToolsRoot, `${reader}.cs`);
+    const text = await source(programToolsRoot, `../program-${reader}.cs`);
     assert.doesNotMatch(text, /SideEffects =/, `${reader}.cs is a pure read and must declare no side effect`);
     assert.doesNotMatch(text, /ctx\.CommitEffect\(\)/, `${reader}.cs must not cross an effect barrier`);
   }
   for (const tool of DESTRUCTIVE) {
-    const text = await source(programToolsRoot, `${tool}.cs`);
+    const text = await source(programToolsRoot, `../program-${tool}.cs`);
     assert.match(text, /DestructiveHint = true/, `${tool}.cs is declared destructive`);
   }
-  assert.match(await source(programToolsRoot, "install.cs"), /SideEffects = new\[\] \{ "debug-session", "artifact-write" \}/);
-  assert.match(await source(programToolsRoot, "replace.cs"), /SideEffects = new\[\] \{ "debug-session", "artifact-write" \}/);
-  assert.match(await source(programToolsRoot, "run.cs"), /SideEffects = new\[\] \{ "debug-activation", "user-code-execution" \}/);
-  assert.match(await source(programToolsRoot, "stop.cs"), /SideEffects = new\[\] \{ "debug-activation" \}/);
-  assert.match(await source(programToolsRoot, "remove.cs"), /SideEffects = new\[\] \{ "debug-session" \}/);
-  assert.match(await source(programToolsRoot, "stop.cs"), /DestructiveHint = false/);
-  assert.match(await source(programToolsRoot, "remove.cs"), /DestructiveHint = false/);
+  assert.match(await source(programToolsRoot, "../program-install.cs"), /SideEffects = new\[\] \{ "debug-session", "artifact-write" \}/);
+  assert.match(await source(programToolsRoot, "../program-replace.cs"), /SideEffects = new\[\] \{ "debug-session", "artifact-write" \}/);
+  assert.match(await source(programToolsRoot, "../program-run.cs"), /SideEffects = new\[\] \{ "debug-activation", "user-code-execution" \}/);
+  assert.match(await source(programToolsRoot, "../program-stop.cs"), /SideEffects = new\[\] \{ "debug-activation" \}/);
+  assert.match(await source(programToolsRoot, "../program-remove.cs"), /SideEffects = new\[\] \{ "debug-session" \}/);
+  assert.match(await source(programToolsRoot, "../program-stop.cs"), /DestructiveHint = false/);
+  assert.match(await source(programToolsRoot, "../program-remove.cs"), /DestructiveHint = false/);
 });
 
 test("the program domain declares every budget in the single debug limit owner", async () => {
@@ -160,14 +160,14 @@ test("the run observation proof accepts exactly the declared non-terminal window
   assert.match(coordinator, /if \(IsIntermediateField\(key\) && IntermediateFieldIsSet\(entry\.Value\)\) return true;/, "intermediate marker fields stay rejected");
   assert.match(coordinator, /namedRootState && IsIntermediateStatus\(text\) && !rootIsDeclaredBoundedObservation/, "only the root run state of a declared observation is exempt");
   const contract = JSON.parse(await readFile(join(repoRoot, "contracts", "tool-completion-contract.json"), "utf8"));
-  for (const toolName of ["debug.program.run", "debug.program.wait", "debug.program.stop"]) {
+  for (const toolName of ["debug.program-run", "debug.program-wait", "debug.program-stop"]) {
     const entry = contract.tools.find((candidate: { toolName: string }) => candidate.toolName === toolName);
     assert.equal(entry.completionPredicate.kind, "owned-run-terminal-readback", `${toolName} declares the run observation predicate`);
     assert.match(entry.completionPredicate.description, /terminal[:=]false/, `${toolName} must declare the bounded non-terminal window`);
   }
   // 创建信封必须携带诚实非终态事实：合法的 dispatch 运行在返回时仍在等待自己的执行点。
   const host = await source(debugRoot, "DebugProgramHost.cs");
-  assert.match(host, /Terminal = run\.IsTerminal/, "debug.program.run must return the run's own terminal fact");
+  assert.match(host, /Terminal = run\.IsTerminal/, "debug.program-run must return the run's own terminal fact");
   const dtos = await source(programToolsRoot, "DebugProgramDtos.cs");
   assert.match(dtos, /public bool Terminal \{ get; set; \}/, "DebugProgramRunResult must carry the terminal observation flag");
 });
@@ -205,14 +205,14 @@ test("the frozen ABI is self-describing and the descriptor carries a legal examp
   assert.match(abi, /void Emit\(string name, object value\)/);
   assert.match(abi, /long StepIndex \{ get; \}/);
   for (const tool of ["install", "replace", "run"]) {
-    const text = await source(programToolsRoot, `${tool}.cs`);
+    const text = await source(programToolsRoot, `../program-${tool}.cs`);
     assert.match(text, /UnityCliDebugProgramAbi\.StepContextAbi\(\)/, `${tool}.cs must publish the step member ABI`);
   }
-  assert.match(await source(runToolsRoot, "begin.cs"), /UnityCliDebugProgramAbi\.StepContextAbi\(\)/, "begin.cs names context.Check and must publish the same step member ABI");
-  const install = await source(programToolsRoot, "install.cs");
+  assert.match(await source(runToolsRoot, "../run-begin.cs"), /UnityCliDebugProgramAbi\.StepContextAbi\(\)/, "begin.cs names context.Check and must publish the same step member ABI");
+  const install = await source(programToolsRoot, "../program-install.cs");
   assert.match(install, /UnityCliDebugProgramAbi\.ExampleSource\(\)/, "install must ship a minimal legal program");
   assert.match(install, /UnityCliDebugProgramAbi\.SignatureTable\(\)/, "install must ship the whole signature table");
-  const replace = await source(programToolsRoot, "replace.cs");
+  const replace = await source(programToolsRoot, "../program-replace.cs");
   assert.match(replace, /UnityCliDebugProgramAbi\.SignatureTable\(\)/);
 });
 

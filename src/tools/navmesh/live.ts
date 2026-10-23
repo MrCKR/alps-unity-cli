@@ -46,7 +46,7 @@ export interface NavMeshSurfaceProof {
 }
 
 export interface NavMeshPlannedEffect {
-  type: "navmesh.bake" | "navmesh.surface.bake";
+  type: "navmesh.bake" | "navmesh.surface-bake";
   target: "open-scenes" | "all-active-surfaces";
   targetCount: number;
 }
@@ -101,7 +101,7 @@ type RecordValue = Record<string, unknown>;
 /** 以一个公开 requestId 启动 durable root，并只在 terminal proof 后返回。 */
 export async function runNavMeshBake(kind: NavMeshBakeKind, context: ToolContext): Promise<NavMeshBakeResult> {
   // C# coordinator先做exact replay，再只对首次创建执行EditMode/readiness校验。
-  const binding = await bind(context, kind === "legacy" ? "navmesh.bake" : "navmesh.surface.bake", false);
+  const binding = await bind(context, kind === "legacy" ? "navmesh.bake" : "navmesh.surface-bake", false);
   const deadline = deadlineOf(context);
   const input = { expectedEditorSessionId: binding.sessionId, kind };
   if (context.execution.dryRun) {
@@ -120,7 +120,7 @@ export async function runNavMeshBake(kind: NavMeshBakeKind, context: ToolContext
     if (root.terminal !== true && !rootRequestDigest) throw invalid("start omitted its exact root digest");
     while (root.terminal !== true) {
       if (root.terminal !== false || root.accepted !== true) throw invalid("start returned neither acceptance nor a root terminal");
-      if (Date.now() >= deadline) throw timeout(kind === "legacy" ? "navmesh.bake" : "navmesh.surface.bake", "E_EXECUTION_TIMEOUT");
+      if (Date.now() >= deadline) throw timeout(kind === "legacy" ? "navmesh.bake" : "navmesh.surface-bake", "E_EXECUTION_TIMEOUT");
       await delay(Math.min(100, Math.max(1, deadline - Date.now())));
       root = record((await call(childId(context.requestId, "_navmesh_status"), "internal.navmesh.bake.status", { rootRequestId: context.requestId, rootRequestDigest }, binding.flags, context, observe)).data);
     }
@@ -129,7 +129,7 @@ export async function runNavMeshBake(kind: NavMeshBakeKind, context: ToolContext
   } catch (error) {
     if (terminalReceived || !accepted || (error instanceof StructuredToolError && error.code === "E_EXECUTION_TIMEOUT")) throw error;
     const cause = error instanceof StructuredToolError ? error : undefined;
-    throw timeout(kind === "legacy" ? "navmesh.bake" : "navmesh.surface.bake", cause?.code ?? "BRIDGE_CONNECTION_FAILED", cause?.details);
+    throw timeout(kind === "legacy" ? "navmesh.bake" : "navmesh.surface-bake", cause?.code ?? "BRIDGE_CONNECTION_FAILED", cause?.details);
   }
 }
 
@@ -258,7 +258,7 @@ function normalizeEffects(value: unknown, kind: NavMeshBakeKind, targetCount: nu
   if (!Array.isArray(value) || value.length !== 1) return undefined;
   const item = record(value[0]);
   const count = nonnegative(item.targetCount);
-  const type = kind === "legacy" ? "navmesh.bake" : "navmesh.surface.bake";
+  const type = kind === "legacy" ? "navmesh.bake" : "navmesh.surface-bake";
   const target = kind === "legacy" ? "open-scenes" : "all-active-surfaces";
   if (item.type !== type || item.target !== target || count === undefined || (targetCount !== undefined && count !== targetCount) || count === 0) return undefined;
   return [{ type, target, targetCount: count }];

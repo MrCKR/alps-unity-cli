@@ -13,7 +13,7 @@ namespace UnityCli
     /// - 持有唯一的 UnityCliDebugEventBuffer，并把 DebugLimits 的唯一预算声明传给它；
     /// - 负责 Editor Session 归属、主线程身份与时钟溯源；
     /// - 是所有托管调试事件（hook、以及后续 program/log/check/pause/input/lifecycle）唯一的追加入口；
-    /// - 是 debug.events.read 唯一的读取入口，并把 cursor 状态归约为稳定错误码。
+    /// - 是 debug.events-read 唯一的读取入口，并把 cursor 状态归约为稳定错误码。
     ///
     /// 线程规则：
     /// - Append 可以被任意托管线程调用；是否主线程由已绑定的主线程身份证明，不能证明时按 off-main 处理。
@@ -36,7 +36,7 @@ namespace UnityCli
         internal static IReadOnlyList<UnityCliDebugGap> Gaps { get { return BufferInstance().Gaps; } }
 
         /// <summary>
-        /// 当前保留窗口内调用方报告过无法入库的追加次数；debug.events.read 把本值原样返回。
+        /// 当前保留窗口内调用方报告过无法入库的追加次数；debug.events-read 把本值原样返回。
         /// 计数与它归因的事件同属一个保留窗口：窗口被丢弃时计数一起归零，
         /// 因此读到的每一次失败都必然能在同一窗口里被归因。
         /// </summary>
@@ -52,7 +52,7 @@ namespace UnityCli
         /// 追加失败的唯一记账与归因入口：计数、日志行与 coverage 事实在同一处一次完成。
         ///
         /// 本 owner 不提供只增加计数的 API，因此不存在“计数了却无法归因”的路径：
-        /// debug.events.read 读到的每一次失败都带一条固定日志行，并尽力补发一条 coverage 事实，
+        /// debug.events-read 读到的每一次失败都带一条固定日志行，并尽力补发一条 coverage 事实，
         /// 说明丢失事件的来源、种类与名称；归因事实被保留窗口丢弃时计数同时归零。
         /// coverage 事实只用固定标量构造，不做投影、不读主线程专属 API，因此不会因同一原因再次失败；
         /// 它和所有事件一样受存储的条数与字节上限约束，不随失败次数无限增长。
@@ -157,7 +157,7 @@ namespace UnityCli
         }
 
         /// <summary>
-        /// debug.events.read 的唯一读取入口：统一分页、筛选与覆盖率字段，并把 cursor 状态归约为稳定错误码。
+        /// debug.events-read 的唯一读取入口：统一分页、筛选与覆盖率字段，并把 cursor 状态归约为稳定错误码。
         /// </summary>
         internal static DebugEventsResult ReadEvents(DebugEventsRequest request, double waitedMilliseconds = 0d)
         {
@@ -171,7 +171,7 @@ namespace UnityCli
                 throw new BridgeCommandException(
                     "E_CONTINUATION_STALE",
                     "The event continuation no longer matches the current Editor session or filters.",
-                    "Re-read the current tail of debug.events.read without a cursor.");
+                    "Re-read the current tail of debug.events-read without a cursor.");
             }
             if (string.Equals(page.CursorStatus, "expired", StringComparison.Ordinal))
             {
@@ -179,7 +179,7 @@ namespace UnityCli
                     "E_HOOK_EVENT_CURSOR_EXPIRED",
                     "The event continuation predates the retained event window.",
                     new Dictionary<string, object> { { "oldestAvailableCursor", page.OldestAvailableCursor } },
-                    new[] { "Re-read debug.events.read without a cursor; oldestAvailableCursor reports the new readable start." });
+                    new[] { "Re-read debug.events-read without a cursor; oldestAvailableCursor reports the new readable start." });
             }
             var events = new List<DebugEventItem>(page.Events.Count);
             foreach (var entry in page.Events) events.Add(DebugEventItem.FromEvent(entry));

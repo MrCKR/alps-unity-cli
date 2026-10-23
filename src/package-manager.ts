@@ -186,7 +186,8 @@ export interface UnityCliPackageRemoval {
 }
 
 const bridgePackageName = "com.alpsckr.unitycli";
-const cliCompatibilityRange = ">=0.9.0 <0.10.0";
+/** Bridge 包声明的 CLI 兼容范围；安装结果与 check 共用同一声明。 */
+export const cliCompatibilityRange = ">=0.9.0 <0.10.0";
 const installMetadataFileName = "unitycli.install.json";
 const fileManifestFileName = "unitycli.files.json";
 const deploymentMetadataFileName = "unitycli.package-deployments.json";
@@ -281,7 +282,7 @@ export async function setRegistry(projectPath: string, url: string, options: Man
 async function setRegistryLocked(projectPath: string, url: string, options: ManifestMutationOptions): Promise<{ manifestPath: string; registry: string; dryRun?: true; plannedEffects?: Array<Record<string, unknown>> }> {
   const paths = packagePaths(projectPath);
   const manifest = await readManifest(paths.manifestPath, false);
-  if (options.dryRun) return { manifestPath: paths.manifestPath, registry: url, dryRun: true, plannedEffects: [{ type: "package.registry.set", registry: url, previousRegistry: manifest.registry }] };
+  if (options.dryRun) return { manifestPath: paths.manifestPath, registry: url, dryRun: true, plannedEffects: [{ type: "package.registry-set", registry: url, previousRegistry: manifest.registry }] };
   manifest.registry = url;
   await writeManifest(paths.manifestPath, manifest);
   const readback = await readManifest(paths.manifestPath, false);
@@ -299,7 +300,7 @@ export async function clearRegistry(projectPath: string, options: ManifestMutati
 async function clearRegistryLocked(projectPath: string, options: ManifestMutationOptions): Promise<{ manifestPath: string; registryCleared?: true; dryRun?: true; plannedEffects?: Array<Record<string, unknown>> }> {
   const paths = packagePaths(projectPath);
   const manifest = await readManifest(paths.manifestPath, false);
-  if (options.dryRun) return { manifestPath: paths.manifestPath, dryRun: true, plannedEffects: [{ type: "package.registry.clear", registry: manifest.registry }] };
+  if (options.dryRun) return { manifestPath: paths.manifestPath, dryRun: true, plannedEffects: [{ type: "package.registry-clear", registry: manifest.registry }] };
   delete manifest.registry;
   await writeManifest(paths.manifestPath, manifest);
   const readback = await readManifest(paths.manifestPath, false);
@@ -320,7 +321,7 @@ async function addScopedRegistryLocked(projectPath: string, registry: ScopedRegi
   const registries = normalizeScopedRegistries(manifest.scopedRegistries);
   const index = registries.findIndex((existing) => existing.name === registry.name);
   const normalized = { name: registry.name, url: registry.url, scopes: uniqueScopes(registry.scopes) };
-  if (options.dryRun) return { manifestPath: paths.manifestPath, registry: normalized, dryRun: true, plannedEffects: [{ type: "package.scoped-registry.add", ...normalized }] };
+  if (options.dryRun) return { manifestPath: paths.manifestPath, registry: normalized, dryRun: true, plannedEffects: [{ type: "package.scoped-registry-add", ...normalized }] };
   if (index >= 0) {
     registries[index] = normalized;
   } else {
@@ -358,7 +359,7 @@ async function removeScopedRegistryLocked(projectPath: string, name: string, opt
       "Rerun with force=true only when you intentionally want to leave those packages without their scoped registry."
     ]);
   }
-  const plannedEffects = [{ type: "package.scoped-registry.remove", name, scopes: removed.scopes, matchedPackages, forced: options.force === true, blocked }];
+  const plannedEffects = [{ type: "package.scoped-registry-remove", name, scopes: removed.scopes, matchedPackages, forced: options.force === true, blocked }];
   if (!options.dryRun) {
     registries.splice(index, 1);
     manifest.scopedRegistries = registries;
@@ -805,7 +806,7 @@ async function ensurePackageBridgeLocked(projectPath: string, prepared?: UnityCl
       throw new PackageManagerError(
         "PACKAGE_DIRECTORY_LOCKED",
         `Windows kept the existing UnityCLI package directory open while replacement was attempted (${code}).`,
-        ["Close the exact target Unity Editor and any process using the package directory, then rerun the same init package command."],
+        ["Report the exact locked package directory and that the previous package state was restored.", "Ask once whether this exact Unity project may be closed normally; close it only after approval and rerun the same `init package` command with `--close-editor`.", "Never force-terminate Unity and never delete part of the package directory by hand."],
         { operation: "replace-existing-package", nativeCode: code },
       );
     }
@@ -1393,7 +1394,7 @@ export function validateRegistryUrl(url: string | undefined): string {
   } catch {
     throw new PackageManagerError("REGISTRY_URL_INVALID", `Registry URL is invalid: ${url}`, [
       "Use an http(s) registry URL, for example https://package.openupm.com.",
-      "Run unitycli tools describe package.registry.set for accepted registry inputs."
+      "Run unitycli tools describe package.registry-set for accepted registry inputs."
     ]);
   }
 }

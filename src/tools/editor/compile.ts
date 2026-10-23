@@ -103,7 +103,7 @@ export default defineTool<EditorCompileRequest, EditorCompileResult>({
     if (Date.now() >= absoluteDeadlineMs) throw compileTimeout();
     if (state.status === "blocked") throw blockedEditorStateError("Unity Editor is blocked and cannot start compilation.", state.blockers);
     rejectUnavailableEditorState(state, "editor.compile");
-    if (isPlaying(state)) throw new StructuredToolError("E_UNITY_COMPILE_REQUIRES_EDIT_MODE", "editor.compile requires Edit Mode.", ["Run unitycli tools run editor.play-mode.stop, then retry editor.compile."], { playMode: state.state.playMode.value }, false, 0);
+    if (isPlaying(state)) throw new StructuredToolError("E_UNITY_COMPILE_REQUIRES_EDIT_MODE", "editor.compile requires Edit Mode.", ["Run unitycli tools run editor.play-mode-stop, then retry editor.compile."], { playMode: state.state.playMode.value }, false, 0);
     if (!state.session.known || !state.session.editorSessionId) throw new StructuredToolError("E_EDITOR_SESSION_REPLACED", "editor.compile could not bind a verified Editor session.", ["Inspect editor.state and retry after the session identity is known."]);
 
     const boundContext: ToolContext = { ...context, flags: { ...(context.flags ?? {}), instance: state.identity.instanceId } };

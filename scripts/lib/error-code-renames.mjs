@@ -22,6 +22,7 @@ export const FACT_ADDITIONS = [
   ["OBSERVER_ASYNC", "false", false],
   ["DUPLICATE", "false", false],
   ["REJECTED", "false", false],
+  ["DISABLED", "false", false],
   ["NESTED", "false", false],
   ["PAUSED", "false", true],
   ["REQUIRES_INVOCATION", "false", false],
@@ -80,12 +81,7 @@ export const SYNONYM_TARGETS = {
 };
 
 /** 站点级语义 override：事实默认派不出来的真实信封语义，必须带理由。 */
-export const SEMANTIC_OVERRIDES = {
-  E_INIT_EDITOR_RUNNING: {
-    transient: false,
-    reason: "Retrying without changing the Editor state can never succeed, so this code is not transient even though the RUNNING fact defaults to transient."
-  }
-};
+export const SEMANTIC_OVERRIDES = {};
 
 /** 已应用的改名记录（旧 → 新）。审计用它拦住旧名的回流；不得用作运行时映射。 */
 export const RETIRED_CODES = {

@@ -74,13 +74,13 @@ test("core atomic business mutations return readback state rather than requested
 
 test("UI and ScriptableObject asset mutations commit only after validation and return reload readback", async () => {
   const [documentCreate, visualElement, scriptableCreate, scriptableModify, button, image, text] = await Promise.all([
-    source("Tools/ui/document/create.cs"),
+    source("Tools/ui/document-create.cs"),
     source("Tools/ui/modify-visual-element.cs"),
     source("Tools/scriptable-object/create.cs"),
     source("Tools/scriptable-object/modify.cs"),
-    source("Tools/ui/button/create.cs"),
-    source("Tools/ui/image/create.cs"),
-    source("Tools/ui/text/create.cs"),
+    source("Tools/ui/button-create.cs"),
+    source("Tools/ui/image-create.cs"),
+    source("Tools/ui/text-create.cs"),
   ]);
 
   assert.ok(documentCreate.indexOf("ValidateTextAssetCreation") < documentCreate.indexOf("ctx.CommitEffect()"));
@@ -101,7 +101,7 @@ test("UI and ScriptableObject asset mutations commit only after validation and r
 
 test("adjacent core tools expose observed business objects after mutation", async () => {
   const [buildSettings, importSettings, objectModify, componentSet, gameObjectModify] = await Promise.all([
-    source("Tools/build/settings/set.cs"),
+    source("Tools/build/settings-set.cs"),
     source("Tools/texture/import-settings.cs"),
     source("Tools/serialized-object/patch.cs"),
     source("Tools/component/set.cs"),

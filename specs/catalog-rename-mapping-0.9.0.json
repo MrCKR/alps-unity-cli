@@ -1,0 +1,1093 @@
+{
+  "issue": "ISSUE-118",
+  "sourceContract": "contracts/command-contract.json",
+  "commandCount": 455,
+  "mappings": [
+    {
+      "old": "asset.import-settings.set",
+      "new": "asset.import-settings-set",
+      "group": "asset",
+      "final": "asset.import-settings-set"
+    },
+    {
+      "old": "asset.refresh.status",
+      "new": "asset.refresh-status",
+      "group": "asset",
+      "final": "asset.refresh-status"
+    },
+    {
+      "old": "build.platform.get",
+      "new": "build.platform-get",
+      "group": "build",
+      "final": "build.platform-get"
+    },
+    {
+      "old": "build.platform.set",
+      "new": "build.platform-set",
+      "group": "build",
+      "final": "build.platform-set"
+    },
+    {
+      "old": "build.player.status",
+      "new": "build.player-status",
+      "group": "build",
+      "final": "build.player-status"
+    },
+    {
+      "old": "build.profile.create",
+      "new": "build.profile-create",
+      "group": "build",
+      "final": "build.profile-create"
+    },
+    {
+      "old": "build.profile.list",
+      "new": "build.profile-list",
+      "group": "build",
+      "final": "build.profile-list"
+    },
+    {
+      "old": "build.profile.modify",
+      "new": "build.profile-modify",
+      "group": "build",
+      "final": "build.profile-modify"
+    },
+    {
+      "old": "build.profile.switch",
+      "new": "build.profile-switch",
+      "group": "build",
+      "final": "build.profile-switch"
+    },
+    {
+      "old": "build.scene.add",
+      "new": "build.scene-add",
+      "group": "build",
+      "final": "build.scene-add"
+    },
+    {
+      "old": "build.scene.disable",
+      "new": "build.scene-disable",
+      "group": "build",
+      "final": "build.scene-disable"
+    },
+    {
+      "old": "build.scene.enable",
+      "new": "build.scene-enable",
+      "group": "build",
+      "final": "build.scene-enable"
+    },
+    {
+      "old": "build.scene.list",
+      "new": "build.scene-list",
+      "group": "build",
+      "final": "build.scene-list"
+    },
+    {
+      "old": "build.scene.remove",
+      "new": "build.scene-remove",
+      "group": "build",
+      "final": "build.scene-remove"
+    },
+    {
+      "old": "build.settings.get",
+      "new": "build.settings-get",
+      "group": "build",
+      "final": "build.settings-get"
+    },
+    {
+      "old": "build.settings.set",
+      "new": "build.settings-set",
+      "group": "build",
+      "final": "build.settings-set"
+    },
+    {
+      "old": "cinemachine.brain.ensure",
+      "new": "cinemachine.brain-ensure",
+      "group": "cinemachine",
+      "final": "cinemachine.brain-ensure"
+    },
+    {
+      "old": "cinemachine.brain.status",
+      "new": "cinemachine.brain-status",
+      "group": "cinemachine",
+      "final": "cinemachine.brain-status"
+    },
+    {
+      "old": "cinemachine.extension.add",
+      "new": "cinemachine.extension-add",
+      "group": "cinemachine",
+      "final": "cinemachine.extension-add"
+    },
+    {
+      "old": "cinemachine.extension.list",
+      "new": "cinemachine.extension-list",
+      "group": "cinemachine",
+      "final": "cinemachine.extension-list"
+    },
+    {
+      "old": "cinemachine.extension.remove",
+      "new": "cinemachine.extension-remove",
+      "group": "cinemachine",
+      "final": "cinemachine.extension-remove"
+    },
+    {
+      "old": "debug.code.execute",
+      "new": "debug.code-execute",
+      "group": "debug",
+      "final": "debug.code-execute"
+    },
+    {
+      "old": "debug.code.flow.cancel",
+      "new": "debug.code-flow-cancel",
+      "group": "debug",
+      "final": "debug.code-flow-cancel"
+    },
+    {
+      "old": "debug.code.flow.run",
+      "new": "debug.code-flow-run",
+      "group": "debug",
+      "final": "debug.code-flow-run"
+    },
+    {
+      "old": "debug.code.flow.submit",
+      "new": "debug.code-flow-submit",
+      "group": "debug",
+      "final": "debug.code-flow-submit"
+    },
+    {
+      "old": "debug.code.flow.wait",
+      "new": "debug.code-flow-wait",
+      "group": "debug",
+      "final": "debug.code-flow-wait"
+    },
+    {
+      "old": "debug.console.clear",
+      "new": "debug.console-clear",
+      "group": "debug",
+      "final": "debug.console-clear"
+    },
+    {
+      "old": "debug.console.read",
+      "new": "debug.console-read",
+      "group": "debug",
+      "final": "debug.console-read"
+    },
+    {
+      "old": "debug.events.read",
+      "new": "debug.events-read",
+      "group": "debug",
+      "final": "debug.events-read"
+    },
+    {
+      "old": "debug.hook.disable",
+      "new": "debug.hook-disable",
+      "group": "debug",
+      "final": "debug.hook-disable"
+    },
+    {
+      "old": "debug.hook.enable",
+      "new": "debug.hook-enable",
+      "group": "debug",
+      "final": "debug.hook-enable"
+    },
+    {
+      "old": "debug.hook.info",
+      "new": "debug.hook-info",
+      "group": "debug",
+      "final": "debug.hook-info"
+    },
+    {
+      "old": "debug.hook.install",
+      "new": "debug.hook-install",
+      "group": "debug",
+      "final": "debug.hook-install"
+    },
+    {
+      "old": "debug.hook.list",
+      "new": "debug.hook-list",
+      "group": "debug",
+      "final": "debug.hook-list"
+    },
+    {
+      "old": "debug.hook.remove",
+      "new": "debug.hook-remove",
+      "group": "debug",
+      "final": "debug.hook-remove"
+    },
+    {
+      "old": "debug.hook.replace",
+      "new": "debug.hook-replace",
+      "group": "debug",
+      "final": "debug.hook-replace"
+    },
+    {
+      "old": "debug.input.info",
+      "new": "debug.input-info",
+      "group": "debug",
+      "final": "debug.input-info"
+    },
+    {
+      "old": "debug.input.key",
+      "new": "debug.input-key",
+      "group": "debug",
+      "final": "debug.input-key"
+    },
+    {
+      "old": "debug.input.pointer",
+      "new": "debug.input-pointer",
+      "group": "debug",
+      "final": "debug.input-pointer"
+    },
+    {
+      "old": "debug.input.release",
+      "new": "debug.input-release",
+      "group": "debug",
+      "final": "debug.input-release"
+    },
+    {
+      "old": "debug.method.find",
+      "new": "debug.method-find",
+      "group": "debug",
+      "final": "debug.method-find"
+    },
+    {
+      "old": "debug.method.invoke",
+      "new": "debug.method-invoke",
+      "group": "debug",
+      "final": "debug.method-invoke"
+    },
+    {
+      "old": "debug.pause.evaluate",
+      "new": "debug.pause-evaluate",
+      "group": "debug",
+      "final": "debug.pause-evaluate"
+    },
+    {
+      "old": "debug.pause.inspect",
+      "new": "debug.pause-inspect",
+      "group": "debug",
+      "final": "debug.pause-inspect"
+    },
+    {
+      "old": "debug.pause.list",
+      "new": "debug.pause-list",
+      "group": "debug",
+      "final": "debug.pause-list"
+    },
+    {
+      "old": "debug.pause.resume",
+      "new": "debug.pause-resume",
+      "group": "debug",
+      "final": "debug.pause-resume"
+    },
+    {
+      "old": "debug.pause.wait",
+      "new": "debug.pause-wait",
+      "group": "debug",
+      "final": "debug.pause-wait"
+    },
+    {
+      "old": "debug.program.info",
+      "new": "debug.program-info",
+      "group": "debug",
+      "final": "debug.program-info"
+    },
+    {
+      "old": "debug.program.install",
+      "new": "debug.program-install",
+      "group": "debug",
+      "final": "debug.program-install"
+    },
+    {
+      "old": "debug.program.list",
+      "new": "debug.program-list",
+      "group": "debug",
+      "final": "debug.program-list"
+    },
+    {
+      "old": "debug.program.remove",
+      "new": "debug.program-remove",
+      "group": "debug",
+      "final": "debug.program-remove"
+    },
+    {
+      "old": "debug.program.replace",
+      "new": "debug.program-replace",
+      "group": "debug",
+      "final": "debug.program-replace"
+    },
+    {
+      "old": "debug.program.run",
+      "new": "debug.program-run",
+      "group": "debug",
+      "final": "debug.program-run"
+    },
+    {
+      "old": "debug.program.stop",
+      "new": "debug.program-stop",
+      "group": "debug",
+      "final": "debug.program-stop"
+    },
+    {
+      "old": "debug.program.wait",
+      "new": "debug.program-wait",
+      "group": "debug",
+      "final": "debug.program-wait"
+    },
+    {
+      "old": "debug.run.begin",
+      "new": "debug.run-begin",
+      "group": "debug",
+      "final": "debug.run-begin"
+    },
+    {
+      "old": "debug.run.compare",
+      "new": "debug.run-compare",
+      "group": "debug",
+      "final": "debug.run-compare"
+    },
+    {
+      "old": "debug.run.end",
+      "new": "debug.run-end",
+      "group": "debug",
+      "final": "debug.run-end"
+    },
+    {
+      "old": "debug.run.info",
+      "new": "debug.run-info",
+      "group": "debug",
+      "final": "debug.run-info"
+    },
+    {
+      "old": "debug.run.list",
+      "new": "debug.run-list",
+      "group": "debug",
+      "final": "debug.run-list"
+    },
+    {
+      "old": "debug.run.wait",
+      "new": "debug.run-wait",
+      "group": "debug",
+      "final": "debug.run-wait"
+    },
+    {
+      "old": "debug.session.create",
+      "new": "debug.session-create",
+      "group": "debug",
+      "final": "debug.session-create"
+    },
+    {
+      "old": "debug.session.export",
+      "new": "debug.session-export",
+      "group": "debug",
+      "final": "debug.session-export"
+    },
+    {
+      "old": "debug.session.import",
+      "new": "debug.session-import",
+      "group": "debug",
+      "final": "debug.session-import"
+    },
+    {
+      "old": "debug.session.info",
+      "new": "debug.session-info",
+      "group": "debug",
+      "final": "debug.session-info"
+    },
+    {
+      "old": "debug.session.list",
+      "new": "debug.session-list",
+      "group": "debug",
+      "final": "debug.session-list"
+    },
+    {
+      "old": "debug.session.remove",
+      "new": "debug.session-remove",
+      "group": "debug",
+      "final": "debug.session-remove"
+    },
+    {
+      "old": "debug.session.stop",
+      "new": "debug.session-stop",
+      "group": "debug",
+      "final": "debug.session-stop"
+    },
+    {
+      "old": "debug.thread.list",
+      "new": "debug.thread-list",
+      "group": "debug",
+      "final": "debug.thread-list"
+    },
+    {
+      "old": "debug.type.schema",
+      "new": "debug.type-schema",
+      "group": "debug",
+      "final": "debug.type-schema"
+    },
+    {
+      "old": "debug.value.read",
+      "new": "debug.value-read",
+      "group": "debug",
+      "final": "debug.value-read"
+    },
+    {
+      "old": "debug.value.write",
+      "new": "debug.value-write",
+      "group": "debug",
+      "final": "debug.value-write"
+    },
+    {
+      "old": "editor.active-tool.set",
+      "new": "editor.active-tool-set",
+      "group": "editor",
+      "final": "editor.active-tool-set"
+    },
+    {
+      "old": "editor.autotick.set",
+      "new": "editor.autotick-set",
+      "group": "editor",
+      "final": "editor.autotick-set"
+    },
+    {
+      "old": "editor.dialog.click",
+      "new": "editor.dialog-click",
+      "group": "editor",
+      "final": "editor.dialog-click"
+    },
+    {
+      "old": "editor.menu",
+      "new": "editor.menu.execute",
+      "group": "editor",
+      "final": "editor.menu-execute"
+    },
+    {
+      "old": "editor.menu-items",
+      "new": "editor.menu.list",
+      "group": "editor",
+      "final": "editor.menu-list"
+    },
+    {
+      "old": "editor.menu.execute",
+      "new": "editor.menu-execute",
+      "group": "editor",
+      "final": "editor.menu-execute"
+    },
+    {
+      "old": "editor.menu.list",
+      "new": "editor.menu-list",
+      "group": "editor",
+      "final": "editor.menu-list"
+    },
+    {
+      "old": "editor.play-mode.start",
+      "new": "editor.play-mode-start",
+      "group": "editor",
+      "final": "editor.play-mode-start"
+    },
+    {
+      "old": "editor.play-mode.status",
+      "new": "editor.play-mode-status",
+      "group": "editor",
+      "final": "editor.play-mode-status"
+    },
+    {
+      "old": "editor.play-mode.stop",
+      "new": "editor.play-mode-stop",
+      "group": "editor",
+      "final": "editor.play-mode-stop"
+    },
+    {
+      "old": "editor.selection.set",
+      "new": "editor.selection-set",
+      "group": "editor",
+      "final": "editor.selection-set"
+    },
+    {
+      "old": "hdrp.settings.get",
+      "new": "hdrp.settings-get",
+      "group": "hdrp",
+      "final": "hdrp.settings-get"
+    },
+    {
+      "old": "hdrp.settings.set",
+      "new": "hdrp.settings-set",
+      "group": "hdrp",
+      "final": "hdrp.settings-set"
+    },
+    {
+      "old": "hdrp.volume.add-effect",
+      "new": "hdrp.volume-add-effect",
+      "group": "hdrp",
+      "final": "hdrp.volume-add-effect"
+    },
+    {
+      "old": "hdrp.volume.create",
+      "new": "hdrp.volume-create",
+      "group": "hdrp",
+      "final": "hdrp.volume-create"
+    },
+    {
+      "old": "hdrp.volume.info",
+      "new": "hdrp.volume-info",
+      "group": "hdrp",
+      "final": "hdrp.volume-info"
+    },
+    {
+      "old": "hdrp.volume.list",
+      "new": "hdrp.volume-list",
+      "group": "hdrp",
+      "final": "hdrp.volume-list"
+    },
+    {
+      "old": "hdrp.volume.set",
+      "new": "hdrp.volume-set",
+      "group": "hdrp",
+      "final": "hdrp.volume-set"
+    },
+    {
+      "old": "lighting.bake.cancel",
+      "new": "lighting.bake-cancel",
+      "group": "lighting",
+      "final": "lighting.bake-cancel"
+    },
+    {
+      "old": "lighting.bake.clear",
+      "new": "lighting.bake-clear",
+      "group": "lighting",
+      "final": "lighting.bake-clear"
+    },
+    {
+      "old": "lighting.bake.reflection-probe",
+      "new": "lighting.bake-reflection-probe",
+      "group": "lighting",
+      "final": "lighting.bake-reflection-probe"
+    },
+    {
+      "old": "lighting.bake.settings",
+      "new": "lighting.bake-settings",
+      "group": "lighting",
+      "final": "lighting.bake-settings"
+    },
+    {
+      "old": "lighting.bake.start",
+      "new": "lighting.bake-start",
+      "group": "lighting",
+      "final": "lighting.bake-start"
+    },
+    {
+      "old": "lighting.bake.status",
+      "new": "lighting.bake-status",
+      "group": "lighting",
+      "final": "lighting.bake-status"
+    },
+    {
+      "old": "lighting.skybox.get",
+      "new": "lighting.skybox-get",
+      "group": "lighting",
+      "final": "lighting.skybox-get"
+    },
+    {
+      "old": "lighting.skybox.set-ambient",
+      "new": "lighting.skybox-set-ambient",
+      "group": "lighting",
+      "final": "lighting.skybox-set-ambient"
+    },
+    {
+      "old": "lighting.skybox.set-fog",
+      "new": "lighting.skybox-set-fog",
+      "group": "lighting",
+      "final": "lighting.skybox-set-fog"
+    },
+    {
+      "old": "lighting.skybox.set-material",
+      "new": "lighting.skybox-set-material",
+      "group": "lighting",
+      "final": "lighting.skybox-set-material"
+    },
+    {
+      "old": "lighting.skybox.set-properties",
+      "new": "lighting.skybox-set-properties",
+      "group": "lighting",
+      "final": "lighting.skybox-set-properties"
+    },
+    {
+      "old": "lighting.skybox.set-reflection",
+      "new": "lighting.skybox-set-reflection",
+      "group": "lighting",
+      "final": "lighting.skybox-set-reflection"
+    },
+    {
+      "old": "lighting.skybox.set-sun",
+      "new": "lighting.skybox-set-sun",
+      "group": "lighting",
+      "final": "lighting.skybox-set-sun"
+    },
+    {
+      "old": "navmesh.settings.set",
+      "new": "navmesh.settings-set",
+      "group": "navmesh",
+      "final": "navmesh.settings-set"
+    },
+    {
+      "old": "navmesh.surface.bake",
+      "new": "navmesh.surface-bake",
+      "group": "navmesh",
+      "final": "navmesh.surface-bake"
+    },
+    {
+      "old": "package.install.status",
+      "new": "package.install-status",
+      "group": "package",
+      "final": "package.install-status"
+    },
+    {
+      "old": "package.registry.clear",
+      "new": "package.registry-clear",
+      "group": "package",
+      "final": "package.registry-clear"
+    },
+    {
+      "old": "package.registry.set",
+      "new": "package.registry-set",
+      "group": "package",
+      "final": "package.registry-set"
+    },
+    {
+      "old": "package.remove.status",
+      "new": "package.remove-status",
+      "group": "package",
+      "final": "package.remove-status"
+    },
+    {
+      "old": "package.scoped-registry.add",
+      "new": "package.scoped-registry-add",
+      "group": "package",
+      "final": "package.scoped-registry-add"
+    },
+    {
+      "old": "package.scoped-registry.remove",
+      "new": "package.scoped-registry-remove",
+      "group": "package",
+      "final": "package.scoped-registry-remove"
+    },
+    {
+      "old": "physics.joint.add",
+      "new": "physics.joint-add",
+      "group": "physics",
+      "final": "physics.joint-add"
+    },
+    {
+      "old": "physics.joint.remove",
+      "new": "physics.joint-remove",
+      "group": "physics",
+      "final": "physics.joint-remove"
+    },
+    {
+      "old": "player-runtime.input.key",
+      "new": "player-runtime.input-key",
+      "group": "player-runtime",
+      "final": "player-runtime.input-key"
+    },
+    {
+      "old": "player-runtime.input.pointer",
+      "new": "player-runtime.input-pointer",
+      "group": "player-runtime",
+      "final": "player-runtime.input-pointer"
+    },
+    {
+      "old": "player-runtime.target-framerate.set",
+      "new": "player-runtime.target-framerate-set",
+      "group": "player-runtime",
+      "final": "player-runtime.target-framerate-set"
+    },
+    {
+      "old": "player-runtime.time-scale.set",
+      "new": "player-runtime.time-scale-set",
+      "group": "player-runtime",
+      "final": "player-runtime.time-scale-set"
+    },
+    {
+      "old": "player-runtime.ui.capture-element",
+      "new": "player-runtime.ui-capture-element",
+      "group": "player-runtime",
+      "final": "player-runtime.ui-capture-element"
+    },
+    {
+      "old": "prefab.overrides.apply",
+      "new": "prefab.overrides-apply",
+      "group": "prefab",
+      "final": "prefab.overrides-apply"
+    },
+    {
+      "old": "prefab.overrides.revert",
+      "new": "prefab.overrides-revert",
+      "group": "prefab",
+      "final": "prefab.overrides-revert"
+    },
+    {
+      "old": "prefab.variant.create",
+      "new": "prefab.variant-create",
+      "group": "prefab",
+      "final": "prefab.variant-create"
+    },
+    {
+      "old": "profiler.frame-debugger.disable",
+      "new": "profiler.frame-debugger-disable",
+      "group": "profiler",
+      "final": "profiler.frame-debugger-disable"
+    },
+    {
+      "old": "profiler.frame-debugger.enable",
+      "new": "profiler.frame-debugger-enable",
+      "group": "profiler",
+      "final": "profiler.frame-debugger-enable"
+    },
+    {
+      "old": "profiler.frame-debugger.events",
+      "new": "profiler.frame-debugger-events",
+      "group": "profiler",
+      "final": "profiler.frame-debugger-events"
+    },
+    {
+      "old": "profiler.memory-snapshot.compare",
+      "new": "profiler.memory-snapshot-compare",
+      "group": "profiler",
+      "final": "profiler.memory-snapshot-compare"
+    },
+    {
+      "old": "profiler.memory-snapshot.list",
+      "new": "profiler.memory-snapshot-list",
+      "group": "profiler",
+      "final": "profiler.memory-snapshot-list"
+    },
+    {
+      "old": "profiler.memory-snapshot.take",
+      "new": "profiler.memory-snapshot-take",
+      "group": "profiler",
+      "final": "profiler.memory-snapshot-take"
+    },
+    {
+      "old": "project-settings.audio-settings.set",
+      "new": "project-settings.audio-settings-set",
+      "group": "project-settings",
+      "final": "project-settings.audio-settings-set"
+    },
+    {
+      "old": "project-settings.input-settings.set",
+      "new": "project-settings.input-settings-set",
+      "group": "project-settings",
+      "final": "project-settings.input-settings-set"
+    },
+    {
+      "old": "project-settings.layer.add",
+      "new": "project-settings.layer-add",
+      "group": "project-settings",
+      "final": "project-settings.layer-add"
+    },
+    {
+      "old": "project-settings.layer.remove",
+      "new": "project-settings.layer-remove",
+      "group": "project-settings",
+      "final": "project-settings.layer-remove"
+    },
+    {
+      "old": "project-settings.player-settings.set",
+      "new": "project-settings.player-settings-set",
+      "group": "project-settings",
+      "final": "project-settings.player-settings-set"
+    },
+    {
+      "old": "project-settings.tag.add",
+      "new": "project-settings.tag-add",
+      "group": "project-settings",
+      "final": "project-settings.tag-add"
+    },
+    {
+      "old": "project-settings.tag.remove",
+      "new": "project-settings.tag-remove",
+      "group": "project-settings",
+      "final": "project-settings.tag-remove"
+    },
+    {
+      "old": "project-settings.time-settings.set",
+      "new": "project-settings.time-settings-set",
+      "group": "project-settings",
+      "final": "project-settings.time-settings-set"
+    },
+    {
+      "old": "rendering.pipeline.info",
+      "new": "rendering.pipeline-info",
+      "group": "rendering",
+      "final": "rendering.pipeline-info"
+    },
+    {
+      "old": "rendering.pipeline.settings",
+      "new": "rendering.pipeline-settings",
+      "group": "rendering",
+      "final": "rendering.pipeline-settings"
+    },
+    {
+      "old": "scene.gameobject.component",
+      "new": "scene.gameobject-component",
+      "group": "scene",
+      "final": "scene.gameobject-component"
+    },
+    {
+      "old": "scene.gameobject.components",
+      "new": "scene.gameobject-components",
+      "group": "scene",
+      "final": "scene.gameobject-components"
+    },
+    {
+      "old": "test.run.status",
+      "new": "test.run-status",
+      "group": "test",
+      "final": "test.run-status"
+    },
+    {
+      "old": "timeline.clip.add",
+      "new": "timeline.clip-add",
+      "group": "timeline",
+      "final": "timeline.clip-add"
+    },
+    {
+      "old": "timeline.track.add",
+      "new": "timeline.track-add",
+      "group": "timeline",
+      "final": "timeline.track-add"
+    },
+    {
+      "old": "ui.button.create",
+      "new": "ui.button-create",
+      "group": "ui",
+      "final": "ui.button-create"
+    },
+    {
+      "old": "ui.canvas.create",
+      "new": "ui.canvas-create",
+      "group": "ui",
+      "final": "ui.canvas-create"
+    },
+    {
+      "old": "ui.document.create",
+      "new": "ui.document-create",
+      "group": "ui",
+      "final": "ui.document-create"
+    },
+    {
+      "old": "ui.document.delete",
+      "new": "ui.document-delete",
+      "group": "ui",
+      "final": "ui.document-delete"
+    },
+    {
+      "old": "ui.document.info",
+      "new": "ui.document-info",
+      "group": "ui",
+      "final": "ui.document-info"
+    },
+    {
+      "old": "ui.document.update",
+      "new": "ui.document-update",
+      "group": "ui",
+      "final": "ui.document-update"
+    },
+    {
+      "old": "ui.image.create",
+      "new": "ui.image-create",
+      "group": "ui",
+      "final": "ui.image-create"
+    },
+    {
+      "old": "ui.text.create",
+      "new": "ui.text-create",
+      "group": "ui",
+      "final": "ui.text-create"
+    },
+    {
+      "old": "urp.feature.add",
+      "new": "urp.feature-add",
+      "group": "urp",
+      "final": "urp.feature-add"
+    },
+    {
+      "old": "urp.feature.configure",
+      "new": "urp.feature-configure",
+      "group": "urp",
+      "final": "urp.feature-configure"
+    },
+    {
+      "old": "urp.feature.list",
+      "new": "urp.feature-list",
+      "group": "urp",
+      "final": "urp.feature-list"
+    },
+    {
+      "old": "urp.feature.remove",
+      "new": "urp.feature-remove",
+      "group": "urp",
+      "final": "urp.feature-remove"
+    },
+    {
+      "old": "urp.feature.toggle",
+      "new": "urp.feature-toggle",
+      "group": "urp",
+      "final": "urp.feature-toggle"
+    },
+    {
+      "old": "urp.settings.get",
+      "new": "urp.settings-get",
+      "group": "urp",
+      "final": "urp.settings-get"
+    },
+    {
+      "old": "urp.settings.set",
+      "new": "urp.settings-set",
+      "group": "urp",
+      "final": "urp.settings-set"
+    },
+    {
+      "old": "urp.volume.add-effect",
+      "new": "urp.volume-add-effect",
+      "group": "urp",
+      "final": "urp.volume-add-effect"
+    },
+    {
+      "old": "urp.volume.create",
+      "new": "urp.volume-create",
+      "group": "urp",
+      "final": "urp.volume-create"
+    },
+    {
+      "old": "urp.volume.info",
+      "new": "urp.volume-info",
+      "group": "urp",
+      "final": "urp.volume-info"
+    },
+    {
+      "old": "urp.volume.list",
+      "new": "urp.volume-list",
+      "group": "urp",
+      "final": "urp.volume-list"
+    },
+    {
+      "old": "urp.volume.set",
+      "new": "urp.volume-set",
+      "group": "urp",
+      "final": "urp.volume-set"
+    },
+    {
+      "old": "vfx.control.pause",
+      "new": "vfx.control-pause",
+      "group": "vfx",
+      "final": "vfx.control-pause"
+    },
+    {
+      "old": "vfx.control.play",
+      "new": "vfx.control-play",
+      "group": "vfx",
+      "final": "vfx.control-play"
+    },
+    {
+      "old": "vfx.control.reinitialize",
+      "new": "vfx.control-reinitialize",
+      "group": "vfx",
+      "final": "vfx.control-reinitialize"
+    },
+    {
+      "old": "vfx.control.set-rate",
+      "new": "vfx.control-set-rate",
+      "group": "vfx",
+      "final": "vfx.control-set-rate"
+    },
+    {
+      "old": "vfx.control.set-seed",
+      "new": "vfx.control-set-seed",
+      "group": "vfx",
+      "final": "vfx.control-set-seed"
+    },
+    {
+      "old": "vfx.control.stop",
+      "new": "vfx.control-stop",
+      "group": "vfx",
+      "final": "vfx.control-stop"
+    },
+    {
+      "old": "vfx.effect.add",
+      "new": "vfx.effect-add",
+      "group": "vfx",
+      "final": "vfx.effect-add"
+    },
+    {
+      "old": "vfx.effect.assign",
+      "new": "vfx.effect-assign",
+      "group": "vfx",
+      "final": "vfx.effect-assign"
+    },
+    {
+      "old": "vfx.effect.info",
+      "new": "vfx.effect-info",
+      "group": "vfx",
+      "final": "vfx.effect-info"
+    },
+    {
+      "old": "vfx.graph.create",
+      "new": "vfx.graph-create",
+      "group": "vfx",
+      "final": "vfx.graph-create"
+    },
+    {
+      "old": "vfx.graph.info",
+      "new": "vfx.graph-info",
+      "group": "vfx",
+      "final": "vfx.graph-info"
+    },
+    {
+      "old": "vfx.particle.clear",
+      "new": "vfx.particle-clear",
+      "group": "vfx",
+      "final": "vfx.particle-clear"
+    },
+    {
+      "old": "vfx.particle.pause",
+      "new": "vfx.particle-pause",
+      "group": "vfx",
+      "final": "vfx.particle-pause"
+    },
+    {
+      "old": "vfx.particle.play",
+      "new": "vfx.particle-play",
+      "group": "vfx",
+      "final": "vfx.particle-play"
+    },
+    {
+      "old": "vfx.particle.stop",
+      "new": "vfx.particle-stop",
+      "group": "vfx",
+      "final": "vfx.particle-stop"
+    },
+    {
+      "old": "vfx.template.create",
+      "new": "vfx.template-create",
+      "group": "vfx",
+      "final": "vfx.template-create"
+    },
+    {
+      "old": "vfx.template.list",
+      "new": "vfx.template-list",
+      "group": "vfx",
+      "final": "vfx.template-list"
+    },
+    {
+      "old": "vfx.trail.create",
+      "new": "vfx.trail-create",
+      "group": "vfx",
+      "final": "vfx.trail-create"
+    },
+    {
+      "old": "vfx.trail.set",
+      "new": "vfx.trail-set",
+      "group": "vfx",
+      "final": "vfx.trail-set"
+    }
+  ]
+}

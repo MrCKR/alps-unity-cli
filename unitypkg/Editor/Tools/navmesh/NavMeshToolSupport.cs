@@ -138,7 +138,7 @@ namespace UnityCli
             ApplyRequested("voxelSize", voxelSize, 0.000001d, 1000d, fields, value => { desired.VoxelSize = value; desired.ManualVoxelSize = true; });
             if (manualVoxelSize.HasValue) { fields.Add("manualVoxelSize"); desired.ManualVoxelSize = manualVoxelSize.Value; }
             if (fields.Count == 0)
-                throw new UnityCliBridge.BridgeCommandException("E_SCHEMA_INVALID", "navmesh.settings.set requires at least one settings field.", "Pass one or more fields returned by navmesh.settings.");
+                throw new UnityCliBridge.BridgeCommandException("E_SCHEMA_INVALID", "navmesh.settings-set requires at least one settings field.", "Pass one or more fields returned by navmesh.settings.");
             var settingsObject = ProjectSettingsObject();
             return new SettingsWritePlan
             {

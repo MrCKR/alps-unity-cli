@@ -41,8 +41,8 @@ namespace UnityCli
                     new Dictionary<string, object> { { "path", "$.listener.trigger" }, { "expected", "method-hit, log, host-signal or player-loop-phase" }, { "actual", trigger ?? "null" }, { "availableTriggers", DebugTriggerSources.All() } },
                     new[]
                     {
-                        "Run a main-thread listener through debug.program.run with executionSite editor-tick or player-loop-phase instead of subscribing the editor tick as a listener trigger.",
-                        "Run tools describe debug.hook.install to read the listener contract, then submit the corrected input."
+                        "Run a main-thread listener through debug.program-run with executionSite editor-tick or player-loop-phase instead of subscribing the editor tick as a listener trigger.",
+                        "Run tools describe debug.hook-install to read the listener contract, then submit the corrected input."
                     });
             // PlayerLoop phase 只在 Editor Play 下存在，并且一个 phase 到达没有方法实例也没有参数：
             // 声明自身的合法性先于执行域可用性校验，因此必然无法满足的过滤组合在任何环境下都被同一条拒绝，
@@ -72,8 +72,8 @@ namespace UnityCli
                     new Dictionary<string, object> { { "path", "$.listener.sessionId" }, { "expected", "the id of an open debug session" }, { "actual", "missing" } },
                     new[]
                     {
-                        "Run tools run debug.session.create to establish the owner of this investigation.",
-                        "Run tools run debug.session.list to read the currently open sessions."
+                        "Run tools run debug.session-create to establish the owner of this investigation.",
+                        "Run tools run debug.session-list to read the currently open sessions."
                     });
             var maxHits = spec.MaxHits ?? 0L;
             if (maxHits < 0L || maxHits > DebugLimits.MaxListenerHits)
@@ -140,7 +140,7 @@ namespace UnityCli
                 {
                     "Compare a declared field instead: a field condition is evaluated on the phase's own main thread and can be satisfied there.",
                     "Declare listener.trigger method-hit when the filter needs an argument or an instance identity.",
-                    "Run tools describe debug.hook.install to read the listener contract, then submit the corrected input."
+                    "Run tools describe debug.hook-install to read the listener contract, then submit the corrected input."
                 });
         }
 
@@ -175,7 +175,7 @@ namespace UnityCli
                 "E_SCHEMA_INVALID",
                 "Listener condition field is invalid.",
                 new Dictionary<string, object> { { "path", path }, { "expected", expected }, { "actual", actual ?? "null" } },
-                new[] { "Run tools describe debug.hook.install to read the listener condition contract, then submit the corrected input." });
+                new[] { "Run tools describe debug.hook-install to read the listener condition contract, then submit the corrected input." });
         }
 
         /// <summary>

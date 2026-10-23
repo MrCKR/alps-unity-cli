@@ -280,7 +280,7 @@ namespace UnityCli
         {
             return new List<PrefabPlannedEffect>
             {
-                new PrefabPlannedEffect { Type = "prefab.variant.create", Path = plan.OutputPath, Source = plan.BasePath }
+                new PrefabPlannedEffect { Type = "prefab.variant-create", Path = plan.OutputPath, Source = plan.BasePath }
             };
         }
 

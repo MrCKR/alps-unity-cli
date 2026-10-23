@@ -166,15 +166,15 @@ test("fixture retries execution timeout when the caller explicitly requests it",
 
 test("fixture validates an explicit durable status mapping", () => {
   const base = { assert: { packageInstalled: true }, steps: [{ argv: ["tools", "run", "package.install", "--input", "{}"], expect: {} }] };
-  assert.equal(fixtureError({ ...base, steps: [{ ...base.steps[0], statusTool: "package.install.status" }] }, "package_remove"), null);
-  assert.match(fixtureError({ ...base, steps: [{ ...base.steps[0], statusTool: "package.remove.status" }] }, "package_remove"), /exact durable status Tool/);
+  assert.equal(fixtureError({ ...base, steps: [{ ...base.steps[0], statusTool: "package.install-status" }] }, "package_remove"), null);
+  assert.match(fixtureError({ ...base, steps: [{ ...base.steps[0], statusTool: "package.remove-status" }] }, "package_remove"), /exact durable status Tool/);
 });
 
 test("fixture verifies a deferred root through its declared status Tool", async () => {
   const calls = [];
   const matrix = {
     o: { project: "D:/Project" },
-    descriptors: new Map([["tool:package.install.status", { name: "package.install.status", resultSchema: {} }]]),
+    descriptors: new Map([["tool:package.install-status", { name: "package.install-status", resultSchema: {} }]]),
     failed: async () => ({ assertion: { status: "FAIL" } }),
     call: async (id, argv, assertion) => {
       calls.push({ id, argv });
@@ -187,7 +187,7 @@ test("fixture verifies a deferred root through its declared status Tool", async 
       return { argv, envelope, exitCode: result.exitCode, result, assertion: { status: issue ? "FAIL" : "PASS", ...(issue ? { issue } : {}) } };
     }
   };
-  const fixture = { assert: { packageInstalled: true }, steps: [{ id: "install", argv: ["tools", "run", "package.install", "--input", "{}"], statusTool: "package.install.status", expect: {} }] };
+  const fixture = { assert: { packageInstalled: true }, steps: [{ id: "install", argv: ["tools", "run", "package.install", "--input", "{}"], statusTool: "package.install-status", expect: {} }] };
   assert.equal(await runFixtureSequence(matrix, "package_remove", fixture), true);
   assert.deepEqual(calls.map((call) => call.id), ["control.package_remove.install", "control.package_remove.install.status"]);
   assert.deepEqual(JSON.parse(calls[1].argv[4]), { requestId: "req_fixture" });
@@ -197,7 +197,7 @@ test("fixture rejects deferred recovery when the declared status Tool fails", as
   let callCount = 0;
   const matrix = {
     o: { project: "D:/Project" },
-    descriptors: new Map([["tool:package.install.status", { name: "package.install.status", resultSchema: {} }]]),
+    descriptors: new Map([["tool:package.install-status", { name: "package.install-status", resultSchema: {} }]]),
     failed: async () => ({ assertion: { status: "FAIL" } }),
     call: async (_id, argv, assertion) => {
       callCount += 1;
@@ -210,7 +210,7 @@ test("fixture rejects deferred recovery when the declared status Tool fails", as
       return { argv, envelope, exitCode: result.exitCode, result, assertion: { status: issue ? "FAIL" : "PASS", ...(issue ? { issue } : {}) } };
     }
   };
-  const fixture = { assert: { packageInstalled: true }, steps: [{ id: "install", argv: ["tools", "run", "package.install", "--input", "{}"], statusTool: "package.install.status", expect: {} }] };
+  const fixture = { assert: { packageInstalled: true }, steps: [{ id: "install", argv: ["tools", "run", "package.install", "--input", "{}"], statusTool: "package.install-status", expect: {} }] };
   assert.equal(await runFixtureSequence(matrix, "package_remove", fixture), false);
   assert.equal(callCount, 2);
 });
@@ -354,13 +354,13 @@ test("public descriptor audit rejects removed fields and default availability", 
 test("Live harness loads only CLI-owned result schemas from current compiled metadata", async () => {
   const schemas = await loadInternalResultSchemas(resolve("dist", "cli.js"));
   assert.ok(schemas.size >= 40 && schemas.size < 100);
-  assert.equal(schemas.get("debug.code.execute")?.oneOf instanceof Array, true);
+  assert.equal(schemas.get("debug.code-execute")?.oneOf instanceof Array, true);
   assert.equal(schemas.get("editor.state")?.type, "object");
   assert.equal(schemas.has("package.list"), false);
 });
 
 test("external-state-dependent Tools do not use descriptor placeholders as positive matrix inputs", async () => {
-  assert.deepEqual(EXTERNAL_STATE_DEPENDENT_TOOL_NAMES, ["editor.dialog.click"]);
+  assert.deepEqual(EXTERNAL_STATE_DEPENDENT_TOOL_NAMES, ["editor.dialog-click"]);
   const source = await readFile(new URL("./run-final-live-matrix.mjs", import.meta.url), "utf8");
   assert.match(source, /fresh editor\.dialogs result with a real dialogId and enabled button/);
   assert.match(source, /tool\.\$\{name\}\.external-state\.dialogs/);
@@ -371,15 +371,15 @@ test("external-state-dependent Tools do not use descriptor placeholders as posit
 
 test("durable status Tools bind to a prior successful root requestId", () => {
   assert.deepEqual(DEPENDENT_STATUS_ROOT_TOOLS, {
-    "asset.refresh.status": "asset.refresh",
-    "build.player.status": "build.run",
-    "editor.play-mode.status": "editor.play-mode.start",
-    "package.install.status": "package.install",
-    "package.remove.status": "package.remove",
-    "test.run.status": "test.run"
+    "asset.refresh-status": "asset.refresh",
+    "build.player-status": "build.run",
+    "editor.play-mode-status": "editor.play-mode-start",
+    "package.install-status": "package.install",
+    "package.remove-status": "package.remove",
+    "test.run-status": "test.run"
   });
   assert.deepEqual(DEPENDENT_STATUS_ROOT_INPUTS, {
-    "asset.refresh.status": { path: "Assets/UnityCLIValidation/Matrix.prefab", forceUpdate: true }
+    "asset.refresh-status": { path: "Assets/UnityCLIValidation/Matrix.prefab", forceUpdate: true }
   });
   const records = [
     { capability: { kind: "tool", name: "asset.refresh" }, phase: "editor", argv: ["tools", "run", "asset.refresh", "--dry-run"], assertion: { status: "PASS" }, envelope: { ok: true, requestId: "dry-run" } },
@@ -391,24 +391,24 @@ test("durable status Tools bind to a prior successful root requestId", () => {
   assert.equal(successfulRootRequestId(records, "build.run", "editor"), null);
 
   const deferred = {
-    capability: { kind: "tool", name: "editor.play-mode.start" },
+    capability: { kind: "tool", name: "editor.play-mode-start" },
     phase: "editor",
     argv: [],
     exitCode: 1,
     assertion: { status: "PASS" },
-    recoveryStatusTool: "editor.play-mode.status",
+    recoveryStatusTool: "editor.play-mode-status",
     envelope: { ok: false, requestId: "play-root", error: { code: "E_EXECUTION_TIMEOUT" } }
   };
-  assert.equal(isDeferredStatusRootTimeout("editor.play-mode.start", "editor", deferred.envelope, deferred.exitCode, deferred.recoveryStatusTool), true);
-  assert.equal(successfulRootRequestId([deferred], "editor.play-mode.start", "editor"), "play-root");
-  assert.equal(successfulRootRequestId([{ ...deferred, recoveryStatusTool: undefined }], "editor.play-mode.start", "editor"), null);
-  assert.equal(isDeferredStatusRootTimeout("editor.play-mode.start", "editor", { ...deferred.envelope, error: { code: "E_SCHEMA_INVALID" } }, 1, deferred.recoveryStatusTool), false);
+  assert.equal(isDeferredStatusRootTimeout("editor.play-mode-start", "editor", deferred.envelope, deferred.exitCode, deferred.recoveryStatusTool), true);
+  assert.equal(successfulRootRequestId([deferred], "editor.play-mode-start", "editor"), "play-root");
+  assert.equal(successfulRootRequestId([{ ...deferred, recoveryStatusTool: undefined }], "editor.play-mode-start", "editor"), null);
+  assert.equal(isDeferredStatusRootTimeout("editor.play-mode-start", "editor", { ...deferred.envelope, error: { code: "E_SCHEMA_INVALID" } }, 1, deferred.recoveryStatusTool), false);
 });
 
 test("dependent status Tools execute after roots without disturbing relative order", () => {
   assert.deepEqual(
-    orderedToolNames(["build.player.status", "asset.refresh", "build.run", "asset.refresh.status", "scene.open"]),
-    ["asset.refresh", "build.run", "scene.open", "build.player.status", "asset.refresh.status"]
+    orderedToolNames(["build.player-status", "asset.refresh", "build.run", "asset.refresh-status", "scene.open"]),
+    ["asset.refresh", "build.run", "scene.open", "build.player-status", "asset.refresh-status"]
   );
 });
 
@@ -427,11 +427,11 @@ test("asset refresh status creates one real matrix-owned root request when absen
     return { assertion: { status: "PASS" }, envelope: { ok: true, requestId: name === "asset.refresh" ? "req_refresh" : "req_status", data: {} } };
   };
 
-  await coverDependentStatusTool(matrix, "asset.refresh.status", { name: "asset.refresh.status" }, "editor", "C:\\DevProject", "asset.refresh", invokeTool);
+  await coverDependentStatusTool(matrix, "asset.refresh-status", { name: "asset.refresh-status" }, "editor", "C:\\DevProject", "asset.refresh", invokeTool);
 
   assert.deepEqual(calls, [
     { name: "asset.refresh", id: "status-root", input: { path: "Assets/UnityCLIValidation/Matrix.prefab", forceUpdate: true }, phase: "editor" },
-    { name: "asset.refresh.status", id: "linked-request", input: { requestId: "req_refresh" }, phase: "editor" }
+    { name: "asset.refresh-status", id: "linked-request", input: { requestId: "req_refresh" }, phase: "editor" }
   ]);
   assert.equal(notApplicableCount, 1);
 });
@@ -480,7 +480,7 @@ test("matrix dialog coverage never runs an unknown modal and uses the fresh owne
       }
     };
     const toolRuns = [];
-    await coverExternalStateDependentTool(matrix, "editor.dialog.click", descriptor, "editor", "D:/Project", async (...args) => { toolRuns.push(args); });
+    await coverExternalStateDependentTool(matrix, "editor.dialog-click", descriptor, "editor", "D:/Project", async (...args) => { toolRuns.push(args); });
     return { calls, records, toolRuns };
   };
 
@@ -493,7 +493,7 @@ test("matrix dialog coverage never runs an unknown modal and uses the fresh owne
   assert.equal(unknown.toolRuns.length, 0);
   assert.deepEqual(unknown.records.map((record) => record.status), ["N/A", "N/A", "BLOCKED"]);
   assert.match(unknown.records.at(-1).reason, /Unknown external modal/);
-  assert.equal(unknown.calls.some((call) => call.argv[0] === "tools" && call.argv[1] === "run" && call.argv[2] === "editor.dialog.click"), false);
+  assert.equal(unknown.calls.some((call) => call.argv[0] === "tools" && call.argv[1] === "run" && call.argv[2] === "editor.dialog-click"), false);
 
   const multiple = await runCoverage([ownedDialog("owned-a"), ownedDialog("owned-b")]);
   assert.equal(multiple.toolRuns.length, 0);
@@ -508,7 +508,7 @@ test("matrix dialog coverage never runs an unknown modal and uses the fresh owne
   }, ownedDialog("fresh-owned-dialog")]);
   assert.equal(owned.records.length, 2);
   assert.equal(owned.toolRuns.length, 1);
-  assert.deepEqual(owned.toolRuns[0].slice(1, 6), ["tool", "editor.dialog.click", "external-state.click", descriptor, { dialogId: "fresh-owned-dialog", button: "Cancel" }]);
+  assert.deepEqual(owned.toolRuns[0].slice(1, 6), ["tool", "editor.dialog-click", "external-state.click", descriptor, { dialogId: "fresh-owned-dialog", button: "Cancel" }]);
 });
 
 test("matrix readiness uses the current immediate editor.state shape", () => {
@@ -568,7 +568,7 @@ test("memory snapshot cleanup is confined to the exact project Library root", ()
   const target = resolve(project, "Library/UnityCli/memory-snapshots/capture.snap");
   const result = {
     path: target,
-    plannedEffects: [{ type: "profiler.memory-snapshot.take", path: target }]
+    plannedEffects: [{ type: "profiler.memory-snapshot-take", path: target }]
   };
   assert.deepEqual(ownedMemorySnapshotCleanupTarget(project, result), {
     root: resolve(project, "Library/UnityCli/memory-snapshots"),
@@ -584,7 +584,7 @@ test("memory snapshot cleanup is confined to the exact project Library root", ()
   );
 });
 
-test("lighting.bake.start cleanup is confined to the active scene lighting directory", async () => {
+test("lighting.bake-start cleanup is confined to the active scene lighting directory", async () => {
   const project = await mkdtemp(join(tmpdir(), "unity-cli-bake-cleanup-中文项目-"));
   try {
     const location = sceneBakeArtifactDirectory(project, "Assets/UnityCLIValidation/MatrixScene.unity");
@@ -598,7 +598,7 @@ test("lighting.bake.start cleanup is confined to the active scene lighting direc
   }
 });
 
-test("lighting.bake.start cleanup rejects junction ownership escapes", async () => {
+test("lighting.bake-start cleanup rejects junction ownership escapes", async () => {
   const owner = await mkdtemp(join(tmpdir(), "unity-cli-bake-owner-"));
   const outside = await mkdtemp(join(tmpdir(), "unity-cli-bake-outside-"));
   const junction = join(owner, "linked");
@@ -613,7 +613,7 @@ test("lighting.bake.start cleanup rejects junction ownership escapes", async () 
   }
 });
 
-test("lighting.bake.start cleanup restores baseline bytes and deletes only paired additions", () => {
+test("lighting.bake-start cleanup restores baseline bytes and deletes only paired additions", () => {
   const lighting = "Assets/UnityCLIValidation/MatrixScene/LightingData.asset";
   const reflection = "Assets/UnityCLIValidation/MatrixScene/ReflectionProbe-0.exr";
   const before = [
@@ -651,9 +651,9 @@ test("local matrix cases bind deterministic caches and package projects", () => 
   assert.deepEqual(routeCapabilityFixtureInput({ member: "UnityEngine.Camera.Render", reflectDir: ".cache/unity-reflect" }, "type-inspection.get-member", { reflect_cache_dir: "D:/evidence/reflect-cache" }), { member: "UnityEngine.Camera.Render", reflectDir: "D:/evidence/reflect-cache" });
   assert.deepEqual(routeCapabilityFixtureInput({ query: "Camera" }, "type-inspection.search", { reflect_cache_dir: "D:/evidence/reflect-cache" }), { query: "Camera", reflectDir: "D:/evidence/reflect-cache" });
   assert.deepEqual(routeCapabilityFixtureInput({ type: "UnityEngine.Camera" }, "type-inspection.get-type", { reflect_cache_dir: "D:/evidence/reflect-cache" }), { type: "UnityEngine.Camera", reflectDir: "D:/evidence/reflect-cache" });
-  assert.deepEqual(routeCapabilityFixtureInput({}, "package.registry.clear", { project: "D:/Dev/UnityProject" }), { project: "D:/Dev/UnityProject" });
-  assert.deepEqual(routeCapabilityFixtureInput({ project: { invalid: true } }, "package.registry.clear", { project: "D:/Dev/UnityProject" }), { project: { invalid: true } });
-  assert.deepEqual(routeCapabilityFixtureInput({ name: "Acme" }, "package.scoped-registry.remove", { project: "D:/Dev/UnityProject" }), { name: "Acme", project: "D:/Dev/UnityProject" });
+  assert.deepEqual(routeCapabilityFixtureInput({}, "package.registry-clear", { project: "D:/Dev/UnityProject" }), { project: "D:/Dev/UnityProject" });
+  assert.deepEqual(routeCapabilityFixtureInput({ project: { invalid: true } }, "package.registry-clear", { project: "D:/Dev/UnityProject" }), { project: { invalid: true } });
+  assert.deepEqual(routeCapabilityFixtureInput({ name: "Acme" }, "package.scoped-registry-remove", { project: "D:/Dev/UnityProject" }), { name: "Acme", project: "D:/Dev/UnityProject" });
   assert.deepEqual(routeCapabilityFixtureInput({ target: "Camera" }, "camera.info", { docs_cache_dir: "D:/evidence/docs-cache", reflect_cache_dir: "D:/evidence/reflect-cache" }), { target: "Camera" });
 });
 
@@ -785,7 +785,7 @@ test("frozen direct cases are a complete request-specific closed set", async () 
       assert.equal(Object.hasOwn(probe, "context"), false, `${name} completionProbe must not use removed context`);
     }
     for (const setup of [...(recipe.setup ?? []), ...(recipe.before ?? []), ...(recipe.after ?? []), ...(recipe.cleanup ?? [])]) {
-      assert.notEqual(setup.name, "debug.code.execute", `${name} must not use debug.code.execute outside its own invocation`);
+      assert.notEqual(setup.name, "debug.code-execute", `${name} must not use debug.code-execute outside its own invocation`);
     }
   }
   const source = await readFile(new URL("./run-final-live-matrix.mjs", import.meta.url), "utf8");
@@ -803,7 +803,7 @@ test("frozen direct cases are a complete request-specific closed set", async () 
 });
 
 test("NavMeshSurface direct case owns one saved fixture, fresh asset proof, and exact cleanup", () => {
-  const recipe = DIRECT_LIVE_CASES["navmesh.surface.bake"];
+  const recipe = DIRECT_LIVE_CASES["navmesh.surface-bake"];
   assert.deepEqual(recipe.setup.map((item) => item.name), ["game-object.create", "component.add", "game-object.create", "scene.save"]);
   assert.equal(recipe.setup[1].input.component, "Unity.AI.Navigation.NavMeshSurface");
   assert.deepEqual(recipe.before[0].flags, ["--dry-run"]);
@@ -816,8 +816,8 @@ test("NavMeshSurface direct case owns one saved fixture, fresh asset proof, and 
 });
 
 test("Prefab and Timeline direct cases own unique assets, fresh readback, and cleanup", () => {
-  const prefabNames = ["prefab.overrides.apply", "prefab.overrides.revert", "prefab.variant.create"];
-  const timelineNames = ["timeline.create", "timeline.info", "timeline.track.add", "timeline.clip.add"];
+  const prefabNames = ["prefab.overrides-apply", "prefab.overrides-revert", "prefab.variant-create"];
+  const timelineNames = ["timeline.create", "timeline.info", "timeline.track-add", "timeline.clip-add"];
   for (const name of [...prefabNames, ...timelineNames]) {
     const recipe = DIRECT_LIVE_CASES[name];
     assert.equal(recipe.invocation.name, name);
@@ -825,18 +825,18 @@ test("Prefab and Timeline direct cases own unique assets, fresh readback, and cl
     assert.ok(assetCleanup, `${name} must delete its owned asset`);
     assert.ok(assetCleanup.acceptErrorCodes.includes("E_ASSET_NOT_FOUND"));
   }
-  const apply = DIRECT_LIVE_CASES["prefab.overrides.apply"];
+  const apply = DIRECT_LIVE_CASES["prefab.overrides-apply"];
   assert.deepEqual(apply.setup.map((item) => item.name), ["asset.duplicate", "prefab.instantiate", "game-object.create"]);
   assert.deepEqual(apply.after.map((item) => item.name), ["prefab.instantiate", "scene.gameobject"]);
   assert.ok(apply.cleanup[1].acceptErrorCodes.includes("E_TARGET_NOT_FOUND"));
   assert.equal(apply.before[0].expect.equals["/data/changed"], true);
   assert.ok(apply.invariants.some((item) => item.operator === "notEquals"));
-  const revert = DIRECT_LIVE_CASES["prefab.overrides.revert"];
+  const revert = DIRECT_LIVE_CASES["prefab.overrides-revert"];
   assert.equal(revert.after[0].expectedErrorCode, "E_TARGET_NOT_FOUND");
-  const variant = DIRECT_LIVE_CASES["prefab.variant.create"];
+  const variant = DIRECT_LIVE_CASES["prefab.variant-create"];
   assert.equal(variant.before[0].expectedErrorCode, "E_ASSET_NOT_FOUND");
   assert.equal(DIRECT_LIVE_CASES["timeline.create"].before[0].expectedErrorCode, "E_ASSET_NOT_FOUND");
-  const clip = DIRECT_LIVE_CASES["timeline.clip.add"];
+  const clip = DIRECT_LIVE_CASES["timeline.clip-add"];
   assert.deepEqual(clip.invocation.input.trackLocalId, { $var: "trackLocalId" });
   assert.equal(clip.after[0].name, "timeline.info");
 });
@@ -899,12 +899,12 @@ test("active fixtures use only current public execution semantics", async () => 
   assert.deepEqual(fixtures.profiler_hierarchy_capture.steps[1].expect.exists, ["data.items"]);
   assert.equal(fixtures.profiler_hierarchy_capture.steps.some((step) => step.argv[2] === "profiler.capture"), false);
   assert.deepEqual(fixtures.profiler_snapshots.steps.map((step) => step.id), ["write-inputs", "restore-proof"]);
-  assert.equal(fixtures.profiler_snapshots.steps.some((step) => step.argv[2] === "profiler.memory-snapshot.take"), false);
+  assert.equal(fixtures.profiler_snapshots.steps.some((step) => step.argv[2] === "profiler.memory-snapshot-take"), false);
   for (const name of [
-    "cinemachine.aim", "cinemachine.extension.add", "scene.create", "game-object.move-to-scene", "scene.set-active", "scene.unload",
-    "prefab.create", "prefab.unpack", "prefab.stage-close", "profiler.load", "profiler.hierarchy", "profiler.frame-debugger.disable", "profiler.memory-snapshot.compare",
-    "package.remove", "package.restore", "package.scoped-registry.remove", "ui.document.create", "ui.detach-document", "ui.modify-visual-element",
-    "scriptable-object.create", "scriptable-object.modify", "vfx.line-create", "vfx.template.create"
+    "cinemachine.aim", "cinemachine.extension-add", "scene.create", "game-object.move-to-scene", "scene.set-active", "scene.unload",
+    "prefab.create", "prefab.unpack", "prefab.stage-close", "profiler.load", "profiler.hierarchy", "profiler.frame-debugger-disable", "profiler.memory-snapshot-compare",
+    "package.remove", "package.restore", "package.scoped-registry-remove", "ui.document-create", "ui.detach-document", "ui.modify-visual-element",
+    "scriptable-object.create", "scriptable-object.modify", "vfx.line-create", "vfx.template-create"
   ]) {
     const fixtureId = capabilityFixtureId(name);
     assert.ok(fixtureId && fixtures[fixtureId], `${name} requires active fixture ${fixtureId}`);
@@ -915,8 +915,8 @@ test("active fixtures use only current public execution semantics", async () => 
       const argv = call.argv;
       const inputIndex = argv.indexOf("--input");
       const input = inputIndex < 0 ? {} : JSON.parse(argv[inputIndex + 1].replace(/\$\{[A-Za-z][A-Za-z0-9_]*\}/g, "0"));
-      if (argv[0] === "tools" && argv[2] === "debug.code.execute") {
-        assert.ok(input.completionProbe, `${call.id ?? argv[2]} debug.code.execute must declare completionProbe`);
+      if (argv[0] === "tools" && argv[2] === "debug.code-execute") {
+        assert.ok(input.completionProbe, `${call.id ?? argv[2]} debug.code-execute must declare completionProbe`);
         assert.equal(input.completionProbe.readTool, "scene.gameobject");
       }
       if (argv[0] === "tools" && argv[1] === "run" && argv[2] === "editor.state") assert.deepEqual(input, {});
@@ -991,7 +991,7 @@ test("Package matrix cases declare terminal-only exact cleanup", async () => {
   assert.match(source, /record\.assertion\?\.status !== "PASS" \|\| record\.envelope\?\.ok !== true \|\| flags\.includes\("--dry-run"\)/);
   assert.match(source, /if \(name === "package\.embed"\)[\s\S]*ownedEmbeddedPackageCleanupTarget[\s\S]*package\.resolve/);
   assert.match(source, /cleanupOwnedMemorySnapshotCase\(m, caseId, name, record, flags, project\)/);
-  for (const pair of [["package.deploy", "package.restore"], ["package.install", "package.remove"], ["package.registry.set", "package.registry.clear"], ["package.scoped-registry.add", "package.scoped-registry.remove"]]) {
+  for (const pair of [["package.deploy", "package.restore"], ["package.install", "package.remove"], ["package.registry-set", "package.registry-clear"], ["package.scoped-registry-add", "package.scoped-registry-remove"]]) {
     assert.match(source, new RegExp(`"${pair[0].replaceAll(".", "\\.")}"[\\s\\S]*name: "${pair[1].replaceAll(".", "\\.")}"`));
   }
   assert.match(source, /selectedStatusToolForRoot\(m, cleanup\.name\)[\s\S]*isDeferredStatusRootTimeout\(cleanup\.name, "editor"[\s\S]*requestId: cleanupRecord\.envelope\.requestId/);
@@ -1071,9 +1071,9 @@ test("direct case retries generation changes only for read-only steps", async ()
   };
   const definitions = [{ id: "read", kind: "tool", name: "scene.gameobject", input: {}, readOnly: true }];
 
-  assert.equal(await runDirectCasePhase(matrix, "tool.debug.code.execute", "setup", definitions, {}, "C:\\DevProject"), true);
+  assert.equal(await runDirectCasePhase(matrix, "tool.debug.code-execute", "setup", definitions, {}, "C:\\DevProject"), true);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].id, "tool.debug.code.execute.setup.read");
+  assert.equal(calls[0].id, "tool.debug.code-execute.setup.read");
   assert.deepEqual(calls[0].meta.retryErrorCodes, ["E_READ_GENERATION_CHANGED"]);
   assert.equal(calls[0].meta.retryMaxAttempts, 3);
   assert.equal(shouldRetryMatrixCall(calls[0].meta, { error: { code: "E_OTHER" } }, "failure", 1, 3), false);
@@ -1092,11 +1092,11 @@ test("direct case never retries mutation steps on generation change", async () =
     },
     failed: async (_id, issue) => ({ assertion: { status: "FAIL", issue } })
   };
-  const definitions = [{ id: "mutate", kind: "tool", name: "debug.code.execute", input: {} }];
+  const definitions = [{ id: "mutate", kind: "tool", name: "debug.code-execute", input: {} }];
 
-  assert.equal(await runDirectCasePhase(matrix, "tool.debug.code.execute", "mutation", definitions, {}, "C:\\DevProject"), false);
+  assert.equal(await runDirectCasePhase(matrix, "tool.debug.code-execute", "mutation", definitions, {}, "C:\\DevProject"), false);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].id, "tool.debug.code.execute.mutation.mutate");
+  assert.equal(calls[0].id, "tool.debug.code-execute.mutation.mutate");
   assert.equal(calls[0].meta.retryErrorCodes, undefined);
 });
 
@@ -1215,10 +1215,10 @@ test("playmode unavailable code overrides cover exactly editor.compile's contrac
 test("playmode resolve blocked tools exactly cover package file mutations", () => {
   assert.deepEqual([...PLAYMODE_RESOLVE_BLOCKED_TOOLS].sort(), [
     "package.deploy", "package.embed", "package.install", "package.remove", "package.resolve", "package.restore",
-    "package.scoped-registry.add", "package.scoped-registry.remove"
+    "package.scoped-registry-add", "package.scoped-registry-remove"
   ]);
   // 不依赖Unity Resolve的本地清理能力不得被误封。
-  for (const name of ["package.registry.clear", "package.registry.set", "package.bridge-remove"]) {
+  for (const name of ["package.registry-clear", "package.registry-set", "package.bridge-remove"]) {
     assert.equal(PLAYMODE_RESOLVE_BLOCKED_TOOLS.has(name), false, name);
   }
 });
@@ -1368,3 +1368,4 @@ test("owned project snapshot rejects reparse paths", async (context) => {
     await rm(owner, { recursive: true, force: true });
   }
 });
+

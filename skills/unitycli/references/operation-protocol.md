@@ -60,15 +60,15 @@ compile、import、domain reload和listener generation交接由session superviso
 
 运行时调试的九步闭环与证据判断见 [运行时调试闭环](debugging.md)；本节只固定跨能力的协议事实。
 
-`debug.session.*` 是本次 Editor 会话的资源 owner。定义只在同一 `editorSessionId` 内有效：Domain Reload 后恢复的定义不带任何运行中的资源，Play exit 与 Editor 重启使其失效。调查结束用 `debug.session.stop` 并读取清理报告；只有已停止的会话才能被删除，未完成的清理返回 `E_DEBUG_CLEANUP_PENDING`。recipe 是同一会话的可重新加载配置：导入只建立未激活的会话，不执行其中的启动或清理内容。
+`debug.session-*` 是本次 Editor 会话的资源 owner。定义只在同一 `editorSessionId` 内有效：Domain Reload 后恢复的定义不带任何运行中的资源，Play exit 与 Editor 重启使其失效。调查结束用 `debug.session-stop` 并读取清理报告；只有已停止的会话才能被删除，未完成的清理返回 `E_DEBUG_CLEANUP_PENDING`。recipe 是同一会话的可重新加载配置：导入只建立未激活的会话，不执行其中的启动或清理内容。
 
 主线程被暂停时，可达能力是冻结名单：暂停自身的读取与解除、事件读取、线程读取、hook/program/session 的只读项，以及命名了当前 `pauseId` 的字段读取与写入，都在发起请求的线程上直接服务并继续使用同一 live descriptor；其他 mutation 在任何 effect 之前返回 `E_DEBUG_MAIN_THREAD_PAUSED`，并指向暂停的读取与解除入口。暂停必须显式选择有界或无界，没有默认值。解除暂停是解除等待，不是抢占：同步代码仍会运行完，无法证明已解除时必须报告 pending 或 unknown，不得声称线程已被强制恢复。
 
-`debug.*.wait` 由中央 scheduler 跨帧投递，不阻塞 Unity 主线程；一次调用处于等待期间不阻止另一次调用停止或替换同一资源。等待到达 deadline 只表示该次调用没有可信终态。
+`debug.*-wait` 由中央 scheduler 跨帧投递，不阻塞 Unity 主线程；一次调用处于等待期间不阻止另一次调用停止或替换同一资源。等待到达 deadline 只表示该次调用没有可信终态。
 
-事件流是跨定义共享的有界环形缓冲。分页游标绑定当时的 publication，失效时返回过期错误，必须重新读取而不是推断；溢出、采样与截断进入覆盖事实。窗口结论在 `verdict`（`passed`/`failed`/`indeterminate`），不在 `ok`；`debug.run.compare` 只在调用方声明的来源、位置、对齐键、值路径与时钟上比较，不默认使用全局 sequence、对象地址或墙上时间。
+事件流是跨定义共享的有界环形缓冲。分页游标绑定当时的 publication，失效时返回过期错误，必须重新读取而不是推断；溢出、采样与截断进入覆盖事实。窗口结论在 `verdict`（`passed`/`failed`/`indeterminate`），不在 `ok`；`debug.run-compare` 只在调用方声明的来源、位置、对齐键、值路径与时钟上比较，不默认使用全局 sequence、对象地址或墙上时间。
 
-`debug.console.read` 是一次有界、不可续读的 Unity Console 快照；`debug.console.clear` 是独立的状态修改。编译产物预算由本域的编译型能力共用，删除定义不会回收已加载程序集，也不会自动触发 reload。
+`debug.console-read` 是一次有界、不可续读的 Unity Console 快照；`debug.console-clear` 是独立的状态修改。编译产物预算由本域的编译型能力共用，删除定义不会回收已加载程序集，也不会自动触发 reload。
 
 ## 大输出
 
@@ -81,6 +81,6 @@ compile、import、domain reload和listener generation交接由session superviso
 
 ## 弹窗与长操作
 
-`editor.state`公开状态固定为`ready|transitioning|blocked|unresponsive|unverifiable|offline|conflict`。它与`editor.dialogs`、`editor.dialog.click`是仅有的三个exact观察名称：使用冻结本地descriptor进入统一dispatcher，不依赖可能被阻断的Live catalog或普通业务admission；alias、group、handler和其他offline Tool不继承该路径。`tools describe`可精确学习这三个descriptor。三者仍执行schema、availability、completion和结果校验，共用从dispatch开始的一份absolute deadline；`editor.state`只可发出一次private snapshot观察，dialogs仅Windows可用。`conflict`只表示至少两个verified live claim；身份读取失败使用`unverifiable`，transport存在但主线程不推进使用`unresponsive`。原错误包含`details.blockers`时，先`tools run editor.dialogs`。点击前使用当前返回的dialogId和规范化button label；只能选择当前可见且enabled的按钮。点击会保留最小pre-effect预算，deadline先到会关闭首次effect barrier；点击后必须证明弹窗消失或状态改变。
+`editor.state`公开状态固定为`ready|transitioning|blocked|unresponsive|unverifiable|offline|conflict`。它与`editor.dialogs`、`editor.dialog-click`是仅有的三个exact观察名称：使用冻结本地descriptor进入统一dispatcher，不依赖可能被阻断的Live catalog或普通业务admission；alias、group、handler和其他offline Tool不继承该路径。`tools describe`可精确学习这三个descriptor。三者仍执行schema、availability、completion和结果校验，共用从dispatch开始的一份absolute deadline；`editor.state`只可发出一次private snapshot观察，dialogs仅Windows可用。`conflict`只表示至少两个verified live claim；身份读取失败使用`unverifiable`，transport存在但主线程不推进使用`unresponsive`。原错误包含`details.blockers`时，先`tools run editor.dialogs`。点击前使用当前返回的dialogId和规范化button label；只能选择当前可见且enabled的按钮。点击会保留最小pre-effect预算，deadline先到会关闭首次effect barrier；点击后必须证明弹窗消失或状态改变。
 
-`build.run`、`test.run`、`editor.refresh`、`debug.code.execute` 和需要刷新 Editor 的 Package Tool 在一次调用内等待最终业务结果。超时只表示该次调用没有可信终态，后续动作由调用方决定。`debug.code.execute`的同步C#一旦在Unity主线程开始，timeout不能中止它；死循环、阻塞等待或长期Unity API调用可继续占用Editor。调用方应先判断这类代码是否确有必要；决定执行后应把timeout视为outcome unknown并在重试前观察业务状态。
+`build.run`、`test.run`、`editor.refresh`、`debug.code-execute` 和需要刷新 Editor 的 Package Tool 在一次调用内等待最终业务结果。超时只表示该次调用没有可信终态，后续动作由调用方决定。`debug.code-execute`的同步C#一旦在Unity主线程开始，timeout不能中止它；死循环、阻塞等待或长期Unity API调用可继续占用Editor。调用方应先判断这类代码是否确有必要；决定执行后应把timeout视为outcome unknown并在重试前观察业务状态。

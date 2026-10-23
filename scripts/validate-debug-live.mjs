@@ -313,7 +313,7 @@ function plannedSyncPackage(closeEditor, roots) {
       "UNITYCLI_DATA_DIR 只注入本脚本派生的子 CLI 进程，不写用户级或系统级环境变量。",
       closeEditor
         ? "已显式请求 --close-editor：CLI 只会正常关闭 Dev 项目的 Editor；遇到未保存或 modal 阻断必须停止。"
-        : "未请求 --close-editor：Dev 项目正在运行时 CLI 预期以 E_INIT_EDITOR_RUNNING 失败，本脚本不会替你关闭 Editor。"
+        : "未请求 --close-editor：CLI 会就地替换 Dev 项目的 Package，不关闭 Editor；安装后由运行中的 Editor 自行导入。"
     ]
   };
 }
@@ -409,7 +409,7 @@ async function syncPackage(roots, closeEditor) {
   if (result.timedOut || result.exitCode !== 0 || envelope?.ok !== true) {
     throw new HarnessError("E_HARNESS_CLI_FAILED", "init package did not return a successful envelope for the Dev project.", [
       "Inspect data.envelope and data.stderr, resolve the reported external state, then rerun sync-package.",
-      ...(closeEditor ? [] : ["If the Dev Editor is running and you want it closed normally, rerun with --close-editor."])
+      ...(closeEditor ? [] : ["If the envelope reports PACKAGE_DIRECTORY_LOCKED, rerun with --close-editor only after the user approves closing the Dev Editor normally."])
     ], { plan: { argv: plan.argv, plannedEnv: plan.plannedEnv }, ...data });
   }
   return data;

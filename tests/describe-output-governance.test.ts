@@ -10,7 +10,7 @@ const COMMAND_SAMPLE_PATTERN = /\b(?:unitycli\s+)?tools\s+run\s+[\w.-]+\b/i;
 const LARGE_OUTPUT_PATTERN = /\b(pageInfo|cursor|nextCursor|plannedEffects|artifactDir|truncated)\b/i;
 
 const P0_EXAMPLE_TOOLS = new Set([
-  "debug.code.execute",
+  "debug.code-execute",
   "package.install",
   "package.remove",
   "package.deploy",
@@ -18,19 +18,19 @@ const P0_EXAMPLE_TOOLS = new Set([
   "editor.compile",
   "build.run",
   "navmesh.bake",
-  "navmesh.surface.bake",
+  "navmesh.surface-bake",
   "test.cancel",
   "test.run"
 ]);
 
 const P0_OUTPUT_SCHEMA_TOOLS = new Set([
-  "debug.code.execute",
+  "debug.code-execute",
   "docs.search",
   "docs.get",
   "type-inspection.search",
   "build.run",
   "navmesh.bake",
-  "navmesh.surface.bake",
+  "navmesh.surface-bake",
   "test.cancel",
   "test.run"
 ]);
@@ -38,7 +38,7 @@ const P0_OUTPUT_SCHEMA_TOOLS = new Set([
 const LARGE_OUTPUT_TOOLS = new Set([
   "docs.search",
   "type-inspection.search",
-  "debug.code.execute"
+  "debug.code-execute"
 ]);
 
 function descriptorText(tool: ResolvedToolMetadata): string {
@@ -65,15 +65,15 @@ function assertNoInternalSourceText(subject: string, text: string): void {
 test("TS-local descriptor registry owns exactly the current package-local tools", () => {
   const names = allRegisteredToolMetadata().map((tool) => tool.name).sort();
   assert.deepEqual(names, [
-    "asset.refresh", "asset.refresh.status", "build.player.status", "build.run", "debug.code.execute", "debug.code.flow.cancel", "debug.code.flow.run", "debug.code.flow.submit", "debug.code.flow.wait", "docs.get", "docs.search", "editor.compile", "editor.dialog.click",
-    "editor.dialogs", "editor.play-mode.status", "editor.refresh", "editor.state", "navmesh.bake", "navmesh.bake-cancel",
-    "navmesh.bake-status", "navmesh.surface.bake", "occlusion.bake", "occlusion.bake-cancel",
+    "asset.refresh", "asset.refresh-status", "build.player-status", "build.run", "debug.code-execute", "debug.code-flow-cancel", "debug.code-flow-run", "debug.code-flow-submit", "debug.code-flow-wait", "docs.get", "docs.search", "editor.compile", "editor.dialog-click",
+    "editor.dialogs", "editor.play-mode-status", "editor.refresh", "editor.state", "navmesh.bake", "navmesh.bake-cancel",
+    "navmesh.bake-status", "navmesh.surface-bake", "occlusion.bake", "occlusion.bake-cancel",
     "occlusion.bake-status", "package.bridge-remove", "package.deploy",
-    "package.embed", "package.install", "package.install.status", "package.registry.clear", "package.registry.set", "package.remove", "package.remove.status",
-    "package.resolve", "package.restore", "package.scoped-registry.add", "package.scoped-registry.remove",
-    "player-runtime.console", "player-runtime.input.key", "player-runtime.input.pointer",
-    "player-runtime.log", "player-runtime.state", "player-runtime.target-framerate.set", "player-runtime.time-scale.set", "player-runtime.ui.capture-element",
-    "test.cancel", "test.run", "test.run.status", "type-inspection.get-member", "type-inspection.get-type", "type-inspection.search"
+    "package.embed", "package.install", "package.install-status", "package.registry-clear", "package.registry-set", "package.remove", "package.remove-status",
+    "package.resolve", "package.restore", "package.scoped-registry-add", "package.scoped-registry-remove",
+    "player-runtime.console", "player-runtime.input-key", "player-runtime.input-pointer",
+    "player-runtime.log", "player-runtime.state", "player-runtime.target-framerate-set", "player-runtime.time-scale-set", "player-runtime.ui-capture-element",
+    "test.cancel", "test.run", "test.run-status", "type-inspection.get-member", "type-inspection.get-type", "type-inspection.search"
   ]);
   assert.equal(findToolByName("asset.refresh")?.handler, "hybrid");
 });
@@ -110,8 +110,8 @@ test("descriptions are call guidance, not duplicated summaries or embedded comma
   }
 });
 
-test("debug.code.execute discovery keeps critical execution boundaries within its description budget", () => {
-  const tool = findToolByName("debug.code.execute");
+test("debug.code-execute discovery keeps critical execution boundaries within its description budget", () => {
+  const tool = findToolByName("debug.code-execute");
   assert.ok(tool);
   assert.match(tool.summary, /cannot be force-stopped by timeout/i);
   assert.match(tool.description, /synchronously compile and execute trusted C# 8/i);
@@ -128,7 +128,7 @@ test("debug.code.execute discovery keeps critical execution boundaries within it
   assert.match(tool.description, /Dry-run reports source hash/i);
   // 该描述必须同时公布 typed partial outcome 的信封形状、30000 ms off-main 控制等待边界、
   // 确切包裹声明、返回值截断事实与默认引用集，因此预算从 1536 提升到 2304、再提升到 2688 UTF-8 字节；上限本身仍然被强制。
-  assert.ok(Buffer.byteLength(tool.description, "utf8") <= 2688, "debug.code.execute description must remain within 2688 UTF-8 bytes");
+  assert.ok(Buffer.byteLength(tool.description, "utf8") <= 2688, "debug.code-execute description must remain within 2688 UTF-8 bytes");
   assert.match(tool.description, /every locatable assembly already loaded in the Editor AppDomain is referenced/);
   assert.match(tool.description, /error\.details\.outcome/i);
   assert.match(tool.description, /30000 ms/);
@@ -141,6 +141,23 @@ test("large-output TS-local descriptors disclose output controls", () => {
     assert.ok(tool, `${name} should exist`);
     assert.match(descriptorText(tool), LARGE_OUTPUT_PATTERN, `${name} must disclose pagination, preview, planned effects, or artifact controls`);
   }
+});
+
+test("debug.code-flow-wait keeps its snapshot example honest and discloses the wait-window cost", () => {
+  const tool = findToolByName("debug.code-flow-wait");
+  assert.ok(tool);
+  // “without waiting” 必须是真正的零长度窗口：省略 waitMs 走的是等到请求 deadline 的最长路径。
+  const snapshot = tool.examples?.find((example) => {
+    const input = example.input as { waitMs?: number } | undefined;
+    return input?.waitMs === 0;
+  });
+  assert.ok(snapshot, "debug.code-flow-wait must keep an example that asks for waitMs 0");
+  assert.match(snapshot.description, /without waiting/i);
+  assert.match(snapshot.description, /E_DEBUG_FLOW_PENDING/);
+  // 缺省语义与占档成本必须自足：否则调用方会把 140 s 的读请求当成一次快照。
+  assert.match(tool.description, /waitMs 0 returns the current facts immediately/);
+  assert.match(tool.description, /omitting waitMs waits until this request own deadline/);
+  assert.match(tool.description, /other sessions' mutation requests cannot start until it returns/);
 });
 
 test("doctor private diagnostics read the immutable catalog owner and keep compile output bounded", async () => {

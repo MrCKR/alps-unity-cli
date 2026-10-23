@@ -100,9 +100,9 @@ namespace UnityCli
     /// </summary>
     internal static class DebugPauseControl
     {
-        internal const string ResumeTool = "debug.pause.resume";
-        internal const string ListTool = "debug.pause.list";
-        internal const string StopTool = "debug.session.stop";
+        internal const string ResumeTool = "debug.pause-resume";
+        internal const string ListTool = "debug.pause-list";
+        internal const string StopTool = "debug.session-stop";
         internal const string RejectionCode = "E_DEBUG_MAIN_THREAD_PAUSED";
 
         private static volatile bool activated;
@@ -129,26 +129,26 @@ namespace UnityCli
         /// <summary>冻结的 off-main 可达 Tool：现场读取、现场操作、解除路径与发布状态读取。</summary>
         private static readonly HashSet<string> OffMainTools = new HashSet<string>(StringComparer.Ordinal)
         {
-            "debug.pause.list",
-            "debug.pause.wait",
-            "debug.pause.inspect",
-            "debug.pause.evaluate",
-            "debug.pause.resume",
-            "debug.events.read",
-            "debug.thread.list",
-            "debug.session.info",
-            "debug.session.list",
-            "debug.program.info",
-            "debug.program.list",
-            "debug.hook.info",
-            "debug.hook.list"
+            "debug.pause-list",
+            "debug.pause-wait",
+            "debug.pause-inspect",
+            "debug.pause-evaluate",
+            "debug.pause-resume",
+            "debug.events-read",
+            "debug.thread-list",
+            "debug.session-info",
+            "debug.session-list",
+            "debug.program-info",
+            "debug.program-list",
+            "debug.hook-info",
+            "debug.hook-list"
         };
 
         /// <summary>只有显式命名 pauseId 的值操作才路由到该现场；普通值操作仍走正常路径。</summary>
         private static readonly HashSet<string> PauseScopedTools = new HashSet<string>(StringComparer.Ordinal)
         {
-            "debug.value.read",
-            "debug.value.write"
+            "debug.value-read",
+            "debug.value-write"
         };
 
         /// <summary>当前是否发布了一个仍停住的主线程暂停现场。</summary>
@@ -268,7 +268,7 @@ namespace UnityCli
             };
             if (pause != null && !string.IsNullOrEmpty(pause.SessionId))
                 actions.Add("Run tools run " + StopTool + " with sessionId " + pause.SessionId + " to close that owner's future dispatch and send it the resume signal; cleanup that needs the main thread is reported as pending and completes when the same stop is repeated after the thread resumes.");
-            actions.Add("While the site is held you can still read debug.events.read, debug.hook.list, debug.pause.inspect, debug.session.list, debug.program.list and debug.thread.list, then release the site before submitting business mutations again.");
+            actions.Add("While the site is held you can still read debug.events-read, debug.hook-list, debug.pause-inspect, debug.session-list, debug.program-list and debug.thread-list, then release the site before submitting business mutations again.");
             return actions.ToArray();
         }
 
@@ -389,37 +389,37 @@ namespace UnityCli
             var deadlineMs = UnityCliBridge.OffMainDeadlineMs(request);
             switch (tool)
             {
-                case "debug.pause.list":
+                case "debug.pause-list":
                     return DebugPauseHost.List(UnityCliBridge.DeserializeOffMain<DebugPauseListRequest>(inputJson), UnityCliBridge.EditorSessionId());
-                case "debug.pause.wait":
+                case "debug.pause-wait":
                     return WaitForSite(UnityCliBridge.DeserializeOffMain<DebugPauseWaitRequest>(inputJson), deadlineMs);
-                case "debug.pause.inspect":
+                case "debug.pause-inspect":
                     return ServeOperation(requestId, tool, EnqueueInspect(inputJson), deadlineMs);
-                case "debug.pause.evaluate":
+                case "debug.pause-evaluate":
                     return ServeOperation(requestId, tool, EnqueueEvaluate(inputJson), deadlineMs);
-                case "debug.pause.resume":
+                case "debug.pause-resume":
                     return ServeResume(requestId, inputJson, deadlineMs);
-                case "debug.events.read":
+                case "debug.events-read":
                     return DebugEventStore.ReadEvents(UnityCliBridge.DeserializeOffMain<DebugEventsRequest>(inputJson));
-                case "debug.thread.list":
+                case "debug.thread-list":
                     return DebugThreads.List(UnityCliBridge.DeserializeOffMain<DebugThreadListRequest>(inputJson), UnityCliBridge.EditorSessionId());
-                case "debug.session.info":
+                case "debug.session-info":
                     return DebugSessionHost.Info(UnityCliBridge.DeserializeOffMain<DebugSessionInfoRequest>(inputJson));
-                case "debug.session.list":
+                case "debug.session-list":
                     return DebugSessionHost.List(UnityCliBridge.DeserializeOffMain<DebugSessionListRequest>(inputJson));
-                case "debug.program.info":
+                case "debug.program-info":
                     return DebugProgramHost.Info(UnityCliBridge.DeserializeOffMain<DebugProgramInfoRequest>(inputJson));
-                case "debug.program.list":
+                case "debug.program-list":
                     return DebugProgramHost.List(UnityCliBridge.DeserializeOffMain<DebugProgramListRequest>(inputJson));
-                case "debug.hook.info":
+                case "debug.hook-info":
                     return MethodHookHost.Info(UnityCliBridge.DeserializeOffMain<MethodHookInfoRequest>(inputJson));
-                case "debug.hook.list":
+                case "debug.hook-list":
                     return MethodHookHost.List(UnityCliBridge.DeserializeOffMain<MethodHookListRequest>(inputJson));
-                case "debug.session.stop":
+                case "debug.session-stop":
                     return ServeStop(inputJson);
-                case "debug.value.read":
+                case "debug.value-read":
                     return ServeOperation(requestId, tool, EnqueueValueRead(inputJson), deadlineMs);
-                case "debug.value.write":
+                case "debug.value-write":
                     return ServeOperation(requestId, tool, EnqueueValueWrite(inputJson), deadlineMs);
                 default:
                     // 名单与分派必须同源；走到这里说明可达判定与实现脱节，按不可达拒绝而不是静默降级。
@@ -489,7 +489,7 @@ namespace UnityCli
         {
             var request = UnityCliBridge.DeserializeOffMain<DebugPauseInspectRequest>(inputJson);
             var site = DebugPauseHost.FindSite(request == null ? null : request.PauseId);
-            return DebugPauseHost.EnqueueInspect(site, request, "control:debug.pause.inspect");
+            return DebugPauseHost.EnqueueInspect(site, request, "control:debug.pause-inspect");
         }
 
         private static DebugPauseOperation EnqueueEvaluate(string inputJson)
@@ -504,21 +504,21 @@ namespace UnityCli
                     "Field evaluate requires exactly one of sourceText/code or programEntry.",
                     new Dictionary<string, object> { { "path", "$.programEntry" }, { "hasCode", hasCode }, { "hasProgramEntry", hasEntry } },
                     new[] { "Submit explicit debug code with sourceText, or name an installed program entry with programEntry." });
-            return DebugPauseHost.EnqueueEvaluate(site, request, "control:debug.pause.evaluate");
+            return DebugPauseHost.EnqueueEvaluate(site, request, "control:debug.pause-evaluate");
         }
 
         private static DebugPauseOperation EnqueueValueRead(string inputJson)
         {
             var request = UnityCliBridge.DeserializeOffMain<DebugValueReadRequest>(inputJson);
             var site = DebugPauseHost.FindSite(request == null ? null : request.PauseId);
-            return DebugPauseHost.EnqueueValueRead(site, request, "control:debug.value.read");
+            return DebugPauseHost.EnqueueValueRead(site, request, "control:debug.value-read");
         }
 
         private static DebugPauseOperation EnqueueValueWrite(string inputJson)
         {
             var request = UnityCliBridge.DeserializeOffMain<DebugValueWriteRequest>(inputJson);
             var site = DebugPauseHost.FindSite(request == null ? null : request.PauseId);
-            return DebugPauseHost.EnqueueValueWrite(site, request, "control:debug.value.write");
+            return DebugPauseHost.EnqueueValueWrite(site, request, "control:debug.value-write");
         }
 
         /// <summary>

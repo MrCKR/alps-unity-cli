@@ -32,13 +32,13 @@ function memberBody(text: string, name: string): string {
 }
 
 test("the recipe tools exist with the frozen catalog shape", async () => {
-  const exportText = await source(sessionToolsRoot, "export.cs");
-  const importText = await source(sessionToolsRoot, "import.cs");
+  const exportText = await source(sessionToolsRoot, "../session-export.cs");
+  const importText = await source(sessionToolsRoot, "../session-import.cs");
   assert.match(exportText, /IUnityCliTool<DebugSessionExportRequest, DebugSessionExportResult>/);
   assert.match(importText, /IUnityCliTool<DebugSessionImportRequest, DebugSessionImportResult>/);
-  assert.match(exportText, /Name = "debug\.session\.export"/);
+  assert.match(exportText, /Name = "debug\.session-export"/);
   assert.match(exportText, /Summary = "Read the current immutable recipe snapshot/);
-  assert.match(importText, /Name = "debug\.session\.import"/);
+  assert.match(importText, /Name = "debug\.session-import"/);
   assert.match(importText, /Summary = "Validate a stored recipe and atomically establish a new inactive debug session/);
   for (const text of [exportText, importText]) {
     assert.match(text, /Group = "debug"/);
@@ -54,7 +54,7 @@ test("the recipe tools exist with the frozen catalog shape", async () => {
 });
 
 test("export declares read-only snapshot semantics, exclusions, cursor expiry and the 8 MiB bound", async () => {
-  const exportText = await source(sessionToolsRoot, "export.cs");
+  const exportText = await source(sessionToolsRoot, "../session-export.cs");
   for (const required of [
     /Read the current immutable recipe snapshot of one debug session as bounded pages, without writing any artifact or file/,
     /writes no file and creates no artifact/,
@@ -82,7 +82,7 @@ test("export declares read-only snapshot semantics, exclusions, cursor expiry an
 });
 
 test("import declares the lifecycle table and reports loaded candidate assemblies", async () => {
-  const importText = await source(sessionToolsRoot, "import.cs");
+  const importText = await source(sessionToolsRoot, "../session-import.cs");
   for (const required of [
     /Domain Reload keeps definitions, source, selected JSON, in-budget evidence and terminal summaries/,
     /Import itself is the only path that establishes a session after an Editor restart/,
@@ -149,8 +149,8 @@ test("no compatibility path, alias or duplicated truth was added", async () => {
   }
   const contracts = JSON.parse(await readFile(join(repoRoot, "contracts", "tool-completion-contract.json"), "utf8"));
   const names = contracts.tools.map((entry: { toolName: string }) => entry.toolName);
-  assert.ok(names.includes("debug.session.export"), "the completion contract must cover debug.session.export");
-  assert.ok(names.includes("debug.session.import"), "the completion contract must cover debug.session.import");
+  assert.ok(names.includes("debug.session-export"), "the completion contract must cover debug.session-export");
+  assert.ok(names.includes("debug.session-import"), "the completion contract must cover debug.session-import");
   assert.equal(names.includes("method-hook" + ".events"), false, "the old event route must stay unreachable");
 });
 

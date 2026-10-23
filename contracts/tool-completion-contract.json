@@ -841,9 +841,9 @@
       ]
     },
     {
-      "toolName": "asset.import-settings.set",
+      "toolName": "asset.import-settings-set",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/asset/import-settings/set.cs",
+      "source": "unitypkg/Editor/Tools/asset/import-settings-set.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -976,14 +976,14 @@
       ]
     },
     {
-      "toolName": "asset.refresh.status",
+      "toolName": "asset.refresh-status",
       "descriptorOwner": "ts-local",
       "source": "src/tools/asset/refresh-status.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "asset.refresh.status returns one bounded same-session active phase or exact durable terminal envelope."
+        "description": "asset.refresh-status returns one bounded same-session active phase or exact durable terminal envelope."
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
@@ -1113,18 +1113,18 @@
       ]
     },
     {
-      "toolName": "build.platform.get",
+      "toolName": "build.platform-get",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/build/platform/get.cs",
+      "source": "unitypkg/Editor/Tools/build/platform-get.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "build.platform.get 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "build.platform-get 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "build.platform.get 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "build.platform-get 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -1140,18 +1140,18 @@
       ]
     },
     {
-      "toolName": "build.platform.set",
+      "toolName": "build.platform-set",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/build/platform/set.cs",
+      "source": "unitypkg/Editor/Tools/build/platform-set.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "external",
       "completionPredicate": {
         "kind": "external-operation-terminal",
-        "description": "build.platform.set 的外部或跨帧 operation 已达到自己的业务 terminal，且必要 artifact/状态 readback 已验证。"
+        "description": "build.platform-set 的外部或跨帧 operation 已达到自己的业务 terminal，且必要 artifact/状态 readback 已验证。"
       },
       "proofSource": {
         "kind": "operation-terminal-and-readback",
-        "description": "build.platform.set 的稳定 operation state、callback terminal、artifact digest 或目标状态 readback。"
+        "description": "build.platform-set 的稳定 operation state、callback terminal、artifact digest 或目标状态 readback。"
       },
       "reloadPolicy": {
         "kind": "reattach-or-reobserve",
@@ -1167,14 +1167,14 @@
       ]
     },
     {
-      "toolName": "build.player.status",
+      "toolName": "build.player-status",
       "descriptorOwner": "ts-local",
       "source": "src/tools/build/player-status.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "build.player.status returns one bounded same-session active phase or exact durable terminal envelope."
+        "description": "build.player-status returns one bounded same-session active phase or exact durable terminal envelope."
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
@@ -1194,18 +1194,18 @@
       ]
     },
     {
-      "toolName": "build.profile.create",
+      "toolName": "build.profile-create",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/build/profile/create.cs",
+      "source": "unitypkg/Editor/Tools/build/profile-create.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "build.profile.create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "build.profile-create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "build.profile.create 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "build.profile-create 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -1221,18 +1221,18 @@
       ]
     },
     {
-      "toolName": "build.profile.list",
+      "toolName": "build.profile-list",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/build/profile/list.cs",
+      "source": "unitypkg/Editor/Tools/build/profile-list.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "build.profile.list 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "build.profile-list 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "build.profile.list 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "build.profile-list 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -1248,18 +1248,18 @@
       ]
     },
     {
-      "toolName": "build.profile.modify",
+      "toolName": "build.profile-modify",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/build/profile/modify.cs",
+      "source": "unitypkg/Editor/Tools/build/profile-modify.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "build.profile.modify 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "build.profile-modify 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "build.profile.modify 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "build.profile-modify 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -1275,18 +1275,18 @@
       ]
     },
     {
-      "toolName": "build.profile.switch",
+      "toolName": "build.profile-switch",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/build/profile/switch.cs",
+      "source": "unitypkg/Editor/Tools/build/profile-switch.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "external",
       "completionPredicate": {
         "kind": "external-operation-terminal",
-        "description": "build.profile.switch 的外部或跨帧 operation 已达到自己的业务 terminal，且必要 artifact/状态 readback 已验证。"
+        "description": "build.profile-switch 的外部或跨帧 operation 已达到自己的业务 terminal，且必要 artifact/状态 readback 已验证。"
       },
       "proofSource": {
         "kind": "operation-terminal-and-readback",
-        "description": "build.profile.switch 的稳定 operation state、callback terminal、artifact digest 或目标状态 readback。"
+        "description": "build.profile-switch 的稳定 operation state、callback terminal、artifact digest 或目标状态 readback。"
       },
       "reloadPolicy": {
         "kind": "reattach-or-reobserve",
@@ -1331,18 +1331,18 @@
       ]
     },
     {
-      "toolName": "build.scene.add",
+      "toolName": "build.scene-add",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/build/scene/add.cs",
+      "source": "unitypkg/Editor/Tools/build/scene-add.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "build.scene.add 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "build.scene-add 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "build.scene.add 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "build.scene-add 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -1358,18 +1358,18 @@
       ]
     },
     {
-      "toolName": "build.scene.disable",
+      "toolName": "build.scene-disable",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/build/scene/disable.cs",
+      "source": "unitypkg/Editor/Tools/build/scene-disable.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "build.scene.disable 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "build.scene-disable 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "build.scene.disable 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "build.scene-disable 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -1385,18 +1385,18 @@
       ]
     },
     {
-      "toolName": "build.scene.enable",
+      "toolName": "build.scene-enable",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/build/scene/enable.cs",
+      "source": "unitypkg/Editor/Tools/build/scene-enable.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "build.scene.enable 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "build.scene-enable 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "build.scene.enable 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "build.scene-enable 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -1412,18 +1412,18 @@
       ]
     },
     {
-      "toolName": "build.scene.list",
+      "toolName": "build.scene-list",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/build/scene/list.cs",
+      "source": "unitypkg/Editor/Tools/build/scene-list.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "build.scene.list 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "build.scene-list 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "build.scene.list 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "build.scene-list 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -1439,18 +1439,18 @@
       ]
     },
     {
-      "toolName": "build.scene.remove",
+      "toolName": "build.scene-remove",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/build/scene/remove.cs",
+      "source": "unitypkg/Editor/Tools/build/scene-remove.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "build.scene.remove 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "build.scene-remove 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "build.scene.remove 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "build.scene-remove 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -1466,18 +1466,18 @@
       ]
     },
     {
-      "toolName": "build.settings.get",
+      "toolName": "build.settings-get",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/build/settings/get.cs",
+      "source": "unitypkg/Editor/Tools/build/settings-get.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "build.settings.get 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "build.settings-get 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "build.settings.get 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "build.settings-get 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -1493,18 +1493,18 @@
       ]
     },
     {
-      "toolName": "build.settings.set",
+      "toolName": "build.settings-set",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/build/settings/set.cs",
+      "source": "unitypkg/Editor/Tools/build/settings-set.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "build.settings.set 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "build.settings-set 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "build.settings.set 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "build.settings-set 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -1763,18 +1763,18 @@
       ]
     },
     {
-      "toolName": "cinemachine.brain.ensure",
+      "toolName": "cinemachine.brain-ensure",
       "descriptorOwner": "extension:cinemachine",
       "source": "extensions/cinemachine/unitypkg/Editor/Cinemachine/brain-ensure.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "cinemachine.brain.ensure 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "cinemachine.brain-ensure 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "cinemachine.brain.ensure 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "cinemachine.brain-ensure 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -1790,18 +1790,18 @@
       ]
     },
     {
-      "toolName": "cinemachine.brain.status",
+      "toolName": "cinemachine.brain-status",
       "descriptorOwner": "extension:cinemachine",
       "source": "extensions/cinemachine/unitypkg/Editor/Cinemachine/brain-status.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "cinemachine.brain.status 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "cinemachine.brain-status 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "cinemachine.brain.status 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "cinemachine.brain-status 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -1844,18 +1844,18 @@
       ]
     },
     {
-      "toolName": "cinemachine.extension.add",
+      "toolName": "cinemachine.extension-add",
       "descriptorOwner": "extension:cinemachine",
       "source": "extensions/cinemachine/unitypkg/Editor/Cinemachine/extension-add.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "cinemachine.extension.add 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "cinemachine.extension-add 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "cinemachine.extension.add 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "cinemachine.extension-add 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -1871,18 +1871,18 @@
       ]
     },
     {
-      "toolName": "cinemachine.extension.list",
+      "toolName": "cinemachine.extension-list",
       "descriptorOwner": "extension:cinemachine",
       "source": "extensions/cinemachine/unitypkg/Editor/Cinemachine/extension-list.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "cinemachine.extension.list 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "cinemachine.extension-list 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "cinemachine.extension.list 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "cinemachine.extension-list 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -1898,18 +1898,18 @@
       ]
     },
     {
-      "toolName": "cinemachine.extension.remove",
+      "toolName": "cinemachine.extension-remove",
       "descriptorOwner": "extension:cinemachine",
       "source": "extensions/cinemachine/unitypkg/Editor/Cinemachine/extension-remove.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "cinemachine.extension.remove 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "cinemachine.extension-remove 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "cinemachine.extension.remove 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "cinemachine.extension-remove 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2222,14 +2222,14 @@
       ]
     },
     {
-      "toolName": "debug.code.execute",
+      "toolName": "debug.code-execute",
       "descriptorOwner": "ts-local",
       "source": "src/tools/debug/code-execute.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "debug.code.execute 同步执行结束后返回编译、运行返回值与输出；提供 completionProbe 时附加 fresh assertion readback。"
+        "description": "debug.code-execute 同步执行结束后返回编译、运行返回值与输出；提供 completionProbe 时附加 fresh assertion readback。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
@@ -2250,18 +2250,18 @@
       ]
     },
     {
-      "toolName": "debug.console.clear",
+      "toolName": "debug.console-clear",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/console/clear.cs",
+      "source": "unitypkg/Editor/Tools/debug/console-clear.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "debug.console.clear 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "debug.console-clear 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "debug.console.clear 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "debug.console-clear 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2277,18 +2277,18 @@
       ]
     },
     {
-      "toolName": "debug.console.read",
+      "toolName": "debug.console-read",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/console/read.cs",
+      "source": "unitypkg/Editor/Tools/debug/console-read.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "debug.console.read 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "debug.console-read 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "debug.console.read 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "debug.console-read 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2304,18 +2304,18 @@
       ]
     },
     {
-      "toolName": "debug.events.read",
+      "toolName": "debug.events-read",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/events/read.cs",
+      "source": "unitypkg/Editor/Tools/debug/events-read.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "debug.events.read 的完整 typed business result 通过 output schema；只读读取不触发恢复、编译、重挂或清理。"
+        "description": "debug.events-read 的完整 typed business result 通过 output schema；只读读取不触发恢复、编译、重挂或清理。"
       },
       "proofSource": {
         "kind": "typed-result-readback",
-        "description": "debug.events.read 的 proof 来自一次性 typed result 与其内部一致的 host 快照读回；该路径不写任何持久状态。"
+        "description": "debug.events-read 的 proof 来自一次性 typed result 与其内部一致的 host 快照读回；该路径不写任何持久状态。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2331,18 +2331,18 @@
       ]
     },
     {
-      "toolName": "debug.hook.disable",
+      "toolName": "debug.hook-disable",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/hook/disable.cs",
+      "source": "unitypkg/Editor/Tools/debug/hook-disable.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "owned-definition-terminal-readback",
-        "description": "debug.hook.disable 的终态由 host 自己拥有的定义快照与本 CLI Adapter/gate 的 fresh readback 证明；返回体必须与持久化后的同 session 定义一致。"
+        "description": "debug.hook-disable 的终态由 host 自己拥有的定义快照与本 CLI Adapter/gate 的 fresh readback 证明；返回体必须与持久化后的同 session 定义一致。"
       },
       "proofSource": {
         "kind": "owned-definition-and-attachment-readback",
-        "description": "debug.hook.disable 的 proof 来自 host owner：定义 revision/state 的 fresh 读回、本 CLI Adapter 在该 exact target 上的 patch 计数，以及快照 publication 结果。"
+        "description": "debug.hook-disable 的 proof 来自 host owner：定义 revision/state 的 fresh 读回、本 CLI Adapter 在该 exact target 上的 patch 计数，以及快照 publication 结果。"
       },
       "reloadPolicy": {
         "kind": "definition-owned-not-request-owned",
@@ -2351,7 +2351,7 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "reobserve-or-fail-closed",
-        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.hook.list 或 debug.hook.info 的业务状态，再决定是否提交新的调用。"
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.hook-list 或 debug.hook-info 的业务状态，再决定是否提交新的调用。"
       },
       "asyncSignals": [
         "value-task",
@@ -2359,18 +2359,18 @@
       ]
     },
     {
-      "toolName": "debug.hook.enable",
+      "toolName": "debug.hook-enable",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/hook/enable.cs",
+      "source": "unitypkg/Editor/Tools/debug/hook-enable.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "owned-definition-terminal-readback",
-        "description": "debug.hook.enable 的终态由 host 自己拥有的定义快照与本 CLI Adapter/gate 的 fresh readback 证明；返回体必须与持久化后的同 session 定义一致。"
+        "description": "debug.hook-enable 的终态由 host 自己拥有的定义快照与本 CLI Adapter/gate 的 fresh readback 证明；返回体必须与持久化后的同 session 定义一致。"
       },
       "proofSource": {
         "kind": "owned-definition-and-attachment-readback",
-        "description": "debug.hook.enable 的 proof 来自 host owner：定义 revision/state 的 fresh 读回、本 CLI Adapter 在该 exact target 上的 patch 计数，以及快照 publication 结果。"
+        "description": "debug.hook-enable 的 proof 来自 host owner：定义 revision/state 的 fresh 读回、本 CLI Adapter 在该 exact target 上的 patch 计数，以及快照 publication 结果。"
       },
       "reloadPolicy": {
         "kind": "definition-owned-not-request-owned",
@@ -2379,7 +2379,7 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "reobserve-or-fail-closed",
-        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.hook.list 或 debug.hook.info 的业务状态，再决定是否提交新的调用。"
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.hook-list 或 debug.hook-info 的业务状态，再决定是否提交新的调用。"
       },
       "asyncSignals": [
         "value-task",
@@ -2388,18 +2388,18 @@
       ]
     },
     {
-      "toolName": "debug.hook.info",
+      "toolName": "debug.hook-info",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/hook/info.cs",
+      "source": "unitypkg/Editor/Tools/debug/hook-info.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "debug.hook.info 的完整 typed business result 通过 output schema；只读读取不触发恢复、编译、重挂或清理。"
+        "description": "debug.hook-info 的完整 typed business result 通过 output schema；只读读取不触发恢复、编译、重挂或清理。"
       },
       "proofSource": {
         "kind": "typed-result-readback",
-        "description": "debug.hook.info 的 proof 来自一次性 typed result 与其内部一致的 host 快照读回；该路径不写任何持久状态。"
+        "description": "debug.hook-info 的 proof 来自一次性 typed result 与其内部一致的 host 快照读回；该路径不写任何持久状态。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2415,18 +2415,18 @@
       ]
     },
     {
-      "toolName": "debug.hook.install",
+      "toolName": "debug.hook-install",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/hook/install.cs",
+      "source": "unitypkg/Editor/Tools/debug/hook-install.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "owned-definition-terminal-readback",
-        "description": "debug.hook.install 的终态由 host 自己拥有的定义快照与本 CLI Adapter/gate 的 fresh readback 证明；返回体必须与持久化后的同 session 定义一致。"
+        "description": "debug.hook-install 的终态由 host 自己拥有的定义快照与本 CLI Adapter/gate 的 fresh readback 证明；返回体必须与持久化后的同 session 定义一致。"
       },
       "proofSource": {
         "kind": "owned-definition-and-attachment-readback",
-        "description": "debug.hook.install 的 proof 来自 host owner：定义 revision/state 的 fresh 读回、本 CLI Adapter 在该 exact target 上的 patch 计数，以及快照 publication 结果。"
+        "description": "debug.hook-install 的 proof 来自 host owner：定义 revision/state 的 fresh 读回、本 CLI Adapter 在该 exact target 上的 patch 计数，以及快照 publication 结果。"
       },
       "reloadPolicy": {
         "kind": "definition-owned-not-request-owned",
@@ -2435,7 +2435,7 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "reobserve-or-fail-closed",
-        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.hook.list 或 debug.hook.info 的业务状态，再决定是否提交新的调用。"
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.hook-list 或 debug.hook-info 的业务状态，再决定是否提交新的调用。"
       },
       "asyncSignals": [
         "value-task",
@@ -2444,18 +2444,18 @@
       ]
     },
     {
-      "toolName": "debug.hook.list",
+      "toolName": "debug.hook-list",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/hook/list.cs",
+      "source": "unitypkg/Editor/Tools/debug/hook-list.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "debug.hook.list 的完整 typed business result 通过 output schema；只读读取不触发恢复、编译、重挂或清理。"
+        "description": "debug.hook-list 的完整 typed business result 通过 output schema；只读读取不触发恢复、编译、重挂或清理。"
       },
       "proofSource": {
         "kind": "typed-result-readback",
-        "description": "debug.hook.list 的 proof 来自一次性 typed result 与其内部一致的 host 快照读回；该路径不写任何持久状态。"
+        "description": "debug.hook-list 的 proof 来自一次性 typed result 与其内部一致的 host 快照读回；该路径不写任何持久状态。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2471,18 +2471,18 @@
       ]
     },
     {
-      "toolName": "debug.hook.remove",
+      "toolName": "debug.hook-remove",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/hook/remove.cs",
+      "source": "unitypkg/Editor/Tools/debug/hook-remove.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "owned-definition-terminal-readback",
-        "description": "debug.hook.remove 的终态由 host 自己拥有的定义快照与本 CLI Adapter/gate 的 fresh readback 证明；返回体必须与持久化后的同 session 定义一致。"
+        "description": "debug.hook-remove 的终态由 host 自己拥有的定义快照与本 CLI Adapter/gate 的 fresh readback 证明；返回体必须与持久化后的同 session 定义一致。"
       },
       "proofSource": {
         "kind": "owned-definition-and-attachment-readback",
-        "description": "debug.hook.remove 的 proof 来自 host owner：定义 revision/state 的 fresh 读回、本 CLI Adapter 在该 exact target 上的 patch 计数，以及快照 publication 结果。"
+        "description": "debug.hook-remove 的 proof 来自 host owner：定义 revision/state 的 fresh 读回、本 CLI Adapter 在该 exact target 上的 patch 计数，以及快照 publication 结果。"
       },
       "reloadPolicy": {
         "kind": "definition-owned-not-request-owned",
@@ -2491,7 +2491,7 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "reobserve-or-fail-closed",
-        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.hook.list 或 debug.hook.info 的业务状态，再决定是否提交新的调用。"
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.hook-list 或 debug.hook-info 的业务状态，再决定是否提交新的调用。"
       },
       "asyncSignals": [
         "value-task",
@@ -2499,18 +2499,18 @@
       ]
     },
     {
-      "toolName": "debug.hook.replace",
+      "toolName": "debug.hook-replace",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/hook/replace.cs",
+      "source": "unitypkg/Editor/Tools/debug/hook-replace.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "owned-definition-terminal-readback",
-        "description": "debug.hook.replace 的终态由 host 自己拥有的定义快照与本 CLI Adapter/gate 的 fresh readback 证明；返回体必须与持久化后的同 session 定义一致。"
+        "description": "debug.hook-replace 的终态由 host 自己拥有的定义快照与本 CLI Adapter/gate 的 fresh readback 证明；返回体必须与持久化后的同 session 定义一致。"
       },
       "proofSource": {
         "kind": "owned-definition-and-attachment-readback",
-        "description": "debug.hook.replace 的 proof 来自 host owner：定义 revision/state 的 fresh 读回、本 CLI Adapter 在该 exact target 上的 patch 计数，以及快照 publication 结果。"
+        "description": "debug.hook-replace 的 proof 来自 host owner：定义 revision/state 的 fresh 读回、本 CLI Adapter 在该 exact target 上的 patch 计数，以及快照 publication 结果。"
       },
       "reloadPolicy": {
         "kind": "definition-owned-not-request-owned",
@@ -2519,7 +2519,7 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "reobserve-or-fail-closed",
-        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.hook.list 或 debug.hook.info 的业务状态，再决定是否提交新的调用。"
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.hook-list 或 debug.hook-info 的业务状态，再决定是否提交新的调用。"
       },
       "asyncSignals": [
         "value-task",
@@ -2528,18 +2528,18 @@
       ]
     },
     {
-      "toolName": "debug.method.find",
+      "toolName": "debug.method-find",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/method/find.cs",
+      "source": "unitypkg/Editor/Tools/debug/method-find.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "debug.method.find 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "debug.method-find 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "debug.method.find 的 typed result、output schema validation 与工具拥有的 effect readback；每条方法的 declaringType 与 assemblyName 同源解析，读取结果自身即可直接作为 debug.hook.install 的精确目标，无需另行反射或猜测程序集。"
+        "description": "debug.method-find 的 typed result、output schema validation 与工具拥有的 effect readback；每条方法的 declaringType 与 assemblyName 同源解析，读取结果自身即可直接作为 debug.hook-install 的精确目标，无需另行反射或猜测程序集。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2555,9 +2555,9 @@
       ]
     },
     {
-      "toolName": "debug.method.invoke",
+      "toolName": "debug.method-invoke",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/method/invoke.cs",
+      "source": "unitypkg/Editor/Tools/debug/method-invoke.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
@@ -2582,18 +2582,18 @@
       ]
     },
     {
-      "toolName": "debug.pause.evaluate",
+      "toolName": "debug.pause-evaluate",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/pause/evaluate.cs",
+      "source": "unitypkg/Editor/Tools/debug/pause-evaluate.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "on-site-execution-and-effect-fact-readback",
-        "description": "debug.pause.evaluate 的终态由暂停线程上的真实执行事实证明：返回值和它实际做出的干预（argument-write、skip-original、result-write、field-writes、emitted）都来自同一现场调用；同步用户代码未返回时只报告 executionState=pending 与 completed=false，并说明现场仍被持有且未被强行恢复。"
+        "description": "debug.pause-evaluate 的终态由暂停线程上的真实执行事实证明：返回值和它实际做出的干预（argument-write、skip-original、result-write、field-writes、emitted）都来自同一现场调用；同步用户代码未返回时只报告 executionState=pending 与 completed=false，并说明现场仍被持有且未被强行恢复。"
       },
       "proofSource": {
         "kind": "on-site-stage-and-invocation-state-readback",
-        "description": "debug.pause.evaluate 的 proof 来自唯一编译 owner 的共享预算读回（同一引用快照、同一加载产物记账）与暂停调用自身的暂存状态对比；失败路径（compiler busy、compile failed、entry unbound、artifact budget）都在现场保持 paused 的前提下返回稳定错误，不假装已执行。"
+        "description": "debug.pause-evaluate 的 proof 来自唯一编译 owner 的共享预算读回（同一引用快照、同一加载产物记账）与暂停调用自身的暂存状态对比；失败路径（compiler busy、compile failed、entry unbound、artifact budget）都在现场保持 paused 的前提下返回稳定错误，不假装已执行。"
       },
       "reloadPolicy": {
         "kind": "runtime-record-not-request-owned",
@@ -2602,25 +2602,25 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "reobserve-or-fail-closed",
-        "description": "同步用户代码未在等待窗口内返回时返回 ok:true 且 executionState=pending；调用方先用 debug.pause.list 确认现场仍 paused、再用 debug.pause.inspect 读取现场状态，绝不假定线程已被恢复。"
+        "description": "同步用户代码未在等待窗口内返回时返回 ok:true 且 executionState=pending；调用方先用 debug.pause-list 确认现场仍 paused、再用 debug.pause-inspect 读取现场状态，绝不假定线程已被恢复。"
       },
       "asyncSignals": [
         "value-task"
       ]
     },
     {
-      "toolName": "debug.pause.inspect",
+      "toolName": "debug.pause-inspect",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/pause/inspect.cs",
+      "source": "unitypkg/Editor/Tools/debug/pause-inspect.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "debug.pause.inspect 的完整 typed business result 通过 output schema，并显式声明 servedOnPausedThread 与 servedOnThreadId：读取由暂停线程自己执行，调用方只等待答案。"
+        "description": "debug.pause-inspect 的完整 typed business result 通过 output schema，并显式声明 servedOnPausedThread 与 servedOnThreadId：读取由暂停线程自己执行，调用方只等待答案。"
       },
       "proofSource": {
         "kind": "typed-result-readback",
-        "description": "debug.pause.inspect 的 proof 来自现场 mailbox 的一次有界操作：暂停线程返回真实栈、本次调用参数、实例与请求字段的同一批有界投影，不可读项按项给出 unavailableReason；拒绝路径（mailbox 上限、过期 pauseId）都在任何读写之前完成。"
+        "description": "debug.pause-inspect 的 proof 来自现场 mailbox 的一次有界操作：暂停线程返回真实栈、本次调用参数、实例与请求字段的同一批有界投影，不可读项按项给出 unavailableReason；拒绝路径（mailbox 上限、过期 pauseId）都在任何读写之前完成。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2629,25 +2629,25 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "caller-responsibility",
-        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.pause.list 的业务状态，再决定是否提交新的调用。"
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.pause-list 的业务状态，再决定是否提交新的调用。"
       },
       "asyncSignals": [
         "value-task"
       ]
     },
     {
-      "toolName": "debug.pause.list",
+      "toolName": "debug.pause-list",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/pause/list.cs",
+      "source": "unitypkg/Editor/Tools/debug/pause-list.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "debug.pause.list 的完整 typed business result 通过 output schema：现场身份、时间边界、mailbox 占用、覆盖缺口与上限读数都来自同一 domain 快照；读取不服务现场、不解除现场、不写存储。"
+        "description": "debug.pause-list 的完整 typed business result 通过 output schema：现场身份、时间边界、mailbox 占用、覆盖缺口与上限读数都来自同一 domain 快照；读取不服务现场、不解除现场、不写存储。"
       },
       "proofSource": {
         "kind": "typed-result-readback",
-        "description": "debug.pause.list 的 proof 来自唯一 pause owner 的活动现场注册表与它自己的有界覆盖计数（skippedSites、suppressedNestedHits、skipReasons、suppressOrigins）；已结束现场只保留有界条数供过期 pauseId 报出实际终态。"
+        "description": "debug.pause-list 的 proof 来自唯一 pause owner 的活动现场注册表与它自己的有界覆盖计数（skippedSites、suppressedNestedHits、skipReasons、suppressOrigins）；已结束现场只保留有界条数供过期 pauseId 报出实际终态。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2656,25 +2656,25 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "caller-responsibility",
-        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.pause.list 的业务状态，再决定是否提交新的调用。"
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.pause-list 的业务状态，再决定是否提交新的调用。"
       },
       "asyncSignals": [
         "value-task"
       ]
     },
     {
-      "toolName": "debug.pause.resume",
+      "toolName": "debug.pause-resume",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/pause/resume.cs",
+      "source": "unitypkg/Editor/Tools/debug/pause-resume.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "owned-site-release-readback",
-        "description": "debug.pause.resume 的终态由唯一 pause owner 的现场状态证明：只解除指定的一个现场，返回终态、release reason 与剩余现场数；排放到终态的确认是有界等待，到期时如实保留 released=false 并说明现场仍被持有，同时固定声明 replayedPriorOperations=false 与 preemption=false。"
+        "description": "debug.pause-resume 的终态由唯一 pause owner 的现场状态证明：只解除指定的一个现场，返回终态、release reason 与剩余现场数；排放到终态的确认是有界等待，到期时如实保留 released=false 并说明现场仍被持有，同时固定声明 replayedPriorOperations=false 与 preemption=false。"
       },
       "proofSource": {
         "kind": "owned-site-state-readback",
-        "description": "debug.pause.resume 的 proof 来自现场状态机自身的 published 状态转换（paused -> resuming -> resumed/timed-out）与 pause 来源的终结事件；resume 信号是独立标记，不排在现场等待请求之后，排队的请求全部按 E_DEBUG_PAUSE_STALE 得到答复。"
+        "description": "debug.pause-resume 的 proof 来自现场状态机自身的 published 状态转换（paused -> resuming -> resumed/timed-out）与 pause 来源的终结事件；resume 信号是独立标记，不排在现场等待请求之后，排队的请求全部按 E_DEBUG_PAUSE_STALE 得到答复。"
       },
       "reloadPolicy": {
         "kind": "runtime-record-not-request-owned",
@@ -2683,25 +2683,25 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "reobserve-or-fail-closed",
-        "description": "确认等待到期时返回 ok:true 且 released=false，调用方先用 debug.pause.list 重新观察该现场是否已离开 paused；不得把等待到期当成已恢复。"
+        "description": "确认等待到期时返回 ok:true 且 released=false，调用方先用 debug.pause-list 重新观察该现场是否已离开 paused；不得把等待到期当成已恢复。"
       },
       "asyncSignals": [
         "value-task"
       ]
     },
     {
-      "toolName": "debug.pause.wait",
+      "toolName": "debug.pause-wait",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/pause/wait.cs",
+      "source": "unitypkg/Editor/Tools/debug/pause-wait.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "debug.pause.wait 的完整 typed business result 通过 output schema，并显式声明 resumedByWait=false：等待结束只返回是否观察到匹配现场，绝不解除现场暂停。"
+        "description": "debug.pause-wait 的完整 typed business result 通过 output schema，并显式声明 resumedByWait=false：等待结束只返回是否观察到匹配现场，绝不解除现场暂停。"
       },
       "proofSource": {
         "kind": "typed-result-readback",
-        "description": "debug.pause.wait 的 proof 来自同一 pause owner 的现场注册表只读投影；精确 pauseId 属于已结束或从未发布的现场时返回 E_DEBUG_PAUSE_STALE，不把过期身份报告成尚未出现。"
+        "description": "debug.pause-wait 的 proof 来自同一 pause owner 的现场注册表只读投影；精确 pauseId 属于已结束或从未发布的现场时返回 E_DEBUG_PAUSE_STALE，不把过期身份报告成尚未出现。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2710,25 +2710,25 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "caller-responsibility",
-        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.pause.list 的业务状态，再决定是否提交新的调用。"
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.pause-list 的业务状态，再决定是否提交新的调用。"
       },
       "asyncSignals": [
         "value-task"
       ]
     },
     {
-      "toolName": "debug.program.info",
+      "toolName": "debug.program-info",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/program/info.cs",
+      "source": "unitypkg/Editor/Tools/debug/program-info.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "debug.program.info 的完整 typed business result 通过 output schema；只读读取不编译、不激活、不运行清理。"
+        "description": "debug.program-info 的完整 typed business result 通过 output schema；只读读取不编译、不激活、不运行清理。"
       },
       "proofSource": {
         "kind": "typed-result-readback",
-        "description": "debug.program.info 的 proof 来自一次性 typed result 与其内部一致的 program 定义表读回；该路径不写任何持久状态。"
+        "description": "debug.program-info 的 proof 来自一次性 typed result 与其内部一致的 program 定义表读回；该路径不写任何持久状态。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2744,18 +2744,18 @@
       ]
     },
     {
-      "toolName": "debug.program.install",
+      "toolName": "debug.program-install",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/program/install.cs",
+      "source": "unitypkg/Editor/Tools/debug/program-install.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "owned-definition-terminal-readback",
-        "description": "debug.program.install 的终态由 host 自己拥有的 program 定义表证明：返回的 programId、revision、sourceSha256 与 dormant 状态必须与该定义表的读回一致。"
+        "description": "debug.program-install 的终态由 host 自己拥有的 program 定义表证明：返回的 programId、revision、sourceSha256 与 dormant 状态必须与该定义表的读回一致。"
       },
       "proofSource": {
         "kind": "owned-definition-readback",
-        "description": "debug.program.install 的 proof 来自 host owner：定义表内该 programId 的 revision/state/entry/binding 读回与共享编译预算记账结果。"
+        "description": "debug.program-install 的 proof 来自 host owner：定义表内该 programId 的 revision/state/entry/binding 读回与共享编译预算记账结果。"
       },
       "reloadPolicy": {
         "kind": "definition-owned-not-request-owned",
@@ -2764,7 +2764,7 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "reobserve-or-fail-closed",
-        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.program.list 或 debug.program.info 的业务状态，再决定是否提交新的调用。"
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.program-list 或 debug.program-info 的业务状态，再决定是否提交新的调用。"
       },
       "asyncSignals": [
         "value-task",
@@ -2772,18 +2772,18 @@
       ]
     },
     {
-      "toolName": "debug.program.list",
+      "toolName": "debug.program-list",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/program/list.cs",
+      "source": "unitypkg/Editor/Tools/debug/program-list.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "debug.program.list 的完整 typed business result 通过 output schema；只读分页不编译、不激活、不运行清理。"
+        "description": "debug.program-list 的完整 typed business result 通过 output schema；只读分页不编译、不激活、不运行清理。"
       },
       "proofSource": {
         "kind": "typed-result-readback",
-        "description": "debug.program.list 的 proof 来自一次性 typed result 与其内部一致的 program 定义表读回；该路径不写任何持久状态。"
+        "description": "debug.program-list 的 proof 来自一次性 typed result 与其内部一致的 program 定义表读回；该路径不写任何持久状态。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2799,18 +2799,18 @@
       ]
     },
     {
-      "toolName": "debug.program.remove",
+      "toolName": "debug.program-remove",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/program/remove.cs",
+      "source": "unitypkg/Editor/Tools/debug/program-remove.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "owned-definition-terminal-readback",
-        "description": "debug.program.remove 的终态由 host 自己拥有的 program 定义表证明：programId 不再存在，detach 计数与仍然加载且无法卸载的程序集事实被如实报告。"
+        "description": "debug.program-remove 的终态由 host 自己拥有的 program 定义表证明：programId 不再存在，detach 计数与仍然加载且无法卸载的程序集事实被如实报告。"
       },
       "proofSource": {
         "kind": "owned-definition-and-budget-readback",
-        "description": "debug.program.remove 的 proof 来自 host owner：定义缺席读回、binding 撤除计数与共享编译预算的不可卸载字节读回。"
+        "description": "debug.program-remove 的 proof 来自 host owner：定义缺席读回、binding 撤除计数与共享编译预算的不可卸载字节读回。"
       },
       "reloadPolicy": {
         "kind": "definition-owned-not-request-owned",
@@ -2819,25 +2819,25 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "reobserve-or-fail-closed",
-        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.program.list 确认该定义是否仍然存在，再决定是否重复 remove。"
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.program-list 确认该定义是否仍然存在，再决定是否重复 remove。"
       },
       "asyncSignals": [
         "value-task"
       ]
     },
     {
-      "toolName": "debug.program.replace",
+      "toolName": "debug.program-replace",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/program/replace.cs",
+      "source": "unitypkg/Editor/Tools/debug/program-replace.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "owned-definition-terminal-readback",
-        "description": "debug.program.replace 的终态由 host 自己拥有的 program 定义表证明：返回的 oldRevision/newRevision 与该定义的 CAS 发布结果一致，失败时旧 revision 保持不变。"
+        "description": "debug.program-replace 的终态由 host 自己拥有的 program 定义表证明：返回的 oldRevision/newRevision 与该定义的 CAS 发布结果一致，失败时旧 revision 保持不变。"
       },
       "proofSource": {
         "kind": "owned-definition-readback",
-        "description": "debug.program.replace 的 proof 来自 host owner：定义表内 revision 与 state epoch 的读回、旧配置未被改动的失败路径事实与共享编译预算记账结果。"
+        "description": "debug.program-replace 的 proof 来自 host owner：定义表内 revision 与 state epoch 的读回、旧配置未被改动的失败路径事实与共享编译预算记账结果。"
       },
       "reloadPolicy": {
         "kind": "definition-owned-not-request-owned",
@@ -2846,7 +2846,7 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "reobserve-or-fail-closed",
-        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.program.info 的 revision 与 state epoch，再决定是否提交新的替换。"
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.program-info 的 revision 与 state epoch，再决定是否提交新的替换。"
       },
       "asyncSignals": [
         "value-task",
@@ -2854,18 +2854,18 @@
       ]
     },
     {
-      "toolName": "debug.program.run",
+      "toolName": "debug.program-run",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/program/run.cs",
+      "source": "unitypkg/Editor/Tools/debug/program-run.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "owned-run-terminal-readback",
-        "description": "debug.program.run 的终态由 host 自己拥有的 programRun 事实证明：返回的 programRunId、revision、executionSite、target 与 deadline 必须与该运行记录的读回一致。合法的 dispatch 执行点运行在返回时仍在等待它的执行点，因此以 terminal:false 返回当前证据：这是有界观察的诚实终态，不声称业务目标已完成；terminal=true 时仍不得携带中间态。"
+        "description": "debug.program-run 的终态由 host 自己拥有的 programRun 事实证明：返回的 programRunId、revision、executionSite、target 与 deadline 必须与该运行记录的读回一致。合法的 dispatch 执行点运行在返回时仍在等待它的执行点，因此以 terminal:false 返回当前证据：这是有界观察的诚实终态，不声称业务目标已完成；terminal=true 时仍不得携带中间态。"
       },
       "proofSource": {
         "kind": "owned-run-and-scheduler-readback",
-        "description": "debug.program.run 的 proof 来自 host owner：运行记录状态、driver 挂载事实、binding 挂载计数与活动资源占用读回。"
+        "description": "debug.program-run 的 proof 来自 host owner：运行记录状态、driver 挂载事实、binding 挂载计数与活动资源占用读回。"
       },
       "reloadPolicy": {
         "kind": "definition-owned-not-request-owned",
@@ -2874,25 +2874,25 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "reobserve-or-fail-closed",
-        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.program.info 或 debug.program.wait 的运行状态，再决定是否提交新的运行。"
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.program-info 或 debug.program-wait 的运行状态，再决定是否提交新的运行。"
       },
       "asyncSignals": [
         "value-task"
       ]
     },
     {
-      "toolName": "debug.program.stop",
+      "toolName": "debug.program-stop",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/program/stop.cs",
+      "source": "unitypkg/Editor/Tools/debug/program-stop.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "owned-run-terminal-readback",
-        "description": "debug.program.stop 的终态由 host 自己拥有的运行记录证明：pending 运行被关闭为 cancelled；已在途的同步代码必须报告 InFlight 并以 terminal=false 返回当前证据，不得被声明为已终止。"
+        "description": "debug.program-stop 的终态由 host 自己拥有的运行记录证明：pending 运行被关闭为 cancelled；已在途的同步代码必须报告 InFlight 并以 terminal=false 返回当前证据，不得被声明为已终止。"
       },
       "proofSource": {
         "kind": "owned-run-and-resource-readback",
-        "description": "debug.program.stop 的 proof 来自 host owner：运行状态、未执行步骤关闭事实、cleanup entry 执行结果、detach 计数与该 program 的活动资源释放读回。"
+        "description": "debug.program-stop 的 proof 来自 host owner：运行状态、未执行步骤关闭事实、cleanup entry 执行结果、detach 计数与该 program 的活动资源释放读回。"
       },
       "reloadPolicy": {
         "kind": "definition-owned-not-request-owned",
@@ -2901,25 +2901,25 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "reobserve-or-fail-closed",
-        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.program.info 的运行状态，再决定是否重复 stop。"
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.program-info 的运行状态，再决定是否重复 stop。"
       },
       "asyncSignals": [
         "value-task"
       ]
     },
     {
-      "toolName": "debug.program.wait",
+      "toolName": "debug.program-wait",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/program/wait.cs",
+      "source": "unitypkg/Editor/Tools/debug/program-wait.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "owned-run-terminal-readback",
-        "description": "debug.program.wait 的终态是它自己返回的运行事实：terminal 标志、state 与最后可信业务结果都来自同一份运行记录读回，等待预算到期不算完成。有限等待窗口到期时允许以 terminal:false 返回当前证据：这是有界观察的诚实终态，与 host 请求执行超时严格区分；terminal=true 时仍不得携带中间态。"
+        "description": "debug.program-wait 的终态是它自己返回的运行事实：terminal 标志、state 与最后可信业务结果都来自同一份运行记录读回，等待预算到期不算完成。有限等待窗口到期时允许以 terminal:false 返回当前证据：这是有界观察的诚实终态，与 host 请求执行超时严格区分；terminal=true 时仍不得携带中间态。"
       },
       "proofSource": {
         "kind": "owned-run-readback",
-        "description": "debug.program.wait 的 proof 来自 host owner：运行记录状态、在途标志与已返回结果标签读回；terminal=false 时只声明这是一次有界非终态观察，不声称业务完成；该路径不重新执行、不创建运行、不写持久状态。"
+        "description": "debug.program-wait 的 proof 来自 host owner：运行记录状态、在途标志与已返回结果标签读回；terminal=false 时只声明这是一次有界非终态观察，不声称业务完成；该路径不重新执行、不创建运行、不写持久状态。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2936,14 +2936,14 @@
       ]
     },
     {
-      "toolName": "debug.run.begin",
+      "toolName": "debug.run-begin",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/run/begin.cs",
+      "source": "unitypkg/Editor/Tools/debug/run-begin.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "owned-window-publication",
-        "description": "debug.run.begin 的完成含义是该窗口定义真的发布了：返回的 runId、startSequence、配置指纹与声明回读都来自同一份已登记的窗口记录，且 effect barrier 之前已经拒绝所有非法声明。它不声称任何检查已经成立，也不声称准备或输入已经执行：preparation 与 inputs 只被记录并计算定义 hash。"
+        "description": "debug.run-begin 的完成含义是该窗口定义真的发布了：返回的 runId、startSequence、配置指纹与声明回读都来自同一份已登记的窗口记录，且 effect barrier 之前已经拒绝所有非法声明。它不声称任何检查已经成立，也不声称准备或输入已经执行：preparation 与 inputs 只被记录并计算定义 hash。"
       },
       "proofSource": {
         "kind": "owned-window-readback",
@@ -2956,19 +2956,19 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "reobserve-or-fail-closed",
-        "description": "runId 未知或属于旧 generation 时返回 E_DEBUG_RUN_NOT_FOUND 并附带 domainGeneration 与已知窗口，调用方用 debug.run.list 重新观察后再决定是否建立新窗口。"
+        "description": "runId 未知或属于旧 generation 时返回 E_DEBUG_RUN_NOT_FOUND 并附带 domainGeneration 与已知窗口，调用方用 debug.run-list 重新观察后再决定是否建立新窗口。"
       },
       "asyncSignals": []
     },
     {
-      "toolName": "debug.run.compare",
+      "toolName": "debug.run-compare",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/run/compare.cs",
+      "source": "unitypkg/Editor/Tools/debug/run-compare.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "owned-window-evidence-comparison",
-        "description": "debug.run.compare 的结论是它对两个窗口证据做出的三态判定：equal、diverged 或 indeterminate，以及首个可证明差异、两侧有限上下文、条件差异与各侧覆盖事实；这些事实全部来自两个窗口区间内真实保留的事件与两个窗口自己的声明与终态，不生成、不缓存也不改写任何窗口判定。"
+        "description": "debug.run-compare 的结论是它对两个窗口证据做出的三态判定：equal、diverged 或 indeterminate，以及首个可证明差异、两侧有限上下文、条件差异与各侧覆盖事实；这些事实全部来自两个窗口区间内真实保留的事件与两个窗口自己的声明与终态，不生成、不缓存也不改写任何窗口判定。"
       },
       "proofSource": {
         "kind": "owned-window-readback-and-aligned-evidence",
@@ -2986,14 +2986,14 @@
       "asyncSignals": []
     },
     {
-      "toolName": "debug.run.end",
+      "toolName": "debug.run-end",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/run/end.cs",
+      "source": "unitypkg/Editor/Tools/debug/run-end.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "owned-run-terminal-readback",
-        "description": "debug.run.end 的终态是它自己那份证据窗口：state、terminal、verdict、首个反例、缺口与 queue 水位都来自同一份窗口记录与同一个捕获边界。断言失败不返回错误码：报告以 ok:true 与 verdict:failed 表达业务结论，证据不足以 ok:true 与 verdict:indeterminate 表达，且已封闭窗口保持冻结，重复调用只重读同一结论。"
+        "description": "debug.run-end 的终态是它自己那份证据窗口：state、terminal、verdict、首个反例、缺口与 queue 水位都来自同一份窗口记录与同一个捕获边界。断言失败不返回错误码：报告以 ok:true 与 verdict:failed 表达业务结论，证据不足以 ok:true 与 verdict:indeterminate 表达，且已封闭窗口保持冻结，重复调用只重读同一结论。"
       },
       "proofSource": {
         "kind": "owned-window-and-capture-readback",
@@ -3006,19 +3006,19 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "reobserve-or-fail-closed",
-        "description": "无法取得可信状态时返回 E_DEBUG_RUN_NOT_FOUND 或遵循 E_EXECUTION_TIMEOUT；调用方用 debug.run.info 在有界等待内重新读取同一 runId，再决定后续操作。"
+        "description": "无法取得可信状态时返回 E_DEBUG_RUN_NOT_FOUND 或遵循 E_EXECUTION_TIMEOUT；调用方用 debug.run-info 在有界等待内重新读取同一 runId，再决定后续操作。"
       },
       "asyncSignals": []
     },
     {
-      "toolName": "debug.run.info",
+      "toolName": "debug.run-info",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/run/info.cs",
+      "source": "unitypkg/Editor/Tools/debug/run-info.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "owned-run-terminal-readback",
-        "description": "debug.run.info 的完成含义是它读回了同一份窗口记录：state、terminal、verdict、首个反例、缺口、条件与清理状态都来自 run owner 的窗口记录与统一事件存储的真实事件，不生成、不缓存也不改写判定。"
+        "description": "debug.run-info 的完成含义是它读回了同一份窗口记录：state、terminal、verdict、首个反例、缺口、条件与清理状态都来自 run owner 的窗口记录与统一事件存储的真实事件，不生成、不缓存也不改写判定。"
       },
       "proofSource": {
         "kind": "owned-window-readback",
@@ -3031,19 +3031,19 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "reobserve-or-fail-closed",
-        "description": "runId 未知或属于旧 generation 时返回 E_DEBUG_RUN_NOT_FOUND；调用方用 debug.run.list 读取当前 generation 的窗口后再决定。"
+        "description": "runId 未知或属于旧 generation 时返回 E_DEBUG_RUN_NOT_FOUND；调用方用 debug.run-list 读取当前 generation 的窗口后再决定。"
       },
       "asyncSignals": []
     },
     {
-      "toolName": "debug.run.list",
+      "toolName": "debug.run-list",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/run/list.cs",
+      "source": "unitypkg/Editor/Tools/debug/run-list.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "owned-window-page-readback",
-        "description": "debug.run.list 的完成含义是它读回了一页窗口摘要：每一项的 runId、state、terminal、verdict 与 detailAvailable 都来自同一份窗口记录，页与 cursor 绑定当前 Editor session 与 sessionId 筛选。"
+        "description": "debug.run-list 的完成含义是它读回了一页窗口摘要：每一项的 runId、state、terminal、verdict 与 detailAvailable 都来自同一份窗口记录，页与 cursor 绑定当前 Editor session 与 sessionId 筛选。"
       },
       "proofSource": {
         "kind": "owned-window-readback",
@@ -3061,14 +3061,14 @@
       "asyncSignals": []
     },
     {
-      "toolName": "debug.run.wait",
+      "toolName": "debug.run-wait",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/run/wait.cs",
+      "source": "unitypkg/Editor/Tools/debug/run-wait.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "owned-run-terminal-readback",
-        "description": "debug.run.wait 的终态是它返回的窗口事实：terminal 与 verdict 都来自同一份窗口记录读回，有限等待窗口到期可以合法返回 terminal:false 与当前证据：这是有界非终态观察的诚实答案，与 host 请求执行超时严格区分，terminal:true 时不得携带中间态。"
+        "description": "debug.run-wait 的终态是它返回的窗口事实：terminal 与 verdict 都来自同一份窗口记录读回，有限等待窗口到期可以合法返回 terminal:false 与当前证据：这是有界非终态观察的诚实答案，与 host 请求执行超时严格区分，terminal:true 时不得携带中间态。"
       },
       "proofSource": {
         "kind": "owned-window-readback",
@@ -3090,14 +3090,14 @@
       ]
     },
     {
-      "toolName": "debug.session.export",
+      "toolName": "debug.session-export",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/session/export.cs",
+      "source": "unitypkg/Editor/Tools/debug/session-export.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "debug.session.export 的完整 typed business result 通过 output schema：分页的 fragment、offset 与 complete 一起表达该页事实，不写任何持久状态，也不产生 artifact。"
+        "description": "debug.session-export 的完整 typed business result 通过 output schema：分页的 fragment、offset 与 complete 一起表达该页事实，不写任何持久状态，也不产生 artifact。"
       },
       "proofSource": {
         "kind": "typed-result-readback",
@@ -3117,14 +3117,14 @@
       ]
     },
     {
-      "toolName": "debug.session.import",
+      "toolName": "debug.session-import",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/session/import.cs",
+      "source": "unitypkg/Editor/Tools/debug/session-import.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "owned-definition-terminal-readback",
-        "description": "debug.session.import 的终态是它返回的新 identity 事实：新 sessionId 与已登记的 program、dormant hook 定义数量；成功只证明定义存在、源码已编译，不证明任何业务行为发生。"
+        "description": "debug.session-import 的终态是它返回的新 identity 事实：新 sessionId 与已登记的 program、dormant hook 定义数量；成功只证明定义存在、源码已编译，不证明任何业务行为发生。"
       },
       "proofSource": {
         "kind": "owned-definition-and-store-readback",
@@ -3137,7 +3137,7 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "reobserve-or-fail-closed",
-        "description": "校验或编译失败时返回 E_DEBUG_RECIPE_INVALID，并回滚本次建立的定义、报告已加载不可回收的候选程序集；调用方先读 debug.session.list 再决定是否重新提交。"
+        "description": "校验或编译失败时返回 E_DEBUG_RECIPE_INVALID，并回滚本次建立的定义、报告已加载不可回收的候选程序集；调用方先读 debug.session-list 再决定是否重新提交。"
       },
       "asyncSignals": [
         "value-task",
@@ -3145,18 +3145,18 @@
       ]
     },
     {
-      "toolName": "debug.session.create",
+      "toolName": "debug.session-create",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/session/create.cs",
+      "source": "unitypkg/Editor/Tools/debug/session-create.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "owned-definition-terminal-readback",
-        "description": "debug.session.create 的终态由 host 自己拥有的定义表与持久化后的同 session 文件读回证明；返回的 sessionId、state 与 publication 必须与发布后的文件内容一致。"
+        "description": "debug.session-create 的终态由 host 自己拥有的定义表与持久化后的同 session 文件读回证明；返回的 sessionId、state 与 publication 必须与发布后的文件内容一致。"
       },
       "proofSource": {
         "kind": "owned-definition-and-store-readback",
-        "description": "debug.session.create 的 proof 来自 host owner：定义表内该 sessionId 的 revision/state 读回、单写者 publication 结果与文件语义 CAS 是否通过。"
+        "description": "debug.session-create 的 proof 来自 host owner：定义表内该 sessionId 的 revision/state 读回、单写者 publication 结果与文件语义 CAS 是否通过。"
       },
       "reloadPolicy": {
         "kind": "definition-owned-not-request-owned",
@@ -3165,25 +3165,25 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "reobserve-or-fail-closed",
-        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.session.list 或 debug.session.info 的业务状态，再决定是否提交新的调用。"
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.session-list 或 debug.session-info 的业务状态，再决定是否提交新的调用。"
       },
       "asyncSignals": [
         "value-task"
       ]
     },
     {
-      "toolName": "debug.session.info",
+      "toolName": "debug.session-info",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/session/info.cs",
+      "source": "unitypkg/Editor/Tools/debug/session-info.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "debug.session.info 的完整 typed business result 通过 output schema；只读读取不运行清理、不写 session 文件。"
+        "description": "debug.session-info 的完整 typed business result 通过 output schema；只读读取不运行清理、不写 session 文件。"
       },
       "proofSource": {
         "kind": "typed-result-readback",
-        "description": "debug.session.info 的 proof 来自一次性 typed result 与其内部一致的定义表读回；该路径不写任何持久状态。"
+        "description": "debug.session-info 的 proof 来自一次性 typed result 与其内部一致的定义表读回；该路径不写任何持久状态。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3199,18 +3199,18 @@
       ]
     },
     {
-      "toolName": "debug.session.list",
+      "toolName": "debug.session-list",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/session/list.cs",
+      "source": "unitypkg/Editor/Tools/debug/session-list.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "debug.session.list 的完整 typed business result 通过 output schema；只读分页不运行清理、不写 session 文件。"
+        "description": "debug.session-list 的完整 typed business result 通过 output schema；只读分页不运行清理、不写 session 文件。"
       },
       "proofSource": {
         "kind": "typed-result-readback",
-        "description": "debug.session.list 的 proof 来自一次性 typed result 与其内部一致的定义表读回；该路径不写任何持久状态。"
+        "description": "debug.session-list 的 proof 来自一次性 typed result 与其内部一致的定义表读回；该路径不写任何持久状态。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3226,18 +3226,18 @@
       ]
     },
     {
-      "toolName": "debug.session.remove",
+      "toolName": "debug.session-remove",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/session/remove.cs",
+      "source": "unitypkg/Editor/Tools/debug/session-remove.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "owned-definition-terminal-readback",
-        "description": "debug.session.remove 的终态由 host 自己拥有的定义表证明；sessionId 不再存在且 sessionsUsed 已递减。"
+        "description": "debug.session-remove 的终态由 host 自己拥有的定义表证明；sessionId 不再存在且 sessionsUsed 已递减。"
       },
       "proofSource": {
         "kind": "owned-definition-and-store-readback",
-        "description": "debug.session.remove 的 proof 来自 host owner：定义表内该 sessionId 的缺席读回与单写者 publication 结果。"
+        "description": "debug.session-remove 的 proof 来自 host owner：定义表内该 sessionId 的缺席读回与单写者 publication 结果。"
       },
       "reloadPolicy": {
         "kind": "definition-owned-not-request-owned",
@@ -3246,25 +3246,25 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "reobserve-or-fail-closed",
-        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.session.list 的业务状态，再决定是否提交新的调用。"
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.session-list 的业务状态，再决定是否提交新的调用。"
       },
       "asyncSignals": [
         "value-task"
       ]
     },
     {
-      "toolName": "debug.session.stop",
+      "toolName": "debug.session-stop",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/session/stop.cs",
+      "source": "unitypkg/Editor/Tools/debug/session-stop.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "owned-definition-terminal-readback",
-        "description": "debug.session.stop 的终态由 host 自己拥有的定义 state 与清理报告证明；state 为 stopped 时 report.cleanupPending 必须与定义记录一致。"
+        "description": "debug.session-stop 的终态由 host 自己拥有的定义 state 与清理报告证明；state 为 stopped 时 report.cleanupPending 必须与定义记录一致。"
       },
       "proofSource": {
         "kind": "owned-definition-and-store-readback",
-        "description": "debug.session.stop 的 proof 来自 host owner：state/revision 的 fresh 读回、清理报告逐步结果与单写者 publication 结果。"
+        "description": "debug.session-stop 的 proof 来自 host owner：state/revision 的 fresh 读回、清理报告逐步结果与单写者 publication 结果。"
       },
       "reloadPolicy": {
         "kind": "definition-owned-not-request-owned",
@@ -3273,25 +3273,25 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "reobserve-or-fail-closed",
-        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.session.info 的业务状态，再决定是否重复 stop。"
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 debug.session-info 的业务状态，再决定是否重复 stop。"
       },
       "asyncSignals": [
         "value-task"
       ]
     },
     {
-      "toolName": "debug.thread.list",
+      "toolName": "debug.thread-list",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/thread/list.cs",
+      "source": "unitypkg/Editor/Tools/debug/thread-list.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "debug.thread.list 的完整 typed business result 通过 output schema，并显式声明观察范围（只包含实际产生事件的线程与当前持有在途命中帧的线程）。"
+        "description": "debug.thread-list 的完整 typed business result 通过 output schema，并显式声明观察范围（只包含实际产生事件的线程与当前持有在途命中帧的线程）。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "debug.thread.list 的 proof 来自同一域内两个真实 owner 的只读投影：统一事件存储按线程归并的保留事件条数，以及 hook 派发路径当前持有的在途命中帧记录。"
+        "description": "debug.thread-list 的 proof 来自同一域内两个真实 owner 的只读投影：统一事件存储按线程归并的保留事件条数，以及 hook 派发路径当前持有的在途命中帧记录。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3307,18 +3307,18 @@
       ]
     },
     {
-      "toolName": "debug.type.schema",
+      "toolName": "debug.type-schema",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/type/schema.cs",
+      "source": "unitypkg/Editor/Tools/debug/type-schema.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "debug.type.schema 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "debug.type-schema 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "debug.type.schema 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "debug.type-schema 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3334,18 +3334,18 @@
       ]
     },
     {
-      "toolName": "debug.value.read",
+      "toolName": "debug.value-read",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/value/read.cs",
+      "source": "unitypkg/Editor/Tools/debug/value-read.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "debug.value.read 的完整 typed business result 通过 output schema：有界值投影加上根身份、声明类型、线程与四种时钟溯源，并如实区分 actual-null、intermediate-null 与 stale handle。"
+        "description": "debug.value-read 的完整 typed business result 通过 output schema：有界值投影加上根身份、声明类型、线程与四种时钟溯源，并如实区分 actual-null、intermediate-null 与 stale handle。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "debug.value.read 的 proof 来自同一调用内的字段读取：解析出的 declaringType 与值类型、有界投影、读取线程与时钟来源；无效句柄/目标以 E_DEBUG_TARGET_STALE 报告实际状态而不是伪造成 null 值。"
+        "description": "debug.value-read 的 proof 来自同一调用内的字段读取：解析出的 declaringType 与值类型、有界投影、读取线程与时钟来源；无效句柄/目标以 E_DEBUG_TARGET_STALE 报告实际状态而不是伪造成 null 值。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3361,27 +3361,27 @@
       ]
     },
     {
-      "toolName": "debug.value.write",
+      "toolName": "debug.value-write",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/value/write.cs",
+      "source": "unitypkg/Editor/Tools/debug/value-write.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "owned-field-write-and-restore-record-readback",
-        "description": "debug.value.write 的终态由工具自己拥有的结构化写入事实证明：类型检查后的字段写入、struct 写回标记、以及本 session 的条件恢复记录（原值、目标身份与写入时刻）；前置条件不满足时返回 ok:true 且 applied=false，并证明没有字段被写入。"
+        "description": "debug.value-write 的终态由工具自己拥有的结构化写入事实证明：类型检查后的字段写入、struct 写回标记、以及本 session 的条件恢复记录（原值、目标身份与写入时刻）；前置条件不满足时返回 ok:true 且 applied=false，并证明没有字段被写入。"
       },
       "proofSource": {
         "kind": "field-write-and-restore-record-readback",
-        "description": "debug.value.write 的 proof 来自写入前后的同一目标身份与有界投影，加上登记进本 session 清理管线的条件恢复记录；拒绝路径（property 成员、未证明初始化的 static 类型、不可比较的 expectedValue、句柄预算耗尽）都在唯一 effect barrier 之前完成。"
+        "description": "debug.value-write 的 proof 来自写入前后的同一目标身份与有界投影，加上登记进本 session 清理管线的条件恢复记录；拒绝路径（property 成员、未证明初始化的 static 类型、不可比较的 expectedValue、句柄预算耗尽）都在唯一 effect barrier 之前完成。"
       },
       "reloadPolicy": {
         "kind": "runtime-record-not-request-owned",
-        "description": "字段写入的效果属于目标对象；条件恢复记录与句柄属于 open session，Domain Reload 或 Play exit 后失效，恢复由 debug.session.stop 的清理管线执行。"
+        "description": "字段写入的效果属于目标对象；条件恢复记录与句柄属于 open session，Domain Reload 或 Play exit 后失效，恢复由 debug.session-stop 的清理管线执行。"
       },
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "reobserve-or-fail-closed",
-        "description": "超时或断连后终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先用 debug.value.read 重新读取同一路径确认实际值，再用 debug.session.info 读取恢复记录状态，不得假定写入未发生。"
+        "description": "超时或断连后终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先用 debug.value-read 重新读取同一路径确认实际值，再用 debug.session-info 读取恢复记录状态，不得假定写入未发生。"
       },
       "asyncSignals": [
         "value-task"
@@ -3465,18 +3465,18 @@
       ]
     },
     {
-      "toolName": "editor.active-tool.set",
+      "toolName": "editor.active-tool-set",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/editor/active-tool/set.cs",
+      "source": "unitypkg/Editor/Tools/editor/active-tool-set.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "editor.active-tool.set 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "editor.active-tool-set 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "editor.active-tool.set 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "editor.active-tool-set 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3492,14 +3492,14 @@
       ]
     },
     {
-      "toolName": "editor.autotick.set",
+      "toolName": "editor.autotick-set",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/editor/autotick/set.cs",
+      "source": "unitypkg/Editor/Tools/editor/autotick-set.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "editor.autotick.set返回current editor session中央scheduler的exact enabled/interval状态。"
+        "description": "editor.autotick-set返回current editor session中央scheduler的exact enabled/interval状态。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
@@ -3548,14 +3548,14 @@
       ]
     },
     {
-      "toolName": "editor.dialog.click",
+      "toolName": "editor.dialog-click",
       "descriptorOwner": "ts-local",
       "source": "src/tools/editor/dialog/click.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "target-dialog-closed",
-        "description": "editor.dialog.click only returns success after the re-observed target dialog disappears or is no longer modal."
+        "description": "editor.dialog-click only returns success after the re-observed target dialog disappears or is no longer modal."
       },
       "proofSource": {
         "kind": "native-window-post-click-readback",
@@ -3568,7 +3568,7 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "fail-closed",
-        "description": "When the original dialog closure cannot be proven, editor.dialog.click returns E_DIALOG_CLICK_UNPROVEN."
+        "description": "When the original dialog closure cannot be proven, editor.dialog-click returns E_DIALOG_CLICK_UNPROVEN."
       },
       "asyncSignals": [
         "async",
@@ -3632,45 +3632,45 @@
       ]
     },
     {
-      "toolName": "editor.menu",
+      "toolName": "editor.menu-execute",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/editor/menu.cs",
+      "source": "unitypkg/Editor/Tools/editor/menu-execute.cs",
       "deliveryMode": "direct-terminal",
-      "executionClass": "external",
+      "executionClass": "observed-state",
       "completionPredicate": {
-        "kind": "external-operation-terminal",
-        "description": "editor.menu 的外部或跨帧 operation 已达到自己的业务 terminal，且必要 artifact/状态 readback 已验证。"
+        "kind": "dispatch-confirmed-and-state-readback",
+        "description": "editor.menu-execute 的派发已被 ExecuteMenuItem 接受，且同回合 fresh Editor 状态 readback 已完成；菜单自身的业务效果不可归属，由调用方用只读 Tool 复核。"
       },
       "proofSource": {
-        "kind": "operation-terminal-and-readback",
-        "description": "editor.menu 的稳定 operation state、callback terminal、artifact digest 或目标状态 readback。"
+        "kind": "execute-menu-item-result-and-editor-state-readback",
+        "description": "editor.menu-execute 的 ExecuteMenuItem 返回 true 与同一次 Editor 状态读回共同构成派发终态证明。"
       },
       "reloadPolicy": {
-        "kind": "reattach-or-reobserve",
-        "description": "仅在存在稳定 operation identity/proof 时于同一 editor session 附着或重新观察；否则不重复 effect。"
+        "kind": "same-turn-no-replay",
+        "description": "派发后不重放；菜单触发的域重载或退出会中断回复，此时 outcome unknown。"
       },
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
-        "kind": "external-proof-or-unknown",
-        "description": "外部 operation 已开始但无法取得 terminal proof 时返回 E_EXECUTION_TIMEOUT，调用方负责检查业务状态并决定后续操作。"
+        "kind": "caller-responsibility",
+        "description": "派发后超时或断连返回 E_EXECUTION_TIMEOUT；调用方先读取 Editor 与受影响业务状态，再决定是否提交全新调用。"
       },
       "asyncSignals": [
         "value-task"
       ]
     },
     {
-      "toolName": "editor.menu-items",
+      "toolName": "editor.menu-list",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/editor/menu-items.cs",
+      "source": "unitypkg/Editor/Tools/editor/menu-list.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "editor.menu-items 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+        "description": "editor.menu-list 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "editor.menu-items 的 typed result 与 output schema validation 共同证明读取终态。"
+        "description": "editor.menu-list 的 typed result 与 output schema validation 共同证明读取终态。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3713,18 +3713,18 @@
       ]
     },
     {
-      "toolName": "editor.play-mode.start",
+      "toolName": "editor.play-mode-start",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/editor/play-mode/start.cs",
+      "source": "unitypkg/Editor/Tools/editor/play-mode-start.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "stable-state-readback",
-        "description": "editor.play-mode.start 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
+        "description": "editor.play-mode-start 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
       },
       "proofSource": {
         "kind": "validated-state-snapshot",
-        "description": "editor.play-mode.start 的目标子系统状态 readback 与同一 validated editor session snapshot。"
+        "description": "editor.play-mode-start 的目标子系统状态 readback 与同一 validated editor session snapshot。"
       },
       "reloadPolicy": {
         "kind": "same-session-reobserve",
@@ -3740,14 +3740,14 @@
       ]
     },
     {
-      "toolName": "editor.play-mode.status",
+      "toolName": "editor.play-mode-status",
       "descriptorOwner": "ts-local",
       "source": "src/tools/editor/play-mode-status.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "editor.play-mode.status returns one bounded same-session active phase or exact durable terminal envelope."
+        "description": "editor.play-mode-status returns one bounded same-session active phase or exact durable terminal envelope."
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
@@ -3767,18 +3767,18 @@
       ]
     },
     {
-      "toolName": "editor.play-mode.stop",
+      "toolName": "editor.play-mode-stop",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/editor/play-mode/stop.cs",
+      "source": "unitypkg/Editor/Tools/editor/play-mode-stop.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "stable-state-readback",
-        "description": "editor.play-mode.stop 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
+        "description": "editor.play-mode-stop 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
       },
       "proofSource": {
         "kind": "validated-state-snapshot",
-        "description": "editor.play-mode.stop 的目标子系统状态 readback 与同一 validated editor session snapshot。"
+        "description": "editor.play-mode-stop 的目标子系统状态 readback 与同一 validated editor session snapshot。"
       },
       "reloadPolicy": {
         "kind": "same-session-reobserve",
@@ -3931,18 +3931,18 @@
       ]
     },
     {
-      "toolName": "editor.selection.set",
+      "toolName": "editor.selection-set",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/editor/selection/set.cs",
+      "source": "unitypkg/Editor/Tools/editor/selection-set.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "editor.selection.set 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "editor.selection-set 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "editor.selection.set 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "editor.selection-set 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -4309,18 +4309,18 @@
       ]
     },
     {
-      "toolName": "hdrp.settings.get",
+      "toolName": "hdrp.settings-get",
       "descriptorOwner": "extension:hdrp",
       "source": "extensions/hdrp/unitypkg/Editor/Hdrp/settings-get.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "hdrp.settings.get 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "hdrp.settings-get 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "hdrp.settings.get 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "hdrp.settings-get 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -4336,18 +4336,18 @@
       ]
     },
     {
-      "toolName": "hdrp.settings.set",
+      "toolName": "hdrp.settings-set",
       "descriptorOwner": "extension:hdrp",
       "source": "extensions/hdrp/unitypkg/Editor/Hdrp/settings-set.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "hdrp.settings.set 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "hdrp.settings-set 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "hdrp.settings.set 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "hdrp.settings-set 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -4363,18 +4363,18 @@
       ]
     },
     {
-      "toolName": "hdrp.volume.add-effect",
+      "toolName": "hdrp.volume-add-effect",
       "descriptorOwner": "extension:hdrp",
       "source": "extensions/hdrp/unitypkg/Editor/Hdrp/volume-add-effect.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "hdrp.volume.add-effect 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "hdrp.volume-add-effect 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "hdrp.volume.add-effect 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "hdrp.volume-add-effect 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -4390,18 +4390,18 @@
       ]
     },
     {
-      "toolName": "hdrp.volume.create",
+      "toolName": "hdrp.volume-create",
       "descriptorOwner": "extension:hdrp",
       "source": "extensions/hdrp/unitypkg/Editor/Hdrp/volume-create.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "hdrp.volume.create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "hdrp.volume-create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "hdrp.volume.create 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "hdrp.volume-create 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -4417,18 +4417,18 @@
       ]
     },
     {
-      "toolName": "hdrp.volume.info",
+      "toolName": "hdrp.volume-info",
       "descriptorOwner": "extension:hdrp",
       "source": "extensions/hdrp/unitypkg/Editor/Hdrp/volume-info.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "hdrp.volume.info 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "hdrp.volume-info 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "hdrp.volume.info 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "hdrp.volume-info 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -4444,18 +4444,18 @@
       ]
     },
     {
-      "toolName": "hdrp.volume.list",
+      "toolName": "hdrp.volume-list",
       "descriptorOwner": "extension:hdrp",
       "source": "extensions/hdrp/unitypkg/Editor/Hdrp/volume-list.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "hdrp.volume.list 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "hdrp.volume-list 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "hdrp.volume.list 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "hdrp.volume-list 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -4471,18 +4471,18 @@
       ]
     },
     {
-      "toolName": "hdrp.volume.set",
+      "toolName": "hdrp.volume-set",
       "descriptorOwner": "extension:hdrp",
       "source": "extensions/hdrp/unitypkg/Editor/Hdrp/volume-set.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "hdrp.volume.set 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "hdrp.volume-set 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "hdrp.volume.set 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "hdrp.volume-set 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -4498,18 +4498,18 @@
       ]
     },
     {
-      "toolName": "lighting.bake.cancel",
+      "toolName": "lighting.bake-cancel",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/bake/cancel.cs",
+      "source": "unitypkg/Editor/Tools/lighting/bake-cancel.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "stable-state-readback",
-        "description": "lighting.bake.cancel 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
+        "description": "lighting.bake-cancel 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
       },
       "proofSource": {
         "kind": "validated-state-snapshot",
-        "description": "lighting.bake.cancel 的目标子系统状态 readback 与同一 validated editor session snapshot。"
+        "description": "lighting.bake-cancel 的目标子系统状态 readback 与同一 validated editor session snapshot。"
       },
       "reloadPolicy": {
         "kind": "same-session-reobserve",
@@ -4525,18 +4525,18 @@
       ]
     },
     {
-      "toolName": "lighting.bake.clear",
+      "toolName": "lighting.bake-clear",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/bake/clear.cs",
+      "source": "unitypkg/Editor/Tools/lighting/bake-clear.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "lighting.bake.clear 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "lighting.bake-clear 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "lighting.bake.clear 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "lighting.bake-clear 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -4552,18 +4552,18 @@
       ]
     },
     {
-      "toolName": "lighting.bake.reflection-probe",
+      "toolName": "lighting.bake-reflection-probe",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/bake/reflection-probe.cs",
+      "source": "unitypkg/Editor/Tools/lighting/bake-reflection-probe.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "external",
       "completionPredicate": {
         "kind": "external-operation-terminal",
-        "description": "lighting.bake.reflection-probe 的外部或跨帧 operation 已达到自己的业务 terminal，且必要 artifact/状态 readback 已验证。"
+        "description": "lighting.bake-reflection-probe 的外部或跨帧 operation 已达到自己的业务 terminal，且必要 artifact/状态 readback 已验证。"
       },
       "proofSource": {
         "kind": "operation-terminal-and-readback",
-        "description": "lighting.bake.reflection-probe 的稳定 operation state、callback terminal、artifact digest 或目标状态 readback。"
+        "description": "lighting.bake-reflection-probe 的稳定 operation state、callback terminal、artifact digest 或目标状态 readback。"
       },
       "reloadPolicy": {
         "kind": "reattach-or-reobserve",
@@ -4579,18 +4579,18 @@
       ]
     },
     {
-      "toolName": "lighting.bake.settings",
+      "toolName": "lighting.bake-settings",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/bake/settings.cs",
+      "source": "unitypkg/Editor/Tools/lighting/bake-settings.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "lighting.bake.settings 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "lighting.bake-settings 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "lighting.bake.settings 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "lighting.bake-settings 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -4606,18 +4606,18 @@
       ]
     },
     {
-      "toolName": "lighting.bake.start",
+      "toolName": "lighting.bake-start",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/bake/start.cs",
+      "source": "unitypkg/Editor/Tools/lighting/bake-start.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "stable-state-readback",
-        "description": "lighting.bake.start 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
+        "description": "lighting.bake-start 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
       },
       "proofSource": {
         "kind": "validated-state-snapshot",
-        "description": "lighting.bake.start 的目标子系统状态 readback 与同一 validated editor session snapshot。"
+        "description": "lighting.bake-start 的目标子系统状态 readback 与同一 validated editor session snapshot。"
       },
       "reloadPolicy": {
         "kind": "same-session-reobserve",
@@ -4634,18 +4634,18 @@
       ]
     },
     {
-      "toolName": "lighting.bake.status",
+      "toolName": "lighting.bake-status",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/bake/status.cs",
+      "source": "unitypkg/Editor/Tools/lighting/bake-status.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "lighting.bake.status 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "lighting.bake-status 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "lighting.bake.status 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "lighting.bake-status 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -4715,18 +4715,18 @@
       ]
     },
     {
-      "toolName": "lighting.skybox.get",
+      "toolName": "lighting.skybox-get",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/skybox/get.cs",
+      "source": "unitypkg/Editor/Tools/lighting/skybox-get.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "lighting.skybox.get 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "lighting.skybox-get 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "lighting.skybox.get 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "lighting.skybox-get 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -4742,18 +4742,18 @@
       ]
     },
     {
-      "toolName": "lighting.skybox.set-ambient",
+      "toolName": "lighting.skybox-set-ambient",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/skybox/set-ambient.cs",
+      "source": "unitypkg/Editor/Tools/lighting/skybox-set-ambient.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "lighting.skybox.set-ambient 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "lighting.skybox-set-ambient 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "lighting.skybox.set-ambient 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "lighting.skybox-set-ambient 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -4769,18 +4769,18 @@
       ]
     },
     {
-      "toolName": "lighting.skybox.set-fog",
+      "toolName": "lighting.skybox-set-fog",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/skybox/set-fog.cs",
+      "source": "unitypkg/Editor/Tools/lighting/skybox-set-fog.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "lighting.skybox.set-fog 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "lighting.skybox-set-fog 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "lighting.skybox.set-fog 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "lighting.skybox-set-fog 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -4796,18 +4796,18 @@
       ]
     },
     {
-      "toolName": "lighting.skybox.set-material",
+      "toolName": "lighting.skybox-set-material",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/skybox/set-material.cs",
+      "source": "unitypkg/Editor/Tools/lighting/skybox-set-material.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "lighting.skybox.set-material 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "lighting.skybox-set-material 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "lighting.skybox.set-material 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "lighting.skybox-set-material 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -4823,18 +4823,18 @@
       ]
     },
     {
-      "toolName": "lighting.skybox.set-properties",
+      "toolName": "lighting.skybox-set-properties",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/skybox/set-properties.cs",
+      "source": "unitypkg/Editor/Tools/lighting/skybox-set-properties.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "lighting.skybox.set-properties 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "lighting.skybox-set-properties 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "lighting.skybox.set-properties 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "lighting.skybox-set-properties 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -4850,18 +4850,18 @@
       ]
     },
     {
-      "toolName": "lighting.skybox.set-reflection",
+      "toolName": "lighting.skybox-set-reflection",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/skybox/set-reflection.cs",
+      "source": "unitypkg/Editor/Tools/lighting/skybox-set-reflection.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "lighting.skybox.set-reflection 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "lighting.skybox-set-reflection 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "lighting.skybox.set-reflection 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "lighting.skybox-set-reflection 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -4877,18 +4877,18 @@
       ]
     },
     {
-      "toolName": "lighting.skybox.set-sun",
+      "toolName": "lighting.skybox-set-sun",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/skybox/set-sun.cs",
+      "source": "unitypkg/Editor/Tools/lighting/skybox-set-sun.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "lighting.skybox.set-sun 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "lighting.skybox-set-sun 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "lighting.skybox.set-sun 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "lighting.skybox-set-sun 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -5175,14 +5175,14 @@
       ]
     },
     {
-      "toolName": "navmesh.settings.set",
+      "toolName": "navmesh.settings-set",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/navmesh/settings/set.cs",
+      "source": "unitypkg/Editor/Tools/navmesh/settings-set.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "navmesh.settings.set 返回前必须证明全部 requested fields 与 NavMeshAreas.asset persistence。"
+        "description": "navmesh.settings-set 返回前必须证明全部 requested fields 与 NavMeshAreas.asset persistence。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
@@ -5202,14 +5202,14 @@
       ]
     },
     {
-      "toolName": "navmesh.surface.bake",
+      "toolName": "navmesh.surface-bake",
       "descriptorOwner": "ts-local",
       "source": "src/tools/navmesh/surface-bake.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "resumable",
       "completionPredicate": {
         "kind": "durable-operation-terminal",
-        "description": "navmesh.surface.bake 的 durable root 已 terminal，且每个 frozen surface 都有 fresh data asset identity/hash。"
+        "description": "navmesh.surface-bake 的 durable root 已 terminal，且每个 frozen surface 都有 fresh data asset identity/hash。"
       },
       "proofSource": {
         "kind": "journal-continuation-and-terminal-proof",
@@ -5455,14 +5455,14 @@
       ]
     },
     {
-      "toolName": "package.install.status",
+      "toolName": "package.install-status",
       "descriptorOwner": "ts-local",
       "source": "src/tools/package/install-status.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "package.install.status returns one bounded same-session active phase or exact durable terminal envelope."
+        "description": "package.install-status returns one bounded same-session active phase or exact durable terminal envelope."
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
@@ -5482,18 +5482,18 @@
       ]
     },
     {
-      "toolName": "package.registry.clear",
+      "toolName": "package.registry-clear",
       "descriptorOwner": "ts-local",
       "source": "src/tools/package/registry-clear.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "package.registry.clear 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "package.registry-clear 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "package.registry.clear 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "package.registry-clear 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -5510,18 +5510,18 @@
       ]
     },
     {
-      "toolName": "package.registry.set",
+      "toolName": "package.registry-set",
       "descriptorOwner": "ts-local",
       "source": "src/tools/package/registry-set.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "package.registry.set 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "package.registry-set 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "package.registry.set 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "package.registry-set 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -5567,14 +5567,14 @@
       ]
     },
     {
-      "toolName": "package.remove.status",
+      "toolName": "package.remove-status",
       "descriptorOwner": "ts-local",
       "source": "src/tools/package/remove-status.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "package.remove.status returns one bounded same-session active phase or exact durable terminal envelope."
+        "description": "package.remove-status returns one bounded same-session active phase or exact durable terminal envelope."
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
@@ -5651,18 +5651,18 @@
       ]
     },
     {
-      "toolName": "package.scoped-registry.add",
+      "toolName": "package.scoped-registry-add",
       "descriptorOwner": "ts-local",
       "source": "src/tools/package/scoped-registry-add.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "package.scoped-registry.add 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "package.scoped-registry-add 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "package.scoped-registry.add 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "package.scoped-registry-add 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -5679,18 +5679,18 @@
       ]
     },
     {
-      "toolName": "package.scoped-registry.remove",
+      "toolName": "package.scoped-registry-remove",
       "descriptorOwner": "ts-local",
       "source": "src/tools/package/scoped-registry-remove.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "package.scoped-registry.remove 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "package.scoped-registry-remove 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "package.scoped-registry.remove 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "package.scoped-registry-remove 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -5788,18 +5788,18 @@
       ]
     },
     {
-      "toolName": "physics.joint.add",
+      "toolName": "physics.joint-add",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/physics/joint/add.cs",
+      "source": "unitypkg/Editor/Tools/physics/joint-add.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "physics.joint.add 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "physics.joint-add 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "physics.joint.add 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "physics.joint-add 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -5815,18 +5815,18 @@
       ]
     },
     {
-      "toolName": "physics.joint.remove",
+      "toolName": "physics.joint-remove",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/physics/joint/remove.cs",
+      "source": "unitypkg/Editor/Tools/physics/joint-remove.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "physics.joint.remove 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "physics.joint-remove 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "physics.joint.remove 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "physics.joint-remove 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -6110,7 +6110,7 @@
       "asyncSignals": []
     },
     {
-      "toolName": "player-runtime.input.key",
+      "toolName": "player-runtime.input-key",
       "descriptorOwner": "ts-local",
       "source": "src/tools/player-runtime/input/key.ts",
       "deliveryMode": "direct-terminal",
@@ -6135,7 +6135,7 @@
       "asyncSignals": []
     },
     {
-      "toolName": "player-runtime.input.pointer",
+      "toolName": "player-runtime.input-pointer",
       "descriptorOwner": "ts-local",
       "source": "src/tools/player-runtime/input/pointer.ts",
       "deliveryMode": "direct-terminal",
@@ -6210,7 +6210,7 @@
       "asyncSignals": []
     },
     {
-      "toolName": "player-runtime.target-framerate.set",
+      "toolName": "player-runtime.target-framerate-set",
       "descriptorOwner": "ts-local",
       "source": "src/tools/player-runtime/target-framerate/set.ts",
       "deliveryMode": "direct-terminal",
@@ -6235,7 +6235,7 @@
       "asyncSignals": []
     },
     {
-      "toolName": "player-runtime.time-scale.set",
+      "toolName": "player-runtime.time-scale-set",
       "descriptorOwner": "ts-local",
       "source": "src/tools/player-runtime/time-scale/set.ts",
       "deliveryMode": "direct-terminal",
@@ -6260,7 +6260,7 @@
       "asyncSignals": []
     },
     {
-      "toolName": "player-runtime.ui.capture-element",
+      "toolName": "player-runtime.ui-capture-element",
       "descriptorOwner": "ts-local",
       "source": "src/tools/player-runtime/ui/capture-element.ts",
       "deliveryMode": "direct-terminal",
@@ -6420,9 +6420,9 @@
       ]
     },
     {
-      "toolName": "prefab.overrides.apply",
+      "toolName": "prefab.overrides-apply",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/prefab/overrides/apply.cs",
+      "source": "unitypkg/Editor/Tools/prefab/overrides-apply.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -6447,9 +6447,9 @@
       ]
     },
     {
-      "toolName": "prefab.overrides.revert",
+      "toolName": "prefab.overrides-revert",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/prefab/overrides/revert.cs",
+      "source": "unitypkg/Editor/Tools/prefab/overrides-revert.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -6609,9 +6609,9 @@
       ]
     },
     {
-      "toolName": "prefab.variant.create",
+      "toolName": "prefab.variant-create",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/prefab/variant/create.cs",
+      "source": "unitypkg/Editor/Tools/prefab/variant-create.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7826,18 +7826,18 @@
       ]
     },
     {
-      "toolName": "profiler.frame-debugger.disable",
+      "toolName": "profiler.frame-debugger-disable",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/profiler/frame-debugger/disable.cs",
+      "source": "unitypkg/Editor/Tools/profiler/frame-debugger-disable.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "stable-state-readback",
-        "description": "profiler.frame-debugger.disable 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
+        "description": "profiler.frame-debugger-disable 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
       },
       "proofSource": {
         "kind": "validated-state-snapshot",
-        "description": "profiler.frame-debugger.disable 的目标子系统状态 readback 与同一 validated editor session snapshot。"
+        "description": "profiler.frame-debugger-disable 的目标子系统状态 readback 与同一 validated editor session snapshot。"
       },
       "reloadPolicy": {
         "kind": "same-session-reobserve",
@@ -7853,18 +7853,18 @@
       ]
     },
     {
-      "toolName": "profiler.frame-debugger.enable",
+      "toolName": "profiler.frame-debugger-enable",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/profiler/frame-debugger/enable.cs",
+      "source": "unitypkg/Editor/Tools/profiler/frame-debugger-enable.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "stable-state-readback",
-        "description": "profiler.frame-debugger.enable 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
+        "description": "profiler.frame-debugger-enable 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
       },
       "proofSource": {
         "kind": "validated-state-snapshot",
-        "description": "profiler.frame-debugger.enable 的目标子系统状态 readback 与同一 validated editor session snapshot。"
+        "description": "profiler.frame-debugger-enable 的目标子系统状态 readback 与同一 validated editor session snapshot。"
       },
       "reloadPolicy": {
         "kind": "same-session-reobserve",
@@ -7880,18 +7880,18 @@
       ]
     },
     {
-      "toolName": "profiler.frame-debugger.events",
+      "toolName": "profiler.frame-debugger-events",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/profiler/frame-debugger/events.cs",
+      "source": "unitypkg/Editor/Tools/profiler/frame-debugger-events.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "profiler.frame-debugger.events 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "profiler.frame-debugger-events 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "profiler.frame-debugger.events 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "profiler.frame-debugger-events 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -7988,18 +7988,18 @@
       ]
     },
     {
-      "toolName": "profiler.memory-snapshot.compare",
+      "toolName": "profiler.memory-snapshot-compare",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/profiler/memory-snapshot/compare.cs",
+      "source": "unitypkg/Editor/Tools/profiler/memory-snapshot-compare.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "profiler.memory-snapshot.compare 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "profiler.memory-snapshot-compare 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "profiler.memory-snapshot.compare 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "profiler.memory-snapshot-compare 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -8015,18 +8015,18 @@
       ]
     },
     {
-      "toolName": "profiler.memory-snapshot.list",
+      "toolName": "profiler.memory-snapshot-list",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/profiler/memory-snapshot/list.cs",
+      "source": "unitypkg/Editor/Tools/profiler/memory-snapshot-list.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "profiler.memory-snapshot.list 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "profiler.memory-snapshot-list 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "profiler.memory-snapshot.list 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "profiler.memory-snapshot-list 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -8042,18 +8042,18 @@
       ]
     },
     {
-      "toolName": "profiler.memory-snapshot.take",
+      "toolName": "profiler.memory-snapshot-take",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/profiler/memory-snapshot/take.cs",
+      "source": "unitypkg/Editor/Tools/profiler/memory-snapshot-take.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "external",
       "completionPredicate": {
         "kind": "external-operation-terminal",
-        "description": "profiler.memory-snapshot.take 的外部或跨帧 operation 已达到自己的业务 terminal，且必要 artifact/状态 readback 已验证。"
+        "description": "profiler.memory-snapshot-take 的外部或跨帧 operation 已达到自己的业务 terminal，且必要 artifact/状态 readback 已验证。"
       },
       "proofSource": {
         "kind": "operation-terminal-and-readback",
-        "description": "profiler.memory-snapshot.take 的稳定 operation state、callback terminal、artifact digest 或目标状态 readback。"
+        "description": "profiler.memory-snapshot-take 的稳定 operation state、callback terminal、artifact digest 或目标状态 readback。"
       },
       "reloadPolicy": {
         "kind": "reattach-or-reobserve",
@@ -8342,14 +8342,14 @@
       ]
     },
     {
-      "toolName": "project-settings.audio-settings.set",
+      "toolName": "project-settings.audio-settings-set",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/project-settings/audio-settings/set.cs",
+      "source": "unitypkg/Editor/Tools/project-settings/audio-settings-set.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "project-settings.audio-settings.set 返回前必须证明全部requested fields与对应ProjectSettings文件持久化。"
+        "description": "project-settings.audio-settings-set 返回前必须证明全部requested fields与对应ProjectSettings文件持久化。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
@@ -8423,14 +8423,14 @@
       ]
     },
     {
-      "toolName": "project-settings.input-settings.set",
+      "toolName": "project-settings.input-settings-set",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/project-settings/input-settings/set.cs",
+      "source": "unitypkg/Editor/Tools/project-settings/input-settings-set.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "project-settings.input-settings.set 返回前必须证明全部requested fields与对应ProjectSettings文件持久化。"
+        "description": "project-settings.input-settings-set 返回前必须证明全部requested fields与对应ProjectSettings文件持久化。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
@@ -8450,18 +8450,18 @@
       ]
     },
     {
-      "toolName": "project-settings.layer.add",
+      "toolName": "project-settings.layer-add",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/project-settings/layer/add.cs",
+      "source": "unitypkg/Editor/Tools/project-settings/layer-add.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "project-settings.layer.add 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "project-settings.layer-add 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "project-settings.layer.add 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "project-settings.layer-add 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -8477,18 +8477,18 @@
       ]
     },
     {
-      "toolName": "project-settings.layer.remove",
+      "toolName": "project-settings.layer-remove",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/project-settings/layer/remove.cs",
+      "source": "unitypkg/Editor/Tools/project-settings/layer-remove.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "project-settings.layer.remove 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "project-settings.layer-remove 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "project-settings.layer.remove 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "project-settings.layer-remove 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -8558,14 +8558,14 @@
       ]
     },
     {
-      "toolName": "project-settings.player-settings.set",
+      "toolName": "project-settings.player-settings-set",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/project-settings/player-settings/set.cs",
+      "source": "unitypkg/Editor/Tools/project-settings/player-settings-set.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "project-settings.player-settings.set 返回前必须证明全部requested fields与对应ProjectSettings文件持久化。"
+        "description": "project-settings.player-settings-set 返回前必须证明全部requested fields与对应ProjectSettings文件持久化。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
@@ -8585,18 +8585,18 @@
       ]
     },
     {
-      "toolName": "project-settings.tag.add",
+      "toolName": "project-settings.tag-add",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/project-settings/tag/add.cs",
+      "source": "unitypkg/Editor/Tools/project-settings/tag-add.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "project-settings.tag.add 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "project-settings.tag-add 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "project-settings.tag.add 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "project-settings.tag-add 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -8612,18 +8612,18 @@
       ]
     },
     {
-      "toolName": "project-settings.tag.remove",
+      "toolName": "project-settings.tag-remove",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/project-settings/tag/remove.cs",
+      "source": "unitypkg/Editor/Tools/project-settings/tag-remove.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "project-settings.tag.remove 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "project-settings.tag-remove 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "project-settings.tag.remove 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "project-settings.tag-remove 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -8693,14 +8693,14 @@
       ]
     },
     {
-      "toolName": "project-settings.time-settings.set",
+      "toolName": "project-settings.time-settings-set",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/project-settings/time-settings/set.cs",
+      "source": "unitypkg/Editor/Tools/project-settings/time-settings-set.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "project-settings.time-settings.set 返回前必须证明全部requested fields与对应ProjectSettings文件持久化。"
+        "description": "project-settings.time-settings-set 返回前必须证明全部requested fields与对应ProjectSettings文件持久化。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
@@ -8720,18 +8720,18 @@
       ]
     },
     {
-      "toolName": "rendering.pipeline.info",
+      "toolName": "rendering.pipeline-info",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/rendering/pipeline/info.cs",
+      "source": "unitypkg/Editor/Tools/rendering/pipeline-info.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "rendering.pipeline.info 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "rendering.pipeline-info 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "rendering.pipeline.info 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "rendering.pipeline-info 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -8747,18 +8747,18 @@
       ]
     },
     {
-      "toolName": "rendering.pipeline.settings",
+      "toolName": "rendering.pipeline-settings",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/rendering/pipeline/settings.cs",
+      "source": "unitypkg/Editor/Tools/rendering/pipeline-settings.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "rendering.pipeline.settings 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "rendering.pipeline-settings 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "rendering.pipeline.settings 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "rendering.pipeline-settings 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -8936,18 +8936,18 @@
       ]
     },
     {
-      "toolName": "scene.gameobject.component",
+      "toolName": "scene.gameobject-component",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/scene/gameobject/component.cs",
+      "source": "unitypkg/Editor/Tools/scene/gameobject-component.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "scene.gameobject.component 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+        "description": "scene.gameobject-component 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "scene.gameobject.component 的 typed result 与 output schema validation 共同证明读取终态。"
+        "description": "scene.gameobject-component 的 typed result 与 output schema validation 共同证明读取终态。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -8963,18 +8963,18 @@
       ]
     },
     {
-      "toolName": "scene.gameobject.components",
+      "toolName": "scene.gameobject-components",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/scene/gameobject/components.cs",
+      "source": "unitypkg/Editor/Tools/scene/gameobject-components.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "scene.gameobject.components 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+        "description": "scene.gameobject-components 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "scene.gameobject.components 的 typed result 与 output schema validation 共同证明读取终态。"
+        "description": "scene.gameobject-components 的 typed result 与 output schema validation 共同证明读取终态。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -9831,14 +9831,14 @@
       ]
     },
     {
-      "toolName": "test.run.status",
+      "toolName": "test.run-status",
       "descriptorOwner": "ts-local",
       "source": "src/tools/test/run-status.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "test.run.status returns one bounded same-session active phase or exact durable terminal envelope."
+        "description": "test.run-status returns one bounded same-session active phase or exact durable terminal envelope."
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
@@ -10047,18 +10047,18 @@
       ]
     },
     {
-      "toolName": "timeline.clip.add",
+      "toolName": "timeline.clip-add",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/timeline/clip/add.cs",
+      "source": "unitypkg/Editor/Tools/timeline/clip-add.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "timeline.clip.add 返回前必须以 fresh target track 证明 clip count、timing、playable localId、source binding 与 serialized hash。"
+        "description": "timeline.clip-add 返回前必须以 fresh target track 证明 clip count、timing、playable localId、source binding 与 serialized hash。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "timeline.clip.add 的 typed result、output schema validation 与 Tool-owned fresh Timeline structure/file readback。"
+        "description": "timeline.clip-add 的 typed result、output schema validation 与 Tool-owned fresh Timeline structure/file readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -10128,18 +10128,18 @@
       ]
     },
     {
-      "toolName": "timeline.track.add",
+      "toolName": "timeline.track-add",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/timeline/track/add.cs",
+      "source": "unitypkg/Editor/Tools/timeline/track-add.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "timeline.track.add 返回前必须以 fresh Timeline structure 证明 count、track GUID/localId、exact type/name/parent 与 serialized hash。"
+        "description": "timeline.track-add 返回前必须以 fresh Timeline structure 证明 count、track GUID/localId、exact type/name/parent 与 serialized hash。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "timeline.track.add 的 typed result、output schema validation 与 Tool-owned fresh Timeline structure/file readback。"
+        "description": "timeline.track-add 的 typed result、output schema validation 与 Tool-owned fresh Timeline structure/file readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -10257,18 +10257,18 @@
       ]
     },
     {
-      "toolName": "ui.button.create",
+      "toolName": "ui.button-create",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/ui/button/create.cs",
+      "source": "unitypkg/Editor/Tools/ui/button-create.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "ui.button.create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "ui.button-create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "ui.button.create 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "ui.button-create 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -10284,18 +10284,18 @@
       ]
     },
     {
-      "toolName": "ui.canvas.create",
+      "toolName": "ui.canvas-create",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/ui/canvas/create.cs",
+      "source": "unitypkg/Editor/Tools/ui/canvas-create.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "ui.canvas.create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "ui.canvas-create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "ui.canvas.create 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "ui.canvas-create 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -10365,18 +10365,18 @@
       ]
     },
     {
-      "toolName": "ui.document.create",
+      "toolName": "ui.document-create",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/ui/document/create.cs",
+      "source": "unitypkg/Editor/Tools/ui/document-create.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "ui.document.create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "ui.document-create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "ui.document.create 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "ui.document-create 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -10392,18 +10392,18 @@
       ]
     },
     {
-      "toolName": "ui.document.delete",
+      "toolName": "ui.document-delete",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/ui/document/delete.cs",
+      "source": "unitypkg/Editor/Tools/ui/document-delete.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "ui.document.delete 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "ui.document-delete 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "ui.document.delete 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "ui.document-delete 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -10419,18 +10419,18 @@
       ]
     },
     {
-      "toolName": "ui.document.info",
+      "toolName": "ui.document-info",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/ui/document/info.cs",
+      "source": "unitypkg/Editor/Tools/ui/document-info.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "ui.document.info 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "ui.document-info 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "ui.document.info 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "ui.document-info 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -10446,18 +10446,18 @@
       ]
     },
     {
-      "toolName": "ui.document.update",
+      "toolName": "ui.document-update",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/ui/document/update.cs",
+      "source": "unitypkg/Editor/Tools/ui/document-update.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "ui.document.update 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "ui.document-update 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "ui.document.update 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "ui.document-update 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -10527,18 +10527,18 @@
       ]
     },
     {
-      "toolName": "ui.image.create",
+      "toolName": "ui.image-create",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/ui/image/create.cs",
+      "source": "unitypkg/Editor/Tools/ui/image-create.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "ui.image.create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "ui.image-create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "ui.image.create 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "ui.image-create 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -10664,18 +10664,18 @@
       ]
     },
     {
-      "toolName": "ui.text.create",
+      "toolName": "ui.text-create",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/ui/text/create.cs",
+      "source": "unitypkg/Editor/Tools/ui/text-create.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "ui.text.create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "ui.text-create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "ui.text.create 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "ui.text-create 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -10718,18 +10718,18 @@
       ]
     },
     {
-      "toolName": "urp.feature.add",
+      "toolName": "urp.feature-add",
       "descriptorOwner": "extension:urp",
       "source": "extensions/urp/unitypkg/Editor/Urp/feature-add.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "urp.feature.add 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "urp.feature-add 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "urp.feature.add 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "urp.feature-add 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -10745,18 +10745,18 @@
       ]
     },
     {
-      "toolName": "urp.feature.configure",
+      "toolName": "urp.feature-configure",
       "descriptorOwner": "extension:urp",
       "source": "extensions/urp/unitypkg/Editor/Urp/feature-configure.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "urp.feature.configure 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "urp.feature-configure 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "urp.feature.configure 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "urp.feature-configure 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -10772,18 +10772,18 @@
       ]
     },
     {
-      "toolName": "urp.feature.list",
+      "toolName": "urp.feature-list",
       "descriptorOwner": "extension:urp",
       "source": "extensions/urp/unitypkg/Editor/Urp/feature-list.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "urp.feature.list 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "urp.feature-list 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "urp.feature.list 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "urp.feature-list 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -10799,18 +10799,18 @@
       ]
     },
     {
-      "toolName": "urp.feature.remove",
+      "toolName": "urp.feature-remove",
       "descriptorOwner": "extension:urp",
       "source": "extensions/urp/unitypkg/Editor/Urp/feature-remove.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "urp.feature.remove 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "urp.feature-remove 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "urp.feature.remove 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "urp.feature-remove 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -10826,18 +10826,18 @@
       ]
     },
     {
-      "toolName": "urp.feature.toggle",
+      "toolName": "urp.feature-toggle",
       "descriptorOwner": "extension:urp",
       "source": "extensions/urp/unitypkg/Editor/Urp/feature-toggle.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "urp.feature.toggle 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "urp.feature-toggle 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "urp.feature.toggle 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "urp.feature-toggle 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -10853,18 +10853,18 @@
       ]
     },
     {
-      "toolName": "urp.settings.get",
+      "toolName": "urp.settings-get",
       "descriptorOwner": "extension:urp",
       "source": "extensions/urp/unitypkg/Editor/Urp/settings-get.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "urp.settings.get 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "urp.settings-get 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "urp.settings.get 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "urp.settings-get 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -10880,18 +10880,18 @@
       ]
     },
     {
-      "toolName": "urp.settings.set",
+      "toolName": "urp.settings-set",
       "descriptorOwner": "extension:urp",
       "source": "extensions/urp/unitypkg/Editor/Urp/settings-set.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "urp.settings.set 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "urp.settings-set 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "urp.settings.set 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "urp.settings-set 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -10907,18 +10907,18 @@
       ]
     },
     {
-      "toolName": "urp.volume.add-effect",
+      "toolName": "urp.volume-add-effect",
       "descriptorOwner": "extension:urp",
       "source": "extensions/urp/unitypkg/Editor/Urp/volume-add-effect.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "urp.volume.add-effect 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "urp.volume-add-effect 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "urp.volume.add-effect 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "urp.volume-add-effect 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -10934,18 +10934,18 @@
       ]
     },
     {
-      "toolName": "urp.volume.create",
+      "toolName": "urp.volume-create",
       "descriptorOwner": "extension:urp",
       "source": "extensions/urp/unitypkg/Editor/Urp/volume-create.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "urp.volume.create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "urp.volume-create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "urp.volume.create 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "urp.volume-create 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -10961,18 +10961,18 @@
       ]
     },
     {
-      "toolName": "urp.volume.info",
+      "toolName": "urp.volume-info",
       "descriptorOwner": "extension:urp",
       "source": "extensions/urp/unitypkg/Editor/Urp/volume-info.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "urp.volume.info 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "urp.volume-info 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "urp.volume.info 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "urp.volume-info 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -10988,18 +10988,18 @@
       ]
     },
     {
-      "toolName": "urp.volume.list",
+      "toolName": "urp.volume-list",
       "descriptorOwner": "extension:urp",
       "source": "extensions/urp/unitypkg/Editor/Urp/volume-list.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "urp.volume.list 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "urp.volume-list 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "urp.volume.list 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "urp.volume-list 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -11015,18 +11015,18 @@
       ]
     },
     {
-      "toolName": "urp.volume.set",
+      "toolName": "urp.volume-set",
       "descriptorOwner": "extension:urp",
       "source": "extensions/urp/unitypkg/Editor/Urp/volume-set.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "urp.volume.set 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "urp.volume-set 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "urp.volume.set 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "urp.volume-set 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -11042,18 +11042,18 @@
       ]
     },
     {
-      "toolName": "vfx.control.pause",
+      "toolName": "vfx.control-pause",
       "descriptorOwner": "extension:vfx-graph",
       "source": "extensions/vfx-graph/unitypkg/Editor/Vfx/control-pause.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "stable-state-readback",
-        "description": "vfx.control.pause 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
+        "description": "vfx.control-pause 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
       },
       "proofSource": {
         "kind": "validated-state-snapshot",
-        "description": "vfx.control.pause 的目标子系统状态 readback 与同一 validated editor session snapshot。"
+        "description": "vfx.control-pause 的目标子系统状态 readback 与同一 validated editor session snapshot。"
       },
       "reloadPolicy": {
         "kind": "same-session-reobserve",
@@ -11069,18 +11069,18 @@
       ]
     },
     {
-      "toolName": "vfx.control.play",
+      "toolName": "vfx.control-play",
       "descriptorOwner": "extension:vfx-graph",
       "source": "extensions/vfx-graph/unitypkg/Editor/Vfx/control-play.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "stable-state-readback",
-        "description": "vfx.control.play 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
+        "description": "vfx.control-play 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
       },
       "proofSource": {
         "kind": "validated-state-snapshot",
-        "description": "vfx.control.play 的目标子系统状态 readback 与同一 validated editor session snapshot。"
+        "description": "vfx.control-play 的目标子系统状态 readback 与同一 validated editor session snapshot。"
       },
       "reloadPolicy": {
         "kind": "same-session-reobserve",
@@ -11096,18 +11096,18 @@
       ]
     },
     {
-      "toolName": "vfx.control.reinitialize",
+      "toolName": "vfx.control-reinitialize",
       "descriptorOwner": "extension:vfx-graph",
       "source": "extensions/vfx-graph/unitypkg/Editor/Vfx/control-reinitialize.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "stable-state-readback",
-        "description": "vfx.control.reinitialize 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
+        "description": "vfx.control-reinitialize 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
       },
       "proofSource": {
         "kind": "validated-state-snapshot",
-        "description": "vfx.control.reinitialize 的目标子系统状态 readback 与同一 validated editor session snapshot。"
+        "description": "vfx.control-reinitialize 的目标子系统状态 readback 与同一 validated editor session snapshot。"
       },
       "reloadPolicy": {
         "kind": "same-session-reobserve",
@@ -11123,18 +11123,18 @@
       ]
     },
     {
-      "toolName": "vfx.control.set-rate",
+      "toolName": "vfx.control-set-rate",
       "descriptorOwner": "extension:vfx-graph",
       "source": "extensions/vfx-graph/unitypkg/Editor/Vfx/control-set-rate.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "vfx.control.set-rate 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "vfx.control-set-rate 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "vfx.control.set-rate 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "vfx.control-set-rate 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -11150,18 +11150,18 @@
       ]
     },
     {
-      "toolName": "vfx.control.set-seed",
+      "toolName": "vfx.control-set-seed",
       "descriptorOwner": "extension:vfx-graph",
       "source": "extensions/vfx-graph/unitypkg/Editor/Vfx/control-set-seed.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "vfx.control.set-seed 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "vfx.control-set-seed 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "vfx.control.set-seed 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "vfx.control-set-seed 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -11177,18 +11177,18 @@
       ]
     },
     {
-      "toolName": "vfx.control.stop",
+      "toolName": "vfx.control-stop",
       "descriptorOwner": "extension:vfx-graph",
       "source": "extensions/vfx-graph/unitypkg/Editor/Vfx/control-stop.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "stable-state-readback",
-        "description": "vfx.control.stop 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
+        "description": "vfx.control-stop 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
       },
       "proofSource": {
         "kind": "validated-state-snapshot",
-        "description": "vfx.control.stop 的目标子系统状态 readback 与同一 validated editor session snapshot。"
+        "description": "vfx.control-stop 的目标子系统状态 readback 与同一 validated editor session snapshot。"
       },
       "reloadPolicy": {
         "kind": "same-session-reobserve",
@@ -11204,18 +11204,18 @@
       ]
     },
     {
-      "toolName": "vfx.effect.add",
+      "toolName": "vfx.effect-add",
       "descriptorOwner": "extension:vfx-graph",
       "source": "extensions/vfx-graph/unitypkg/Editor/Vfx/effect-add.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "vfx.effect.add 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "vfx.effect-add 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "vfx.effect.add 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "vfx.effect-add 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -11231,18 +11231,18 @@
       ]
     },
     {
-      "toolName": "vfx.effect.assign",
+      "toolName": "vfx.effect-assign",
       "descriptorOwner": "extension:vfx-graph",
       "source": "extensions/vfx-graph/unitypkg/Editor/Vfx/effect-assign.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "vfx.effect.assign 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "vfx.effect-assign 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "vfx.effect.assign 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "vfx.effect-assign 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -11258,18 +11258,18 @@
       ]
     },
     {
-      "toolName": "vfx.effect.info",
+      "toolName": "vfx.effect-info",
       "descriptorOwner": "extension:vfx-graph",
       "source": "extensions/vfx-graph/unitypkg/Editor/Vfx/effect-info.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "vfx.effect.info 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "vfx.effect-info 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "vfx.effect.info 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "vfx.effect-info 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -11285,18 +11285,18 @@
       ]
     },
     {
-      "toolName": "vfx.graph.create",
+      "toolName": "vfx.graph-create",
       "descriptorOwner": "extension:vfx-graph",
       "source": "extensions/vfx-graph/unitypkg/Editor/Vfx/graph-create.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "vfx.graph.create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "vfx.graph-create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "vfx.graph.create 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "vfx.graph-create 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -11312,18 +11312,18 @@
       ]
     },
     {
-      "toolName": "vfx.graph.info",
+      "toolName": "vfx.graph-info",
       "descriptorOwner": "extension:vfx-graph",
       "source": "extensions/vfx-graph/unitypkg/Editor/Vfx/graph-info.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "vfx.graph.info 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "vfx.graph-info 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "vfx.graph.info 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "vfx.graph-info 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -11555,18 +11555,18 @@
       ]
     },
     {
-      "toolName": "vfx.particle.clear",
+      "toolName": "vfx.particle-clear",
       "descriptorOwner": "extension:vfx-graph",
       "source": "extensions/vfx-graph/unitypkg/Editor/Vfx/particle-clear.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "stable-state-readback",
-        "description": "vfx.particle.clear 请求的根与可选子系统 particleCount=0 已按 instance ID 重新观察，并在稳定窗口内持续成立。"
+        "description": "vfx.particle-clear 请求的根与可选子系统 particleCount=0 已按 instance ID 重新观察，并在稳定窗口内持续成立。"
       },
       "proofSource": {
         "kind": "validated-state-snapshot",
-        "description": "vfx.particle.clear 的 fresh ParticleSystem readback 与同一 validated editor session snapshot。"
+        "description": "vfx.particle-clear 的 fresh ParticleSystem readback 与同一 validated editor session snapshot。"
       },
       "reloadPolicy": {
         "kind": "same-session-reobserve",
@@ -11582,18 +11582,18 @@
       ]
     },
     {
-      "toolName": "vfx.particle.pause",
+      "toolName": "vfx.particle-pause",
       "descriptorOwner": "extension:vfx-graph",
       "source": "extensions/vfx-graph/unitypkg/Editor/Vfx/particle-pause.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "stable-state-readback",
-        "description": "vfx.particle.pause 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
+        "description": "vfx.particle-pause 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
       },
       "proofSource": {
         "kind": "validated-state-snapshot",
-        "description": "vfx.particle.pause 的目标子系统状态 readback 与同一 validated editor session snapshot。"
+        "description": "vfx.particle-pause 的目标子系统状态 readback 与同一 validated editor session snapshot。"
       },
       "reloadPolicy": {
         "kind": "same-session-reobserve",
@@ -11609,18 +11609,18 @@
       ]
     },
     {
-      "toolName": "vfx.particle.play",
+      "toolName": "vfx.particle-play",
       "descriptorOwner": "extension:vfx-graph",
       "source": "extensions/vfx-graph/unitypkg/Editor/Vfx/particle-play.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "stable-state-readback",
-        "description": "vfx.particle.play 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
+        "description": "vfx.particle-play 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
       },
       "proofSource": {
         "kind": "validated-state-snapshot",
-        "description": "vfx.particle.play 的目标子系统状态 readback 与同一 validated editor session snapshot。"
+        "description": "vfx.particle-play 的目标子系统状态 readback 与同一 validated editor session snapshot。"
       },
       "reloadPolicy": {
         "kind": "same-session-reobserve",
@@ -11636,18 +11636,18 @@
       ]
     },
     {
-      "toolName": "vfx.particle.stop",
+      "toolName": "vfx.particle-stop",
       "descriptorOwner": "extension:vfx-graph",
       "source": "extensions/vfx-graph/unitypkg/Editor/Vfx/particle-stop.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "stable-state-readback",
-        "description": "vfx.particle.stop 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
+        "description": "vfx.particle-stop 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
       },
       "proofSource": {
         "kind": "validated-state-snapshot",
-        "description": "vfx.particle.stop 的目标子系统状态 readback 与同一 validated editor session snapshot。"
+        "description": "vfx.particle-stop 的目标子系统状态 readback 与同一 validated editor session snapshot。"
       },
       "reloadPolicy": {
         "kind": "same-session-reobserve",
@@ -11663,18 +11663,18 @@
       ]
     },
     {
-      "toolName": "vfx.template.create",
+      "toolName": "vfx.template-create",
       "descriptorOwner": "extension:vfx-graph",
       "source": "extensions/vfx-graph/unitypkg/Editor/Vfx/template-create.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "vfx.template.create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "vfx.template-create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "vfx.template.create 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "vfx.template-create 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -11690,18 +11690,18 @@
       ]
     },
     {
-      "toolName": "vfx.template.list",
+      "toolName": "vfx.template-list",
       "descriptorOwner": "extension:vfx-graph",
       "source": "extensions/vfx-graph/unitypkg/Editor/Vfx/template-list.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "vfx.template.list 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "vfx.template-list 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "vfx.template.list 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "vfx.template-list 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -11717,18 +11717,18 @@
       ]
     },
     {
-      "toolName": "vfx.trail.create",
+      "toolName": "vfx.trail-create",
       "descriptorOwner": "extension:vfx-graph",
       "source": "extensions/vfx-graph/unitypkg/Editor/Vfx/trail-create.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "vfx.trail.create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "vfx.trail-create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "vfx.trail.create 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "vfx.trail-create 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -11744,18 +11744,18 @@
       ]
     },
     {
-      "toolName": "vfx.trail.set",
+      "toolName": "vfx.trail-set",
       "descriptorOwner": "extension:vfx-graph",
       "source": "extensions/vfx-graph/unitypkg/Editor/Vfx/trail-set.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "vfx.trail.set 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "vfx.trail-set 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "vfx.trail.set 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "vfx.trail-set 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -11798,14 +11798,14 @@
       ]
     },
     {
-      "toolName": "debug.input.info",
+      "toolName": "debug.input-info",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/input/info.cs",
+      "source": "unitypkg/Editor/Tools/debug/input-info.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "device-backend-availability-and-owner-record-readback",
-        "description": "debug.input.info 的终态是它对当前 Editor 的可选设备后端与输入所有权做出的只读事实：后端 status 为 available 或 unavailable 并给出 reason、apiIdentity 与 missingApiMembers，通用输入路径逐条给出真实 Tool 名与线程语义，候选 managed wrapper 只在真实 detour 加真实命中时 supported=true，以及本 owner 实际拥有的设备与输入记录（含现场读回的 confirmedControls）。缺少依赖不失败，它就是 unavailable 这个答案。"
+        "description": "debug.input-info 的终态是它对当前 Editor 的可选设备后端与输入所有权做出的只读事实：后端 status 为 available 或 unavailable 并给出 reason、apiIdentity 与 missingApiMembers，通用输入路径逐条给出真实 Tool 名与线程语义，候选 managed wrapper 只在真实 detour 加真实命中时 supported=true，以及本 owner 实际拥有的设备与输入记录（含现场读回的 confirmedControls）。缺少依赖不失败，它就是 unavailable 这个答案。"
       },
       "proofSource": {
         "kind": "typed-result-and-live-device-readback",
@@ -11823,14 +11823,14 @@
       "asyncSignals": []
     },
     {
-      "toolName": "debug.input.key",
+      "toolName": "debug.input-key",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/input/key.cs",
+      "source": "unitypkg/Editor/Tools/debug/input-key.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "owned-virtual-device-and-declared-end-boundary",
-        "description": "debug.input.key 的终态由它自己那份输入记录决定：会话拥有的虚拟键设备身份、声明的结束边界与到期时刻、现场读回的真实按下控制，以及每条记录的释放状态。没有可用后端时在任何 effect 之前以 E_DEBUG_BINDING_UNSUPPORTED 加上 status unavailable 拒绝，绝不安装依赖，也绝不上报已下发。"
+        "description": "debug.input-key 的终态由它自己那份输入记录决定：会话拥有的虚拟键设备身份、声明的结束边界与到期时刻、现场读回的真实按下控制，以及每条记录的释放状态。没有可用后端时在任何 effect 之前以 E_DEBUG_BINDING_UNSUPPORTED 加上 status unavailable 拒绝，绝不安装依赖，也绝不上报已下发。"
       },
       "proofSource": {
         "kind": "typed-result-and-live-device-readback",
@@ -11843,19 +11843,19 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "reobserve-or-fail-closed",
-        "description": "只有在既无法提交状态、又无法撤除本次刚建立的设备时才返回 E_EXECUTION_TIMEOUT 并带 effectMayBePartial true；此时调用方用 debug.input.info 读取本 owner 仍报告的设备与记录，再用 debug.input.release 重新请求释放。"
+        "description": "只有在既无法提交状态、又无法撤除本次刚建立的设备时才返回 E_EXECUTION_TIMEOUT 并带 effectMayBePartial true；此时调用方用 debug.input-info 读取本 owner 仍报告的设备与记录，再用 debug.input-release 重新请求释放。"
       },
       "asyncSignals": []
     },
     {
-      "toolName": "debug.input.pointer",
+      "toolName": "debug.input-pointer",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/input/pointer.cs",
+      "source": "unitypkg/Editor/Tools/debug/input-pointer.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "owned-virtual-pointer-in-declared-coordinate-space",
-        "description": "debug.input.pointer 的终态由它自己那份指针输入记录决定：会话拥有的虚拟指针设备身份、在 effect 之前固定下来的目标坐标空间与观测尺寸、声明的结束边界与到期时刻、现场读回的真实按下按键，以及每条记录的释放状态。坐标空间无法解析或调用不在 Unity 主线程时在任何 effect 之前以 E_DEBUG_SCOPE_UNSUPPORTED 拒绝，绝不按假设尺寸下发。"
+        "description": "debug.input-pointer 的终态由它自己那份指针输入记录决定：会话拥有的虚拟指针设备身份、在 effect 之前固定下来的目标坐标空间与观测尺寸、声明的结束边界与到期时刻、现场读回的真实按下按键，以及每条记录的释放状态。坐标空间无法解析或调用不在 Unity 主线程时在任何 effect 之前以 E_DEBUG_SCOPE_UNSUPPORTED 拒绝，绝不按假设尺寸下发。"
       },
       "proofSource": {
         "kind": "typed-result-and-live-device-readback",
@@ -11868,19 +11868,19 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "reobserve-or-fail-closed",
-        "description": "只有在既无法提交状态、又无法撤除本次刚建立的设备时才返回 E_EXECUTION_TIMEOUT 并带 effectMayBePartial true；此时调用方用 debug.input.info 读取本 owner 仍报告的记录，再用 debug.input.release 重新请求释放。"
+        "description": "只有在既无法提交状态、又无法撤除本次刚建立的设备时才返回 E_EXECUTION_TIMEOUT 并带 effectMayBePartial true；此时调用方用 debug.input-info 读取本 owner 仍报告的记录，再用 debug.input-release 重新请求释放。"
       },
       "asyncSignals": []
     },
     {
-      "toolName": "debug.input.release",
+      "toolName": "debug.input-release",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/debug/input/release.cs",
+      "source": "unitypkg/Editor/Tools/debug/input-release.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "confirmed-release-readback-or-honest-pending",
-        "description": "debug.input.release 的终态是它对每条目标记录的实际释放确认：只有设备读回证明按下状态已清除（或设备已可证明不存在）才报 released，否则报 pending 并给出精确原因与补完路径。它绝不用“已提交释放”替代“已确认释放”，也绝不 reset 或移除不是本 owner 建立的设备。"
+        "description": "debug.input-release 的终态是它对每条目标记录的实际释放确认：只有设备读回证明按下状态已清除（或设备已可证明不存在）才报 released，否则报 pending 并给出精确原因与补完路径。它绝不用“已提交释放”替代“已确认释放”，也绝不 reset 或移除不是本 owner 建立的设备。"
       },
       "proofSource": {
         "kind": "device-readback-and-device-list-readback",
@@ -11893,12 +11893,12 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "reobserve-or-fail-closed",
-        "description": "释放确认无法完成时不返回成功：以 ok:true 加 releaseState pending 与 pendingReasons 表达事实，调用方用 debug.input.info 读取同一记录，或再次调用本 Tool 重试确认，直到 released 为止。"
+        "description": "释放确认无法完成时不返回成功：以 ok:true 加 releaseState pending 与 pendingReasons 表达事实，调用方用 debug.input-info 读取同一记录，或再次调用本 Tool 重试确认，直到 released 为止。"
       },
       "asyncSignals": []
     },
     {
-      "toolName": "debug.code.flow.wait",
+      "toolName": "debug.code-flow-wait",
       "descriptorOwner": "ts-local",
       "source": "src/tools/debug/code-flow-wait.ts",
       "deliveryMode": "direct-terminal",
@@ -11926,7 +11926,7 @@
       ]
     },
     {
-      "toolName": "debug.code.flow.cancel",
+      "toolName": "debug.code-flow-cancel",
       "descriptorOwner": "ts-local",
       "source": "src/tools/debug/code-flow-cancel.ts",
       "deliveryMode": "direct-terminal",
@@ -11954,7 +11954,7 @@
       ]
     },
     {
-      "toolName": "debug.code.flow.run",
+      "toolName": "debug.code-flow-run",
       "descriptorOwner": "ts-local",
       "source": "src/tools/debug/code-flow-run.ts",
       "deliveryMode": "direct-terminal",
@@ -11982,7 +11982,7 @@
       ]
     },
     {
-      "toolName": "debug.code.flow.submit",
+      "toolName": "debug.code-flow-submit",
       "descriptorOwner": "ts-local",
       "source": "src/tools/debug/code-flow-submit.ts",
       "deliveryMode": "direct-terminal",
@@ -11993,7 +11993,7 @@
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "收据携带 flowId、budgetMs 与并发占用；流终态由 debug.code.flow.wait 读取。"
+        "description": "收据携带 flowId、budgetMs 与并发占用；流终态由 debug.code-flow-wait 读取。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",

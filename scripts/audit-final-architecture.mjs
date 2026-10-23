@@ -320,7 +320,7 @@ function residualChecks(allTextFiles, csharpFiles, multiCapabilityFiles) {
     {
       id: "legacyDirectUiDocumentRoute",
       path: "src/bridge/index.ts",
-      pattern: /command\s*===\s*["']ui\.document\.info["']/g
+      pattern: /command\s*===\s*["']ui\.document-info["']/g
     }
   ];
   for (const spec of contractResidualSpecs) {
@@ -531,7 +531,8 @@ const textRoots = ["src", "unitypkg", "extensions", "tests", "docs", "skills", "
 const allTextFiles = textRoots.flatMap((root) => collectFiles(join(ROOT, root), (path) => /\.(?:cs|ts|js|mjs|cjs|json|md)$/.test(path)));
 const checks = residualChecks(allTextFiles, csharpFiles, multiCapabilityFiles);
 
-const expectedCompiledInventory = collectPublicToolInventory(ROOT)
+const publicInventory = collectPublicToolInventory(ROOT);
+const expectedCompiledInventory = publicInventory
   .filter((entry) => entry.descriptorOwner !== "ts-local")
   .map((entry) => [entry.name, entry.descriptorOwner, entry.assemblyName, entry.implementationType]);
 const generatedInventoryPath = join(ROOT, "unitypkg", "Editor", "Generated", "UnityCliToolCompletionRegistry.g.cs");
@@ -561,6 +562,21 @@ checks.push({
   files: builtInToolLayoutMismatches
 });
 
+// native Tool 名固定两段 <group>.<tool>；官方 attribute 名来自外部作者，不在此集合内。
+const nativeToolNameShapeMismatches = publicInventory
+  .filter((entry) => {
+    const segments = entry.name.split(".");
+    if (segments.length !== 2) return true;
+    return entry.descriptorOwner !== "ts-local" && Boolean(entry.group) && segments[0] !== entry.group;
+  })
+  .map((entry) => ({ path: entry.source, count: 1, expected: "<group>.<tool> with exactly one dot", actual: entry.name }));
+checks.push({
+  id: "nativeToolNameShape",
+  expected: 0,
+  actual: nativeToolNameShapeMismatches.length,
+  files: nativeToolNameShapeMismatches
+});
+
 const packageSamplesCapabilities = collectFiles(join(ROOT, "unitypkg", "Editor", "Samples"), (path) => path.endsWith(".cs"))
   .map(csharpCapabilityFile)
   .filter((entry) => entry.toolCount > 0);
@@ -574,7 +590,7 @@ checks.push({
 const internalMetaRoutes = new Set([
   "catalog.editor.health", "catalog.editor.groups", "catalog.editor.summary", "catalog.editor.describe", "catalog.editor.list", "catalog.editor.run",
   "catalog.player.groups", "catalog.player.summary", "catalog.player.describe", "catalog.player.list", "catalog.player.run",
-  "debug.code.execute"
+  "debug.code-execute"
 ]);
 const contractCsharpTools = new Set(contract.commands
   .filter((entry) => entry.csharp_handler === "present" && !internalMetaRoutes.has(entry.bridgeCommand))

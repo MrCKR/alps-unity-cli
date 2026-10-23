@@ -61,7 +61,7 @@ namespace UnityCli
         /// <summary>只更新显式提供的三个 Audio 字段，并从新 SerializedObject 与磁盘文件验证终态。</summary>
         internal static ProjectAudioSettingsSetResult SetAudio(ProjectAudioSettingsSetRequest request, UnityCliProjectToolContext ctx)
         {
-            const string toolName = "project-settings.audio-settings.set";
+            const string toolName = "project-settings.audio-settings-set";
             EnsureReady(toolName);
             request = request ?? new ProjectAudioSettingsSetRequest();
             if (!request.Volume.HasValue && !request.RolloffScale.HasValue && !request.DopplerFactor.HasValue)
@@ -149,7 +149,7 @@ namespace UnityCli
         /// <summary>冻结唯一命名axis和三个批准字段，effect后按index/name/value与文件身份重新证明。</summary>
         internal static ProjectInputSettingsSetResult SetInput(ProjectInputSettingsSetRequest request, UnityCliProjectToolContext ctx)
         {
-            const string toolName = "project-settings.input-settings.set";
+            const string toolName = "project-settings.input-settings-set";
             EnsureReady(toolName);
             request = request ?? new ProjectInputSettingsSetRequest();
             if (string.IsNullOrEmpty(request.Axis))
@@ -261,7 +261,7 @@ namespace UnityCli
         /// <summary>PlayerSettings enum按当前Unity定义精确解析；reload风险显式投影但不在断线后重放。</summary>
         internal static ProjectPlayerSettingsSetResult SetPlayer(ProjectPlayerSettingsSetRequest request, UnityCliProjectToolContext ctx)
         {
-            const string toolName = "project-settings.player-settings.set";
+            const string toolName = "project-settings.player-settings-set";
             EnsureReady(toolName);
             request = request ?? new ProjectPlayerSettingsSetRequest();
             if (request.CompanyName == null && request.ProductName == null && request.BundleVersion == null && request.ScriptingBackend == null && request.ApiCompatibilityLevel == null)
@@ -323,7 +323,7 @@ namespace UnityCli
         /// <summary>Time写入先验证effective fixed/maximum关系，再保存唯一TimeManager asset并fresh证明。</summary>
         internal static ProjectTimeSettingsSetResult SetTime(ProjectTimeSettingsSetRequest request, UnityCliProjectToolContext ctx)
         {
-            const string toolName = "project-settings.time-settings.set";
+            const string toolName = "project-settings.time-settings-set";
             EnsureReady(toolName);
             request = request ?? new ProjectTimeSettingsSetRequest();
             if (!request.FixedDeltaTime.HasValue && !request.MaximumDeltaTime.HasValue && !request.TimeScale.HasValue)

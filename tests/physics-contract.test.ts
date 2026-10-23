@@ -10,8 +10,8 @@ const PHYSICS_COMMANDS = [
   "physics.assign-material",
   "physics.collision-matrix",
   "physics.force",
-  "physics.joint.add",
-  "physics.joint.remove",
+  "physics.joint-add",
+  "physics.joint-remove",
   "physics.linecast",
   "physics.material",
   "physics.overlap",
@@ -40,8 +40,8 @@ test("physics live descriptors expose representative semantics", async () => {
     makeLiveTool({ name: "physics.collision-matrix", summary: "Read or update collision matrix.", description: "Read or update the full 32-layer collision matrix.", group: "physics", playModeSupport: "session-affecting", sideEffects: ["scene-modify"], inputSchema: { type: "object", properties: {} } }),
     makeLiveTool({ name: "physics.material", summary: "Mutate physics materials.", description: "Mutate physics materials.", group: "physics", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] }),
     makeLiveTool({ name: "physics.assign-material", summary: "Assign a physics material.", description: "Assign a physics material.", group: "physics", supportsDryRun: true, playModeSupport: "session-affecting", sideEffects: ["scene-modify"], inputSchema: { type: "object", required: ["target", "materialPath"], properties: { target: { type: "string" }, materialPath: { type: "string" } } } }),
-    makeLiveTool({ name: "physics.joint.add", summary: "Add a joint.", description: "Add or configure a Joint component.", group: "physics", supportsDryRun: true, playModeSupport: "supported", sideEffects: ["scene-modify"], inputSchema: { type: "object", required: ["target"], properties: { target: { type: "string" } } } }),
-    makeLiveTool({ name: "physics.joint.remove", summary: "Remove a joint.", description: "Remove matching Joint components.", group: "physics", supportsDryRun: true, playModeSupport: "supported", sideEffects: ["scene-modify"], inputSchema: { type: "object", required: ["target"], properties: { target: { type: "string" } } } }),
+    makeLiveTool({ name: "physics.joint-add", summary: "Add a joint.", description: "Add or configure a Joint component.", group: "physics", supportsDryRun: true, playModeSupport: "supported", sideEffects: ["scene-modify"], inputSchema: { type: "object", required: ["target"], properties: { target: { type: "string" } } } }),
+    makeLiveTool({ name: "physics.joint-remove", summary: "Remove a joint.", description: "Remove matching Joint components.", group: "physics", supportsDryRun: true, playModeSupport: "supported", sideEffects: ["scene-modify"], inputSchema: { type: "object", required: ["target"], properties: { target: { type: "string" } } } }),
     makeLiveTool({ name: "physics.rigidbody", summary: "Read or mutate rigidbody state.", description: "Read rigidbody state without adding or modifying components.", group: "physics", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] })
   );
 
@@ -73,7 +73,7 @@ test("physics live descriptors expose representative semantics", async () => {
   assert.ok(assign.sideEffects?.includes("scene-modify"));
   assert.deepEqual(assign.inputSchema.required, ["target", "materialPath"]);
 
-  for (const name of ["physics.joint.add", "physics.joint.remove"]) {
+  for (const name of ["physics.joint-add", "physics.joint-remove"]) {
     const joint = tools.get(name)!;
     assert.equal(joint.playModeSupport, "supported");
     assert.equal(joint.supportsDryRun, true);
@@ -87,7 +87,7 @@ test("physics live descriptors expose representative semantics", async () => {
 });
 
 test("bridge specs resolve for physics tools", () => {
-  for (const [cmd, expected] of [["settings", "physics.settings"], ["collision-matrix", "physics.collision-matrix"], ["material", "physics.material"], ["assign-material", "physics.assign-material"], ["joint.add", "physics.joint.add"], ["joint.remove", "physics.joint.remove"], ["force", "physics.force"], ["overlap", "physics.overlap"], ["rigidbody", "physics.rigidbody"], ["raycast", "physics.raycast"], ["simulation", "physics.simulation"], ["linecast", "physics.linecast"], ["shapecast", "physics.shapecast"], ["validate", "physics.validate"]] as const) {
+  for (const [cmd, expected] of [["settings", "physics.settings"], ["collision-matrix", "physics.collision-matrix"], ["material", "physics.material"], ["assign-material", "physics.assign-material"], ["joint-add", "physics.joint-add"], ["joint-remove", "physics.joint-remove"], ["force", "physics.force"], ["overlap", "physics.overlap"], ["rigidbody", "physics.rigidbody"], ["raycast", "physics.raycast"], ["simulation", "physics.simulation"], ["linecast", "physics.linecast"], ["shapecast", "physics.shapecast"], ["validate", "physics.validate"]] as const) {
     const spec = bridgeCommandRegistry.lookup("physics", cmd);
     assert.equal(spec?.bridgeCommand, "catalog.editor.run", `physics ${cmd} should route via catalog.editor.run`);
     assert.equal(spec?.toolName, expected, `physics ${cmd} toolName should match`);
@@ -137,8 +137,8 @@ test("physics.rigidbody mutation reports the attached component", async () => {
   assert.match(source, /if \(rigidbody != null && !hasSetter\)[\s\S]*PlannedEffects = new List<PhysicsPlannedEffect>\(\)[\s\S]*ctx\.CommitEffect\(\)/, "an existing Rigidbody with no setters must remain read-only");
 });
 
-test("physics.joint.add re-resolves the component after mode-safe attachment", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Tools/physics/joint/add.cs", import.meta.url), "utf8");
+test("physics.joint-add re-resolves the component after mode-safe attachment", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/physics/joint-add.cs", import.meta.url), "utf8");
   assert.match(source, /UnityCliSceneMutation\.AddComponent\(target, type\)/);
   assert.match(source, /var joint = target\.GetComponent\(type\) as Joint/);
   assert.match(source, /var observedTarget = EditorUtility\.InstanceIDToObject\(targetId\) as GameObject/);
@@ -165,7 +165,7 @@ test("physics mutation tools validate before commit and prove fresh observed sta
   assert.match(assignMaterial, /var observedCollider = dryRun \? collider : EditorUtility\.InstanceIDToObject\(colliderId\) as Collider/);
   assert.match(force, /candidate\.GetInstanceID\(\) == rigidbodyId/);
 
-  const jointRemove = await readFile(new URL("../unitypkg/Editor/Tools/physics/joint/remove.cs", import.meta.url), "utf8");
+  const jointRemove = await readFile(new URL("../unitypkg/Editor/Tools/physics/joint-remove.cs", import.meta.url), "utf8");
   assert.match(jointRemove, /requestedJointIds/);
   assert.match(jointRemove, /remainingIds\.Contains\(id\)/);
   assert.match(jointRemove, /E_PHYSICS_JOINT_REMOVE_STATE_MISMATCH/);

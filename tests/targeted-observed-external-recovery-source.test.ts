@@ -11,8 +11,8 @@ test("targeted observed-state tools use stable fresh readback before returning",
     "../unitypkg/Editor/Tools/animator/play.cs",
     "../unitypkg/Editor/Tools/animator/stop.cs",
     "../unitypkg/Editor/Tools/editor/pause.cs",
-    "../unitypkg/Editor/Tools/lighting/bake/cancel.cs",
-    "../unitypkg/Editor/Tools/lighting/bake/start.cs",
+    "../unitypkg/Editor/Tools/lighting/bake-cancel.cs",
+    "../unitypkg/Editor/Tools/lighting/bake-start.cs",
   ];
   for (const path of paths) assert.match(await source(path), /ctx\.Wait\.UntilStable\(/, path);
 });

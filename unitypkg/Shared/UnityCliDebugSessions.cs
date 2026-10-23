@@ -173,7 +173,7 @@ namespace UnityCli
     /// </summary>
     public static class UnityCliDebugStopEntries
     {
-        /// <summary>主线程上的 debug.session.stop 调用。</summary>
+        /// <summary>主线程上的 debug.session-stop 调用。</summary>
         public const string MainThread = "main-thread";
 
         /// <summary>主线程暂停期间由暂停控制通道在后台线程上服务的 stop。</summary>

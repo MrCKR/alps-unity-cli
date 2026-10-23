@@ -277,8 +277,8 @@ namespace UnityCli
                         },
                         new[]
                         {
-                            "Wait for the site's current requests to drain, or read debug.pause.list to see the site state.",
-                            "Resume the site with debug.pause.resume when the on-site work is no longer needed."
+                            "Wait for the site's current requests to drain, or read debug.pause-list to see the site state.",
+                            "Resume the site with debug.pause-resume when the on-site work is no longer needed."
                         });
                 }
                 site.Waiting.Enqueue(operation);
@@ -340,7 +340,7 @@ namespace UnityCli
                 },
                 new[]
                 {
-                    "Run tools run debug.pause.list to read the sites that are paused right now.",
+                    "Run tools run debug.pause-list to read the sites that are paused right now.",
                     "Install the hook again if a new pause is required; a resumed pauseId is never reused."
                 });
         }
@@ -359,8 +359,8 @@ namespace UnityCli
                 },
                 new[]
                 {
-                    "Run tools run debug.pause.list to read the currently published pause sites.",
-                    "Run tools run debug.pause.wait to wait for a matching site before operating on it."
+                    "Run tools run debug.pause-list to read the currently published pause sites.",
+                    "Run tools run debug.pause-wait to wait for a matching site before operating on it."
                 });
         }
 

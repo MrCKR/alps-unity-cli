@@ -14,7 +14,7 @@ namespace UnityCli
 
         public ToolDescriptor Describe() => new()
         {
-            Name = "hdrp.settings.set", Summary = "Set one active HDRP pipeline asset setting.",
+            Name = "hdrp.settings-set", Summary = "Set one active HDRP pipeline asset setting.",
             Description = "Set one public property or SerializedProperty on the active HDRenderPipelineAsset. Supports --dry-run without saving the asset.",
             Group = "hdrp",DestructiveHint = true, SupportsDryRun = true,
             RequiresPackages = new[] { "com.unity.render-pipelines.high-definition" }, SideEffects = new[] { "asset-write", "render-pipeline-settings" },
@@ -24,10 +24,10 @@ namespace UnityCli
 
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            GameObjectToolSupport.EnsureEditorNotBusy("hdrp.settings.set");
+            GameObjectToolSupport.EnsureEditorNotBusy("hdrp.settings-set");
             var pipeline = HdrpToolSupport.GetActivePipelineAsset();
             var plan = HdrpToolSupport.PrepareSetting(pipeline, request.Property, request.Value);
-            var effects = new List<HdrpPlannedEffect> { new HdrpPlannedEffect { Type = "hdrp.settings.set", Property = request.Property, Value = request.Value } };
+            var effects = new List<HdrpPlannedEffect> { new HdrpPlannedEffect { Type = "hdrp.settings-set", Property = request.Property, Value = request.Value } };
             var observedValue = request.Value;
             var pipelinePath = AssetDatabase.GetAssetPath(pipeline);
             if (!ctx.DryRun && string.IsNullOrEmpty(pipelinePath)) throw new UnityCliBridge.BridgeCommandException("E_HDRP_SETTING_PERSISTENCE_UNPROVABLE", "HDRP pipeline setting cannot be independently persisted because the active pipeline has no asset path.", "Use an asset-backed pipeline or add a contract strategy for transient pipeline settings.");

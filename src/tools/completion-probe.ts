@@ -1,6 +1,6 @@
 import type { AnyJson } from "../schema/any-json.js";
 
-export type CompletionProbeReadTool = "scene.gameobject" | "scene.gameobject.component";
+export type CompletionProbeReadTool = "scene.gameobject" | "scene.gameobject-component";
 export type CompletionProbeOperator = "equals" | "notEquals" | "approx" | "exists" | "lengthEquals" | "contains";
 
 /** 高风险同步动作的声明式 before/after proof。 */

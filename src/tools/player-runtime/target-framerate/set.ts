@@ -11,7 +11,7 @@ export interface RuntimeTargetFramerateSetResult {
 }
 
 export default defineTool<RuntimeTargetFramerateSetRequest, RuntimeTargetFramerateSetResult>({
-  name: "player-runtime.target-framerate.set",
+  name: "player-runtime.target-framerate-set",
   summary: "Set and read back the current development Player target frame rate.",
   description: "Validate one session-only target frame rate, apply it to the selected development Player, and return fresh Application.targetFrameRate readback. Use -1 for platform default or 0 for unlimited/VSync behavior.",
   group: "player-runtime",
@@ -22,6 +22,6 @@ export default defineTool<RuntimeTargetFramerateSetRequest, RuntimeTargetFramera
   supportsDryRun: true,
   playModeSupport: "runtime-only",
   timeoutMs: 10_000,
-  examples: [{ description: "Set the current Player target to 60 FPS.", argv: ["tools", "run", "player-runtime.target-framerate.set", "--input", "{\"frameRate\":60}"], input: { frameRate: 60 } }],
-  execute() { throw new Error("player-runtime.target-framerate.set must execute through the bridge-runtime dispatcher"); },
+  examples: [{ description: "Set the current Player target to 60 FPS.", argv: ["tools", "run", "player-runtime.target-framerate-set", "--input", "{\"frameRate\":60}"], input: { frameRate: 60 } }],
+  execute() { throw new Error("player-runtime.target-framerate-set must execute through the bridge-runtime dispatcher"); },
 });

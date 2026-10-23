@@ -10,7 +10,7 @@ namespace UnityCli
 
         public ToolDescriptor Describe() => new()
         {
-            Name = "vfx.particle.stop", Summary = "Stop a ParticleSystem.",
+            Name = "vfx.particle-stop", Summary = "Stop a ParticleSystem.",
             Description = "Stop the existing ParticleSystem with optional child propagation and stop behavior.",
             Group = "vfx",SideEffects = new[] { "particle-playback-edit" },
             Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 60000,
@@ -23,7 +23,7 @@ namespace UnityCli
 
         public async System.Threading.Tasks.ValueTask<VfxParticleActionResult> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            var particleSystem = VfxActionToolSupport.RequireParticle(request.Target, "vfx.particle.stop");
+            var particleSystem = VfxActionToolSupport.RequireParticle(request.Target, "vfx.particle-stop");
             var withChildren = request.WithChildren ?? true;
             var behavior = string.IsNullOrEmpty(request.StopBehavior)
                 ? UnityEngine.ParticleSystemStopBehavior.StopEmitting
@@ -31,10 +31,10 @@ namespace UnityCli
             var gameObjectId = particleSystem.gameObject.GetInstanceID();
             ctx.CommitEffect();
 
-            particleSystem = VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle.stop");
+            particleSystem = VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle-stop");
             particleSystem.Stop(withChildren, behavior);
-            await VfxActionToolSupport.RequireParticleState(particleSystem, withChildren, system => !system.isPlaying && !system.isEmitting && !system.isPaused, "vfx.particle.stop", ctx, ct);
-            return VfxActionToolSupport.BuildParticleResult(VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle.stop"), "vfx.particle.stop", ctx.LogPath);
+            await VfxActionToolSupport.RequireParticleState(particleSystem, withChildren, system => !system.isPlaying && !system.isEmitting && !system.isPaused, "vfx.particle-stop", ctx, ct);
+            return VfxActionToolSupport.BuildParticleResult(VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle-stop"), "vfx.particle-stop", ctx.LogPath);
         }
     }
 }

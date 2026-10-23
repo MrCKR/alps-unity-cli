@@ -180,7 +180,7 @@ namespace UnityCli.Cinemachine
             throw new UnityCliBridge.BridgeCommandException(
                 "E_CINEMACHINE_BRAIN_NOT_FOUND",
                 "GameObject does not have CinemachineBrain: " + GameObjectToolSupport.HierarchyPath(target),
-                "Use cinemachine.brain.ensure to add one.");
+                "Use cinemachine.brain-ensure to add one.");
         }
 
         public static GameObject ResolveBrainOwner(string target)
@@ -199,7 +199,7 @@ namespace UnityCli.Cinemachine
             throw new UnityCliBridge.BridgeCommandException(
                 "E_CINEMACHINE_BRAIN_NOT_FOUND",
                 "No CinemachineBrain found in the scene.",
-                "Use cinemachine.brain.ensure to add one.");
+                "Use cinemachine.brain-ensure to add one.");
         }
 
         public static GameObject FindOrCreateBrainOwnerCandidate()

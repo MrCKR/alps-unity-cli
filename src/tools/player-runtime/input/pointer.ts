@@ -20,7 +20,7 @@ export interface RuntimeInputPointerResult {
 }
 
 export default defineTool<RuntimeInputPointerRequest, RuntimeInputPointerResult>({
-  name: "player-runtime.input.pointer",
+  name: "player-runtime.input-pointer",
   summary: "Inject one bounded Input System pointer event into a development Player.",
   description: "Resolve the current Input System mouse, validate in-screen pixel coordinates, queue move, down, up, or click only in the selected development Player, flush the event, and return fresh position and pressed-state observations.",
   group: "player-runtime",
@@ -32,6 +32,6 @@ export default defineTool<RuntimeInputPointerRequest, RuntimeInputPointerResult>
   supportsDryRun: true,
   playModeSupport: "runtime-only",
   timeoutMs: 10_000,
-  examples: [{ description: "Click the left pointer button at screen position 100,100.", argv: ["tools", "run", "player-runtime.input.pointer", "--input", "{\"x\":100,\"y\":100,\"event\":\"click\",\"button\":\"left\"}"], input: { x: 100, y: 100, event: "click", button: "left" } }],
-  execute() { throw new Error("player-runtime.input.pointer must execute through the bridge-runtime dispatcher"); },
+  examples: [{ description: "Click the left pointer button at screen position 100,100.", argv: ["tools", "run", "player-runtime.input-pointer", "--input", "{\"x\":100,\"y\":100,\"event\":\"click\",\"button\":\"left\"}"], input: { x: 100, y: 100, event: "click", button: "left" } }],
+  execute() { throw new Error("player-runtime.input-pointer must execute through the bridge-runtime dispatcher"); },
 });

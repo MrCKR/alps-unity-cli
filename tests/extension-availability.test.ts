@@ -33,7 +33,7 @@ test("URP and HDRP Volume capabilities use one action-free source per tool", asy
     for (const action of expected) {
       const source = await readFile(new URL(`volume-${action}.cs`, directory), "utf8");
       assert.equal((source.match(/:\s*IUnityCliTool</g) ?? []).length, 1);
-      assert.match(source, new RegExp(`Name = "${pipeline}\\.volume\\.${action}"`));
+      assert.match(source, new RegExp(`Name = "${pipeline}\\.volume-${action}"`));
       assert.doesNotMatch(source, /public string Action/);
     }
   }
@@ -65,7 +65,7 @@ test("render pipeline settings declare reflective output as explicit arbitrary J
     for (const operation of ["get", "set"]) {
       const source = await readFile(new URL(`../../extensions/${pipeline}/unitypkg/Editor/${domain}/settings-${operation}.cs`, import.meta.url), "utf8");
       assert.match(source, /\[UnityCliAnyJson\]\s+public Dictionary<string, object> Settings/);
-      assert.match(source, new RegExp(`Name = "${pipeline}\\.settings\\.${operation}"`));
+      assert.match(source, new RegExp(`Name = "${pipeline}\\.settings-${operation}"`));
     }
   }
 });
@@ -153,11 +153,11 @@ test("extension manifest contributions expose tool names and required packages",
   const all = builtinExtensionToolContributions();
   assert.ok(all.some((tool) => tool.name === "probuilder.ping"));
   assert.ok(all.some((tool) => tool.name === "cinemachine.ping"));
-  assert.ok(all.some((tool) => tool.name === "vfx.graph.info"));
-  assert.ok(all.some((tool) => tool.name === "vfx.graph.create"));
+  assert.ok(all.some((tool) => tool.name === "vfx.graph-info"));
+  assert.ok(all.some((tool) => tool.name === "vfx.graph-create"));
 
   const probuilder = findBuiltinExtensionToolContribution("probuilder.ping");
-  const vfxGraph = findBuiltinExtensionToolContribution("vfx.graph.info");
+  const vfxGraph = findBuiltinExtensionToolContribution("vfx.graph-info");
   assert.ok(probuilder);
   assert.ok(vfxGraph);
   assert.deepEqual(requiredPackagesForContribution(probuilder!.manifest, probuilder!.contribution), ["com.unity.probuilder"]);
@@ -470,31 +470,31 @@ test("validateExtensionManifestContracts validates manifests against bridge rout
 
 test("URP, HDRP, Cinemachine, and VFX extension bridge specs route through catalog.editor.run", () => {
   const expected = [
-    ["urp", "feature.list", "urp.feature.list"],
-    ["urp", "feature.add", "urp.feature.add"],
-    ["urp", "feature.toggle", "urp.feature.toggle"],
-    ["urp", "feature.configure", "urp.feature.configure"],
-    ["urp", "feature.remove", "urp.feature.remove"],
-    ["urp", "volume.list", "urp.volume.list"],
-    ["urp", "volume.create", "urp.volume.create"],
-    ["urp", "volume.info", "urp.volume.info"],
-    ["urp", "volume.add-effect", "urp.volume.add-effect"],
-    ["urp", "volume.set", "urp.volume.set"],
-    ["urp", "settings.get", "urp.settings.get"],
-    ["urp", "settings.set", "urp.settings.set"],
-    ["hdrp", "volume.list", "hdrp.volume.list"],
-    ["hdrp", "volume.create", "hdrp.volume.create"],
-    ["hdrp", "volume.info", "hdrp.volume.info"],
-    ["hdrp", "volume.add-effect", "hdrp.volume.add-effect"],
-    ["hdrp", "volume.set", "hdrp.volume.set"],
-    ["hdrp", "settings.get", "hdrp.settings.get"],
-    ["hdrp", "settings.set", "hdrp.settings.set"],
+    ["urp", "feature-list", "urp.feature-list"],
+    ["urp", "feature-add", "urp.feature-add"],
+    ["urp", "feature-toggle", "urp.feature-toggle"],
+    ["urp", "feature-configure", "urp.feature-configure"],
+    ["urp", "feature-remove", "urp.feature-remove"],
+    ["urp", "volume-list", "urp.volume-list"],
+    ["urp", "volume-create", "urp.volume-create"],
+    ["urp", "volume-info", "urp.volume-info"],
+    ["urp", "volume-add-effect", "urp.volume-add-effect"],
+    ["urp", "volume-set", "urp.volume-set"],
+    ["urp", "settings-get", "urp.settings-get"],
+    ["urp", "settings-set", "urp.settings-set"],
+    ["hdrp", "volume-list", "hdrp.volume-list"],
+    ["hdrp", "volume-create", "hdrp.volume-create"],
+    ["hdrp", "volume-info", "hdrp.volume-info"],
+    ["hdrp", "volume-add-effect", "hdrp.volume-add-effect"],
+    ["hdrp", "volume-set", "hdrp.volume-set"],
+    ["hdrp", "settings-get", "hdrp.settings-get"],
+    ["hdrp", "settings-set", "hdrp.settings-set"],
     ["cinemachine", "ping", "cinemachine.ping"],
-    ["vfx", "graph.info", "vfx.graph.info"],
-    ["vfx", "graph.create", "vfx.graph.create"],
-    ["vfx", "effect.add", "vfx.effect.add"],
-    ["vfx", "trail.create", "vfx.trail.create"],
-    ["vfx", "trail.set", "vfx.trail.set"]
+    ["vfx", "graph-info", "vfx.graph-info"],
+    ["vfx", "graph-create", "vfx.graph-create"],
+    ["vfx", "effect-add", "vfx.effect-add"],
+    ["vfx", "trail-create", "vfx.trail-create"],
+    ["vfx", "trail-set", "vfx.trail-set"]
   ] as const;
   for (const [group, command, toolName] of expected) {
     const spec = bridgeCommandRegistry.lookup(group, command);
@@ -510,8 +510,8 @@ test("extension registry helpers still expose contribution counts", async () => 
 
   assert.equal(registry.extensionIds().length, 5);
   assert.equal(findBuiltinExtensionToolContribution("cinemachine.ping")?.extensionId, "cinemachine");
-  assert.equal(findBuiltinExtensionToolContribution("urp.feature.list")?.extensionId, "urp");
-  assert.equal(findBuiltinExtensionToolContribution("hdrp.volume.list")?.extensionId, "hdrp");
+  assert.equal(findBuiltinExtensionToolContribution("urp.feature-list")?.extensionId, "urp");
+  assert.equal(findBuiltinExtensionToolContribution("hdrp.volume-list")?.extensionId, "hdrp");
   const probuilderMetadata = builtinExtensionMetadata().find((entry) => entry.id === "probuilder");
   assert.ok(probuilderMetadata);
   assert.ok((probuilderMetadata?.providesTools ?? []).includes("probuilder.ping"));

@@ -516,7 +516,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "asset.import-settings.set",
+    "toolName": "asset.import-settings-set",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -594,7 +594,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "asset.refresh.status",
+    "toolName": "asset.refresh-status",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -672,7 +672,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "build.platform.get",
+    "toolName": "build.platform-get",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -688,7 +688,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "build.platform.set",
+    "toolName": "build.platform-set",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "external",
@@ -704,7 +704,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "build.player.status",
+    "toolName": "build.player-status",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -718,7 +718,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "build.profile.create",
+    "toolName": "build.profile-create",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -734,7 +734,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "build.profile.list",
+    "toolName": "build.profile-list",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -750,7 +750,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "build.profile.modify",
+    "toolName": "build.profile-modify",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -766,7 +766,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "build.profile.switch",
+    "toolName": "build.profile-switch",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "external",
@@ -796,7 +796,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "build.scene.add",
+    "toolName": "build.scene-add",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -812,7 +812,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "build.scene.disable",
+    "toolName": "build.scene-disable",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -828,7 +828,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "build.scene.enable",
+    "toolName": "build.scene-enable",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -844,7 +844,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "build.scene.list",
+    "toolName": "build.scene-list",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -860,7 +860,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "build.scene.remove",
+    "toolName": "build.scene-remove",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -876,7 +876,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "build.settings.get",
+    "toolName": "build.settings-get",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -892,7 +892,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "build.settings.set",
+    "toolName": "build.settings-set",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1052,7 +1052,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "cinemachine.brain.ensure",
+    "toolName": "cinemachine.brain-ensure",
     "descriptorOwner": "extension:cinemachine",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1068,7 +1068,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "cinemachine.brain.status",
+    "toolName": "cinemachine.brain-status",
     "descriptorOwner": "extension:cinemachine",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1100,7 +1100,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "cinemachine.extension.add",
+    "toolName": "cinemachine.extension-add",
     "descriptorOwner": "extension:cinemachine",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1116,7 +1116,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "cinemachine.extension.list",
+    "toolName": "cinemachine.extension-list",
     "descriptorOwner": "extension:cinemachine",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1132,7 +1132,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "cinemachine.extension.remove",
+    "toolName": "cinemachine.extension-remove",
     "descriptorOwner": "extension:cinemachine",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1324,7 +1324,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.code.execute",
+    "toolName": "debug.code-execute",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1338,7 +1338,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.code.flow.cancel",
+    "toolName": "debug.code-flow-cancel",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1352,7 +1352,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.code.flow.run",
+    "toolName": "debug.code-flow-run",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1366,7 +1366,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.code.flow.submit",
+    "toolName": "debug.code-flow-submit",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1380,7 +1380,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.code.flow.wait",
+    "toolName": "debug.code-flow-wait",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1394,7 +1394,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.console.clear",
+    "toolName": "debug.console-clear",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1410,7 +1410,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.console.read",
+    "toolName": "debug.console-read",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1426,7 +1426,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.events.read",
+    "toolName": "debug.events-read",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1442,7 +1442,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.hook.disable",
+    "toolName": "debug.hook-disable",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -1458,7 +1458,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.hook.enable",
+    "toolName": "debug.hook-enable",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -1474,7 +1474,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.hook.info",
+    "toolName": "debug.hook-info",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1490,7 +1490,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.hook.install",
+    "toolName": "debug.hook-install",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -1506,7 +1506,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.hook.list",
+    "toolName": "debug.hook-list",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1522,7 +1522,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.hook.remove",
+    "toolName": "debug.hook-remove",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -1538,7 +1538,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.hook.replace",
+    "toolName": "debug.hook-replace",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -1554,7 +1554,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.input.info",
+    "toolName": "debug.input-info",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -1570,7 +1570,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.input.key",
+    "toolName": "debug.input-key",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -1586,7 +1586,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.input.pointer",
+    "toolName": "debug.input-pointer",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -1602,7 +1602,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.input.release",
+    "toolName": "debug.input-release",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -1618,7 +1618,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.method.find",
+    "toolName": "debug.method-find",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1634,7 +1634,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.method.invoke",
+    "toolName": "debug.method-invoke",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -1650,7 +1650,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.pause.evaluate",
+    "toolName": "debug.pause-evaluate",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -1666,7 +1666,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.pause.inspect",
+    "toolName": "debug.pause-inspect",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1682,7 +1682,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.pause.list",
+    "toolName": "debug.pause-list",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1698,7 +1698,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.pause.resume",
+    "toolName": "debug.pause-resume",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -1714,7 +1714,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.pause.wait",
+    "toolName": "debug.pause-wait",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1730,7 +1730,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.program.info",
+    "toolName": "debug.program-info",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1746,7 +1746,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.program.install",
+    "toolName": "debug.program-install",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -1762,7 +1762,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.program.list",
+    "toolName": "debug.program-list",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1778,7 +1778,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.program.remove",
+    "toolName": "debug.program-remove",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -1794,7 +1794,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.program.replace",
+    "toolName": "debug.program-replace",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -1810,7 +1810,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.program.run",
+    "toolName": "debug.program-run",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -1826,7 +1826,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.program.stop",
+    "toolName": "debug.program-stop",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -1842,7 +1842,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.program.wait",
+    "toolName": "debug.program-wait",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -1858,7 +1858,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.run.begin",
+    "toolName": "debug.run-begin",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1874,7 +1874,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.run.compare",
+    "toolName": "debug.run-compare",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -1890,7 +1890,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.run.end",
+    "toolName": "debug.run-end",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -1906,7 +1906,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.run.info",
+    "toolName": "debug.run-info",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -1922,7 +1922,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.run.list",
+    "toolName": "debug.run-list",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1938,7 +1938,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.run.wait",
+    "toolName": "debug.run-wait",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -1954,7 +1954,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.session.create",
+    "toolName": "debug.session-create",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -1970,7 +1970,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.session.export",
+    "toolName": "debug.session-export",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -1986,7 +1986,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.session.import",
+    "toolName": "debug.session-import",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -2002,7 +2002,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.session.info",
+    "toolName": "debug.session-info",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2018,7 +2018,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.session.list",
+    "toolName": "debug.session-list",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2034,7 +2034,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.session.remove",
+    "toolName": "debug.session-remove",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -2050,7 +2050,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.session.stop",
+    "toolName": "debug.session-stop",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -2066,7 +2066,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "debug.thread.list",
+    "toolName": "debug.thread-list",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2082,7 +2082,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.type.schema",
+    "toolName": "debug.type-schema",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2098,7 +2098,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.value.read",
+    "toolName": "debug.value-read",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2114,7 +2114,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "debug.value.write",
+    "toolName": "debug.value-write",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -2174,7 +2174,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "editor.active-tool.set",
+    "toolName": "editor.active-tool-set",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2190,7 +2190,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "editor.autotick.set",
+    "toolName": "editor.autotick-set",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2220,7 +2220,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "editor.dialog.click",
+    "toolName": "editor.dialog-click",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -2264,23 +2264,23 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "editor.menu",
+    "toolName": "editor.menu-execute",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
-    "executionClass": "external",
-    "completionPredicate": "external-operation-terminal",
-    "proofSource": "operation-terminal-and-readback",
-    "reloadPolicy": "reattach-or-reobserve",
+    "executionClass": "observed-state",
+    "completionPredicate": "dispatch-confirmed-and-state-readback",
+    "proofSource": "execute-menu-item-result-and-editor-state-readback",
+    "reloadPolicy": "same-turn-no-replay",
     "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "external-proof-or-unknown",
-    "completionDriverId": "external-terminal-readback-v1",
+    "outcomeUnknownPolicy": "caller-responsibility",
+    "completionDriverId": "observed-terminal-readback-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.EditorMenuTool",
+    "implementationType": "UnityCli.EditorMenuExecuteTool",
     "journalPolicy": "required",
     "mutation": true
   },
   {
-    "toolName": "editor.menu-items",
+    "toolName": "editor.menu-list",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2291,7 +2291,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.Tools.Editor.EditorMenuItemsTool",
+    "implementationType": "UnityCli.EditorMenuListTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -2312,7 +2312,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "editor.play-mode.start",
+    "toolName": "editor.play-mode-start",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -2328,7 +2328,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "editor.play-mode.status",
+    "toolName": "editor.play-mode-status",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2342,7 +2342,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "editor.play-mode.stop",
+    "toolName": "editor.play-mode-stop",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -2436,7 +2436,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "editor.selection.set",
+    "toolName": "editor.selection-set",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2658,7 +2658,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "hdrp.settings.get",
+    "toolName": "hdrp.settings-get",
     "descriptorOwner": "extension:hdrp",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2674,7 +2674,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "hdrp.settings.set",
+    "toolName": "hdrp.settings-set",
     "descriptorOwner": "extension:hdrp",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2690,7 +2690,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "hdrp.volume.add-effect",
+    "toolName": "hdrp.volume-add-effect",
     "descriptorOwner": "extension:hdrp",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2706,7 +2706,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "hdrp.volume.create",
+    "toolName": "hdrp.volume-create",
     "descriptorOwner": "extension:hdrp",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2722,7 +2722,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "hdrp.volume.info",
+    "toolName": "hdrp.volume-info",
     "descriptorOwner": "extension:hdrp",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2738,7 +2738,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "hdrp.volume.list",
+    "toolName": "hdrp.volume-list",
     "descriptorOwner": "extension:hdrp",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2754,7 +2754,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "hdrp.volume.set",
+    "toolName": "hdrp.volume-set",
     "descriptorOwner": "extension:hdrp",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2770,7 +2770,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "lighting.bake.cancel",
+    "toolName": "lighting.bake-cancel",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -2786,7 +2786,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "lighting.bake.clear",
+    "toolName": "lighting.bake-clear",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2802,7 +2802,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "lighting.bake.reflection-probe",
+    "toolName": "lighting.bake-reflection-probe",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "external",
@@ -2818,7 +2818,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "lighting.bake.settings",
+    "toolName": "lighting.bake-settings",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2834,7 +2834,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "lighting.bake.start",
+    "toolName": "lighting.bake-start",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -2850,7 +2850,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "lighting.bake.status",
+    "toolName": "lighting.bake-status",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2898,7 +2898,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "lighting.skybox.get",
+    "toolName": "lighting.skybox-get",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2914,7 +2914,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "lighting.skybox.set-ambient",
+    "toolName": "lighting.skybox-set-ambient",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2930,7 +2930,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "lighting.skybox.set-fog",
+    "toolName": "lighting.skybox-set-fog",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2946,7 +2946,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "lighting.skybox.set-material",
+    "toolName": "lighting.skybox-set-material",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2962,7 +2962,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "lighting.skybox.set-properties",
+    "toolName": "lighting.skybox-set-properties",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2978,7 +2978,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "lighting.skybox.set-reflection",
+    "toolName": "lighting.skybox-set-reflection",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -2994,7 +2994,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "lighting.skybox.set-sun",
+    "toolName": "lighting.skybox-set-sun",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -3164,7 +3164,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "navmesh.settings.set",
+    "toolName": "navmesh.settings-set",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -3180,7 +3180,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "navmesh.surface.bake",
+    "toolName": "navmesh.surface-bake",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "resumable",
@@ -3308,7 +3308,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "package.install.status",
+    "toolName": "package.install-status",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -3322,7 +3322,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "package.registry.clear",
+    "toolName": "package.registry-clear",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -3336,7 +3336,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "package.registry.set",
+    "toolName": "package.registry-set",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -3364,7 +3364,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "package.remove.status",
+    "toolName": "package.remove-status",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -3406,7 +3406,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "package.scoped-registry.add",
+    "toolName": "package.scoped-registry-add",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -3420,7 +3420,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "package.scoped-registry.remove",
+    "toolName": "package.scoped-registry-remove",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -3482,7 +3482,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "physics.joint.add",
+    "toolName": "physics.joint-add",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -3498,7 +3498,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "physics.joint.remove",
+    "toolName": "physics.joint-remove",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -3672,7 +3672,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "player-runtime.input.key",
+    "toolName": "player-runtime.input-key",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -3686,7 +3686,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "player-runtime.input.pointer",
+    "toolName": "player-runtime.input-pointer",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -3728,7 +3728,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "player-runtime.target-framerate.set",
+    "toolName": "player-runtime.target-framerate-set",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -3742,7 +3742,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "player-runtime.time-scale.set",
+    "toolName": "player-runtime.time-scale-set",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -3756,7 +3756,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "player-runtime.ui.capture-element",
+    "toolName": "player-runtime.ui-capture-element",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -3850,7 +3850,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "prefab.overrides.apply",
+    "toolName": "prefab.overrides-apply",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -3866,7 +3866,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "prefab.overrides.revert",
+    "toolName": "prefab.overrides-revert",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -3962,7 +3962,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "prefab.variant.create",
+    "toolName": "prefab.variant-create",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -4682,7 +4682,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "profiler.frame-debugger.disable",
+    "toolName": "profiler.frame-debugger-disable",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -4698,7 +4698,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "profiler.frame-debugger.enable",
+    "toolName": "profiler.frame-debugger-enable",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -4714,7 +4714,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "profiler.frame-debugger.events",
+    "toolName": "profiler.frame-debugger-events",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -4778,7 +4778,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "profiler.memory-snapshot.compare",
+    "toolName": "profiler.memory-snapshot-compare",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -4794,7 +4794,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "profiler.memory-snapshot.list",
+    "toolName": "profiler.memory-snapshot-list",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -4810,7 +4810,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "profiler.memory-snapshot.take",
+    "toolName": "profiler.memory-snapshot-take",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "external",
@@ -4986,7 +4986,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "project-settings.audio-settings.set",
+    "toolName": "project-settings.audio-settings-set",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -5034,7 +5034,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "project-settings.input-settings.set",
+    "toolName": "project-settings.input-settings-set",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -5050,7 +5050,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "project-settings.layer.add",
+    "toolName": "project-settings.layer-add",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -5066,7 +5066,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "project-settings.layer.remove",
+    "toolName": "project-settings.layer-remove",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -5114,7 +5114,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "project-settings.player-settings.set",
+    "toolName": "project-settings.player-settings-set",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -5130,7 +5130,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "project-settings.tag.add",
+    "toolName": "project-settings.tag-add",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -5146,7 +5146,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "project-settings.tag.remove",
+    "toolName": "project-settings.tag-remove",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -5194,7 +5194,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "project-settings.time-settings.set",
+    "toolName": "project-settings.time-settings-set",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -5210,7 +5210,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "rendering.pipeline.info",
+    "toolName": "rendering.pipeline-info",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -5226,7 +5226,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "rendering.pipeline.settings",
+    "toolName": "rendering.pipeline-settings",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -5338,7 +5338,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "scene.gameobject.component",
+    "toolName": "scene.gameobject-component",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -5354,7 +5354,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "scene.gameobject.components",
+    "toolName": "scene.gameobject-components",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -5862,7 +5862,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "test.run.status",
+    "toolName": "test.run-status",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -5988,7 +5988,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "timeline.clip.add",
+    "toolName": "timeline.clip-add",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6036,7 +6036,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "timeline.track.add",
+    "toolName": "timeline.track-add",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6110,7 +6110,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "ui.button.create",
+    "toolName": "ui.button-create",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6126,7 +6126,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "ui.canvas.create",
+    "toolName": "ui.canvas-create",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6174,7 +6174,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "ui.document.create",
+    "toolName": "ui.document-create",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6190,7 +6190,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "ui.document.delete",
+    "toolName": "ui.document-delete",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6206,7 +6206,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "ui.document.info",
+    "toolName": "ui.document-info",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6222,7 +6222,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "ui.document.update",
+    "toolName": "ui.document-update",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6270,7 +6270,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "ui.image.create",
+    "toolName": "ui.image-create",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6350,7 +6350,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "ui.text.create",
+    "toolName": "ui.text-create",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6382,7 +6382,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "urp.feature.add",
+    "toolName": "urp.feature-add",
     "descriptorOwner": "extension:urp",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6398,7 +6398,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "urp.feature.configure",
+    "toolName": "urp.feature-configure",
     "descriptorOwner": "extension:urp",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6414,7 +6414,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "urp.feature.list",
+    "toolName": "urp.feature-list",
     "descriptorOwner": "extension:urp",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6430,7 +6430,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "urp.feature.remove",
+    "toolName": "urp.feature-remove",
     "descriptorOwner": "extension:urp",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6446,7 +6446,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "urp.feature.toggle",
+    "toolName": "urp.feature-toggle",
     "descriptorOwner": "extension:urp",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6462,7 +6462,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "urp.settings.get",
+    "toolName": "urp.settings-get",
     "descriptorOwner": "extension:urp",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6478,7 +6478,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "urp.settings.set",
+    "toolName": "urp.settings-set",
     "descriptorOwner": "extension:urp",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6494,7 +6494,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "urp.volume.add-effect",
+    "toolName": "urp.volume-add-effect",
     "descriptorOwner": "extension:urp",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6510,7 +6510,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "urp.volume.create",
+    "toolName": "urp.volume-create",
     "descriptorOwner": "extension:urp",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6526,7 +6526,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "urp.volume.info",
+    "toolName": "urp.volume-info",
     "descriptorOwner": "extension:urp",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6542,7 +6542,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "urp.volume.list",
+    "toolName": "urp.volume-list",
     "descriptorOwner": "extension:urp",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6558,7 +6558,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "urp.volume.set",
+    "toolName": "urp.volume-set",
     "descriptorOwner": "extension:urp",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6574,7 +6574,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "vfx.control.pause",
+    "toolName": "vfx.control-pause",
     "descriptorOwner": "extension:vfx-graph",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -6590,7 +6590,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "vfx.control.play",
+    "toolName": "vfx.control-play",
     "descriptorOwner": "extension:vfx-graph",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -6606,7 +6606,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "vfx.control.reinitialize",
+    "toolName": "vfx.control-reinitialize",
     "descriptorOwner": "extension:vfx-graph",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -6622,7 +6622,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "vfx.control.set-rate",
+    "toolName": "vfx.control-set-rate",
     "descriptorOwner": "extension:vfx-graph",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6638,7 +6638,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "vfx.control.set-seed",
+    "toolName": "vfx.control-set-seed",
     "descriptorOwner": "extension:vfx-graph",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6654,7 +6654,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "vfx.control.stop",
+    "toolName": "vfx.control-stop",
     "descriptorOwner": "extension:vfx-graph",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -6670,7 +6670,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "vfx.effect.add",
+    "toolName": "vfx.effect-add",
     "descriptorOwner": "extension:vfx-graph",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6686,7 +6686,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "vfx.effect.assign",
+    "toolName": "vfx.effect-assign",
     "descriptorOwner": "extension:vfx-graph",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6702,7 +6702,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "vfx.effect.info",
+    "toolName": "vfx.effect-info",
     "descriptorOwner": "extension:vfx-graph",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6718,7 +6718,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "vfx.graph.create",
+    "toolName": "vfx.graph-create",
     "descriptorOwner": "extension:vfx-graph",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6734,7 +6734,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "vfx.graph.info",
+    "toolName": "vfx.graph-info",
     "descriptorOwner": "extension:vfx-graph",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6794,6 +6794,22 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
     "implementationType": "UnityCli.VfxParameterTool",
+    "journalPolicy": "required",
+    "mutation": true
+  },
+  {
+    "toolName": "vfx.particle-clear",
+    "descriptorOwner": "extension:vfx-graph",
+    "deliveryMode": "direct-terminal",
+    "executionClass": "observed-state",
+    "completionPredicate": "stable-state-readback",
+    "proofSource": "validated-state-snapshot",
+    "reloadPolicy": "same-session-reobserve",
+    "timeoutError": "E_EXECUTION_TIMEOUT",
+    "outcomeUnknownPolicy": "reobserve-or-fail-closed",
+    "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxParticleClearTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -6862,6 +6878,38 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
+    "toolName": "vfx.particle-pause",
+    "descriptorOwner": "extension:vfx-graph",
+    "deliveryMode": "direct-terminal",
+    "executionClass": "observed-state",
+    "completionPredicate": "stable-state-readback",
+    "proofSource": "validated-state-snapshot",
+    "reloadPolicy": "same-session-reobserve",
+    "timeoutError": "E_EXECUTION_TIMEOUT",
+    "outcomeUnknownPolicy": "reobserve-or-fail-closed",
+    "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxParticlePauseTool",
+    "journalPolicy": "required",
+    "mutation": true
+  },
+  {
+    "toolName": "vfx.particle-play",
+    "descriptorOwner": "extension:vfx-graph",
+    "deliveryMode": "direct-terminal",
+    "executionClass": "observed-state",
+    "completionPredicate": "stable-state-readback",
+    "proofSource": "validated-state-snapshot",
+    "reloadPolicy": "same-session-reobserve",
+    "timeoutError": "E_EXECUTION_TIMEOUT",
+    "outcomeUnknownPolicy": "reobserve-or-fail-closed",
+    "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxParticlePlayTool",
+    "journalPolicy": "required",
+    "mutation": true
+  },
+  {
     "toolName": "vfx.particle-shape",
     "descriptorOwner": "extension:vfx-graph",
     "deliveryMode": "direct-terminal",
@@ -6878,55 +6926,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "vfx.particle.clear",
-    "descriptorOwner": "extension:vfx-graph",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "observed-state",
-    "completionPredicate": "stable-state-readback",
-    "proofSource": "validated-state-snapshot",
-    "reloadPolicy": "same-session-reobserve",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "reobserve-or-fail-closed",
-    "completionDriverId": "observed-terminal-readback-v1",
-    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
-    "implementationType": "UnityCli.VfxParticleClearTool",
-    "journalPolicy": "required",
-    "mutation": true
-  },
-  {
-    "toolName": "vfx.particle.pause",
-    "descriptorOwner": "extension:vfx-graph",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "observed-state",
-    "completionPredicate": "stable-state-readback",
-    "proofSource": "validated-state-snapshot",
-    "reloadPolicy": "same-session-reobserve",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "reobserve-or-fail-closed",
-    "completionDriverId": "observed-terminal-readback-v1",
-    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
-    "implementationType": "UnityCli.VfxParticlePauseTool",
-    "journalPolicy": "required",
-    "mutation": true
-  },
-  {
-    "toolName": "vfx.particle.play",
-    "descriptorOwner": "extension:vfx-graph",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "observed-state",
-    "completionPredicate": "stable-state-readback",
-    "proofSource": "validated-state-snapshot",
-    "reloadPolicy": "same-session-reobserve",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "reobserve-or-fail-closed",
-    "completionDriverId": "observed-terminal-readback-v1",
-    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
-    "implementationType": "UnityCli.VfxParticlePlayTool",
-    "journalPolicy": "required",
-    "mutation": true
-  },
-  {
-    "toolName": "vfx.particle.stop",
+    "toolName": "vfx.particle-stop",
     "descriptorOwner": "extension:vfx-graph",
     "deliveryMode": "direct-terminal",
     "executionClass": "observed-state",
@@ -6942,7 +6942,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "vfx.template.create",
+    "toolName": "vfx.template-create",
     "descriptorOwner": "extension:vfx-graph",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6958,7 +6958,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "vfx.template.list",
+    "toolName": "vfx.template-list",
     "descriptorOwner": "extension:vfx-graph",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6974,7 +6974,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "vfx.trail.create",
+    "toolName": "vfx.trail-create",
     "descriptorOwner": "extension:vfx-graph",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",
@@ -6990,7 +6990,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "vfx.trail.set",
+    "toolName": "vfx.trail-set",
     "descriptorOwner": "extension:vfx-graph",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",

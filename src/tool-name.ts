@@ -4,7 +4,8 @@ export const MAX_TOOL_NAME_UTF8_BYTES = 128;
 
 export type RegisteredToolNameProfile = "native" | "official-attribute";
 
-const NATIVE_TOOL_NAME_PATTERN = /^[a-z][a-z0-9-]*(?:\.[a-z0-9][a-z0-9-]*)*(?![\s\S])/;
+// native Tool 名固定两段：<group>.<tool>。group 是唯一容器层级，tool 段内部细分只用 '-'。
+const NATIVE_TOOL_NAME_PATTERN = /^[a-z][a-z0-9-]*\.[a-z0-9][a-z0-9-]*(?![\s\S])/;
 const OFFICIAL_ATTRIBUTE_PREFIX = "UnityPipeline_";
 const OFFICIAL_ATTRIBUTE_SUFFIX_PATTERN = /^[a-z][a-z0-9_-]*(?:\.[a-z0-9][a-z0-9_-]*)*(?![\s\S])/;
 

@@ -59,7 +59,6 @@ function allDocFiles(): string[] {
     ".pi/skills/unity-cli-capability/SKILL.md",
     ".pi/skills/unity-cli-extension/SKILL.md",
     ".pi/skills/unity-cli-validation/SKILL.md",
-    ".pi/skills/unity-cli-wait/SKILL.md",
     ".pi/agents/unity-cli-gate.md",
   ])].sort();
 }

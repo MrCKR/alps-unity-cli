@@ -239,7 +239,7 @@ namespace UnityCli
                     "E_DEBUG_PROGRAM_DOMAIN_CHANGED",
                     "The Unity domain changed between preparation and commit, so the prepared program was discarded.",
                     new Dictionary<string, object> { { "programId", plan.ProgramId } },
-                    new[] { "Submit the same debug.program.install again in the current domain." });
+                    new[] { "Submit the same debug.program-install again in the current domain." });
             var outcome = session.Install(
                 plan.SessionId,
                 plan.Label,
@@ -279,7 +279,7 @@ namespace UnityCli
                 EditorSessionId = UnityCliBridge.EditorSessionId(),
                 DomainGeneration = canonical,
                 Budget = BudgetView(outcome.Budget),
-                Note = "Installation only prepared bindings and compiled the source. No detour is attached, no listener is active and no business code ran; the program stays dormant until debug.program.run activates it."
+                Note = "Installation only prepared bindings and compiled the source. No detour is attached, no listener is active and no business code ran; the program stays dormant until debug.program-run activates it."
             };
         }
 
@@ -522,8 +522,8 @@ namespace UnityCli
                     },
                     new[]
                     {
-                        "Run tools run debug.program.stop for a run you no longer need, then submit this run again.",
-                        "Run tools run debug.session.info on the owning session to read its active resources."
+                        "Run tools run debug.program-stop for a run you no longer need, then submit this run again.",
+                        "Run tools run debug.session-info on the owning session to read its active resources."
                     });
             }
             DebugSessionHost.AttachResource(reservation.Resource.ResourceId);
@@ -548,8 +548,8 @@ namespace UnityCli
                         new Dictionary<string, object> { { "programId", definition.ProgramId }, { "reason", failure } },
                         new[]
                         {
-                            "Run tools run debug.program.stop for the active run before starting another driver.",
-                            "Run tools run debug.program.info to read the active run of this program."
+                            "Run tools run debug.program-stop for the active run before starting another driver.",
+                            "Run tools run debug.program-info to read the active run of this program."
                         });
                 }
                 session.MarkStepDriverPlanted(definition.ProgramId, true);
@@ -682,7 +682,7 @@ namespace UnityCli
                 ? session.Programs().ToList()
                 : session.ProgramsFor(request.SessionId).ToList();
             var editorSessionId = UnityCliBridge.EditorSessionId();
-            var scope = UnityCliContinuationToken.Fingerprint(editorSessionId + "\0debug.program.list");
+            var scope = UnityCliContinuationToken.Fingerprint(editorSessionId + "\0debug.program-list");
             var offset = 0;
             if (request != null && !string.IsNullOrEmpty(request.Cursor))
             {
@@ -694,7 +694,7 @@ namespace UnityCli
                         "E_CONTINUATION_STALE",
                         "The program list continuation does not match the current Editor session or the loaded definition table.",
                         null,
-                        new[] { "Start a new debug.program.list read without a cursor." });
+                        new[] { "Start a new debug.program-list read without a cursor." });
             }
             var limit = request == null || request.Limit == null
                 ? DebugLimits.ProgramListDefaultLimit
@@ -741,7 +741,7 @@ namespace UnityCli
             var run = controller.Run;
             var definition = session.Find(run.ProgramId);
             var alreadyTerminal = run.IsTerminal;
-            var pendingClosed = session.RequestCancellation(run.ProgramRunId, "debug.program.stop requested a cooperative stop");
+            var pendingClosed = session.RequestCancellation(run.ProgramRunId, "debug.program-stop requested a cooperative stop");
             var cleanupRan = false;
             if (alreadyTerminal)
             {
@@ -758,7 +758,7 @@ namespace UnityCli
                 DebugScheduler.CloseDriver(run.ProgramId);
                 session.MarkStepDriverPlanted(run.ProgramId, false);
                 session.MarkCodeReturned(run.ProgramRunId);
-                session.CompleteRun(run.ProgramRunId, UnityCliDebugProgramRunStates.Cancelled, "E_DEBUG_PROGRAM_RUN_CANCELLED", "debug.program.stop closed the future steps of this run.", UtcMilliseconds());
+                session.CompleteRun(run.ProgramRunId, UnityCliDebugProgramRunStates.Cancelled, "E_DEBUG_PROGRAM_RUN_CANCELLED", "debug.program-stop closed the future steps of this run.", UtcMilliseconds());
                 DetachBindings(definition);
                 ReleaseRunResource(run.ProgramId);
                 var remaining = session.RunsFor(run.ProgramId).Any(candidate => !candidate.IsTerminal);

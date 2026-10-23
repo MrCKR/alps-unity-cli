@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "topLevel": "init",
   "schema": "schemas/init.schema.json",
   "subcommands": {
@@ -13,7 +13,6 @@
       "options": [
         "project",
         "close-editor",
-        "hot",
         "check",
         "timeout-ms"
       ],

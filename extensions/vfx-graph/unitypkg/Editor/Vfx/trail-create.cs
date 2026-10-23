@@ -13,7 +13,7 @@ namespace UnityCli
 
         public ToolDescriptor Describe() => new()
         {
-            Name = "vfx.trail.create", Summary = "Create and configure a TrailRenderer.",
+            Name = "vfx.trail-create", Summary = "Create and configure a TrailRenderer.",
             Description = "Create one scene GameObject with a TrailRenderer and apply width, gradient, material, lifetime, emission, alignment, texture, and vertex settings.",
             Group = "vfx",SideEffects = new[] { "scene-object-create", "component-add", "trail-renderer-edit" },
             Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 60000,
@@ -22,15 +22,15 @@ namespace UnityCli
 
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            VfxToolSupport.EnsureEditorReady("vfx.trail.create");
+            VfxToolSupport.EnsureEditorReady("vfx.trail-create");
             VfxToolSupport.PrepareTrailRendererFields(request);
             ctx.CommitEffect();
             var gameObject = VfxToolSupport.CreateSceneObject(string.IsNullOrWhiteSpace(request.Name) ? "Trail" : request.Name);
             var gameObjectId = gameObject.GetInstanceID();
             var trail = gameObject.AddComponent<TrailRenderer>();
-            var effects = new List<VfxPlannedEffect> { new VfxPlannedEffect { Type = "vfx.trail.create", Target = GameObjectToolSupport.HierarchyPath(gameObject), Property = "component", Value = "added" } };
-            VfxToolSupport.ApplyTrailRendererFields(trail, request, effects, "vfx.trail.create");
-            var observed = VfxToolSupport.ResolveObservedComponent<TrailRenderer>(gameObjectId, "vfx.trail.create");
+            var effects = new List<VfxPlannedEffect> { new VfxPlannedEffect { Type = "vfx.trail-create", Target = GameObjectToolSupport.HierarchyPath(gameObject), Property = "component", Value = "added" } };
+            VfxToolSupport.ApplyTrailRendererFields(trail, request, effects, "vfx.trail-create");
+            var observed = VfxToolSupport.ResolveObservedComponent<TrailRenderer>(gameObjectId, "vfx.trail-create");
             VfxToolSupport.VerifyTrailRendererFields(observed, request);
             UnityCliSceneMutation.MarkSceneObjectDirty(observed);
             VfxToolSupport.MarkSceneDirty(observed.gameObject);

@@ -407,8 +407,8 @@ test("collectAvailableTools returns available extension tools and built-in VFX c
   assert.equal(toolNames.filter((name) => name.startsWith("vfx.")).length, VFX_GRAPH_MANIFEST.contributions.tools!.filter((tool) => !(tool.requiresPackages ?? []).includes("com.unity.visualeffectgraph")).length);
   assert.ok(toolNames.includes("vfx.particle-create"));
   assert.ok(toolNames.includes("vfx.line-create"));
-  assert.ok(toolNames.includes("vfx.trail.create"));
-  assert.ok(toolNames.includes("vfx.trail.set"));
+  assert.ok(toolNames.includes("vfx.trail-create"));
+  assert.ok(toolNames.includes("vfx.trail-set"));
   assert.ok(tools.filter((tool) => tool.name.startsWith("vfx.")).every((tool) => !(tool.requiresPackages ?? []).includes("com.unity.visualeffectgraph")));
 });
 
@@ -421,14 +421,14 @@ test("collectAvailableTools returns built-in VFX component tools when optional p
     "vfx.particle-main",
     "vfx.particle-emission",
     "vfx.particle-shape",
-    "vfx.particle.play",
-    "vfx.particle.stop",
-    "vfx.particle.pause",
-    "vfx.particle.clear",
+    "vfx.particle-play",
+    "vfx.particle-stop",
+    "vfx.particle-pause",
+    "vfx.particle-clear",
     "vfx.line-create",
     "vfx.line-positions",
-    "vfx.trail.create",
-    "vfx.trail.set"
+    "vfx.trail-create",
+    "vfx.trail-set"
   ]);
 });
 
@@ -612,18 +612,18 @@ test("ProBuilder manifest has correct tool contributions", () => {
 test("VFX Graph manifest has one contribution per operation", () => {
   assert.equal(VFX_GRAPH_MANIFEST.contributions.tools!.length, VFX_GRAPH_MANIFEST.contributions.csharpEntries!.length);
   const toolNames = VFX_GRAPH_MANIFEST.contributions.tools!.map((t) => t.name);
-  assert.ok(toolNames.includes("vfx.graph.info"));
-  assert.ok(toolNames.includes("vfx.graph.create"));
-  assert.ok(toolNames.includes("vfx.effect.info"));
-  assert.ok(toolNames.includes("vfx.effect.add"));
-  assert.ok(toolNames.includes("vfx.effect.assign"));
-  assert.ok(toolNames.includes("vfx.control.set-seed"));
-  assert.ok(toolNames.includes("vfx.particle.play"));
-  assert.ok(toolNames.includes("vfx.particle.clear"));
-  assert.ok(toolNames.includes("vfx.template.list"));
-  assert.ok(toolNames.includes("vfx.template.create"));
-  assert.ok(toolNames.includes("vfx.trail.create"));
-  assert.ok(toolNames.includes("vfx.trail.set"));
+  assert.ok(toolNames.includes("vfx.graph-info"));
+  assert.ok(toolNames.includes("vfx.graph-create"));
+  assert.ok(toolNames.includes("vfx.effect-info"));
+  assert.ok(toolNames.includes("vfx.effect-add"));
+  assert.ok(toolNames.includes("vfx.effect-assign"));
+  assert.ok(toolNames.includes("vfx.control-set-seed"));
+  assert.ok(toolNames.includes("vfx.particle-play"));
+  assert.ok(toolNames.includes("vfx.particle-clear"));
+  assert.ok(toolNames.includes("vfx.template-list"));
+  assert.ok(toolNames.includes("vfx.template-create"));
+  assert.ok(toolNames.includes("vfx.trail-create"));
+  assert.ok(toolNames.includes("vfx.trail-set"));
   const graphOnly = VFX_GRAPH_MANIFEST.contributions.tools!.filter((t) => t.requiresPackages?.includes("com.unity.visualeffectgraph"));
   assert.equal(graphOnly.length, VFX_GRAPH_MANIFEST.contributions.tools!.filter((tool) => tool.requiresPackages?.includes("com.unity.visualeffectgraph")).length);
 });
@@ -660,7 +660,7 @@ test("extension mutating tools verify observed state instead of echoing requests
     assert.match(source, /VOLUME_VERIFY_FAILED/);
     assert.match(source, /ReadSerializedValue/);
   }
-  assert.match(sources[2], /RequireFeature\(featureIndex, rendererIndex, "urp\.feature\.toggle"\)/);
+  assert.match(sources[2], /RequireFeature\(featureIndex, rendererIndex, "urp\.feature-toggle"\)/);
   assert.match(sources[2], /ContainsFeature/);
   assert.match(sources[2], /ReadSerializedPropertyValue/);
   assert.match(sources[3], /SetAndReadRequired/);
@@ -673,16 +673,16 @@ test("extension mutating tools verify observed state instead of echoing requests
 
 test("URP manifest has one tool per feature, volume, and settings operation", () => {
   assert.equal(URP_MANIFEST.contributions.tools!.length, 12);
-  assert.deepEqual(URP_MANIFEST.contributions.tools!.filter((tool) => tool.name.startsWith("urp.feature.")).map((tool) => tool.name), ["urp.feature.list", "urp.feature.add", "urp.feature.toggle", "urp.feature.configure", "urp.feature.remove"]);
-  assert.deepEqual(URP_MANIFEST.contributions.tools!.filter((tool) => tool.name.startsWith("urp.volume.")).map((tool) => tool.name), ["urp.volume.list", "urp.volume.create", "urp.volume.info", "urp.volume.add-effect", "urp.volume.set"]);
-  assert.deepEqual(URP_MANIFEST.contributions.tools!.filter((tool) => tool.name.startsWith("urp.settings.")).map((tool) => tool.name), ["urp.settings.get", "urp.settings.set"]);
+  assert.deepEqual(URP_MANIFEST.contributions.tools!.filter((tool) => tool.name.startsWith("urp.feature-")).map((tool) => tool.name), ["urp.feature-list", "urp.feature-add", "urp.feature-toggle", "urp.feature-configure", "urp.feature-remove"]);
+  assert.deepEqual(URP_MANIFEST.contributions.tools!.filter((tool) => tool.name.startsWith("urp.volume-")).map((tool) => tool.name), ["urp.volume-list", "urp.volume-create", "urp.volume-info", "urp.volume-add-effect", "urp.volume-set"]);
+  assert.deepEqual(URP_MANIFEST.contributions.tools!.filter((tool) => tool.name.startsWith("urp.settings-")).map((tool) => tool.name), ["urp.settings-get", "urp.settings-set"]);
   assert.equal(Object.hasOwn(URP_MANIFEST.contributions, "contexts"), false);
 });
 
 test("HDRP manifest has one tool per volume and settings operation", () => {
   assert.equal(HDRP_MANIFEST.contributions.tools!.length, 7);
-  assert.deepEqual(HDRP_MANIFEST.contributions.tools!.filter((tool) => tool.name.startsWith("hdrp.volume.")).map((tool) => tool.name), ["hdrp.volume.list", "hdrp.volume.create", "hdrp.volume.info", "hdrp.volume.add-effect", "hdrp.volume.set"]);
-  assert.deepEqual(HDRP_MANIFEST.contributions.tools!.filter((tool) => tool.name.startsWith("hdrp.settings.")).map((tool) => tool.name), ["hdrp.settings.get", "hdrp.settings.set"]);
+  assert.deepEqual(HDRP_MANIFEST.contributions.tools!.filter((tool) => tool.name.startsWith("hdrp.volume-")).map((tool) => tool.name), ["hdrp.volume-list", "hdrp.volume-create", "hdrp.volume-info", "hdrp.volume-add-effect", "hdrp.volume-set"]);
+  assert.deepEqual(HDRP_MANIFEST.contributions.tools!.filter((tool) => tool.name.startsWith("hdrp.settings-")).map((tool) => tool.name), ["hdrp.settings-get", "hdrp.settings-set"]);
   assert.equal(Object.hasOwn(HDRP_MANIFEST.contributions, "contexts"), false);
 });
 
@@ -917,3 +917,4 @@ test("partially available extension shows per-package resolution", () => {
   assert.equal(result.status, "available");
   assert.equal(result.missingPackageIds.length, 0);
 });
+

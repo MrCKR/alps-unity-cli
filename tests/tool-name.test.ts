@@ -16,9 +16,17 @@ const invalidDefinition = (name: string) => ({
 test("native Tool names retain the exact syntax and UTF-8 byte limit", () => {
   assert.equal(isRegisteredToolName("scene.snapshot"), true);
   assert.equal(isRegisteredToolName("scene.hotfix-container"), true);
-  assert.equal(isRegisteredToolName("a".repeat(MAX_TOOL_NAME_UTF8_BYTES)), true);
-  assert.equal(isRegisteredToolName("a".repeat(MAX_TOOL_NAME_UTF8_BYTES + 1)), false);
+  assert.equal(isRegisteredToolName("editor.menu-execute"), true);
+  assert.equal(isRegisteredToolName("editor.play-mode-start"), true);
+  assert.equal(isRegisteredToolName("debug.code-flow-run"), true);
+  assert.equal(isRegisteredToolName(`a.${"b".repeat(MAX_TOOL_NAME_UTF8_BYTES - 2)}`), true);
+  assert.equal(isRegisteredToolName(`a.${"b".repeat(MAX_TOOL_NAME_UTF8_BYTES - 1)}`), false);
+  assert.equal(isRegisteredToolName("a".repeat(MAX_TOOL_NAME_UTF8_BYTES)), false);
   assert.equal(isRegisteredToolName("scene.hotfix_container"), false);
+  // 公开查找只有 group 与 tool 两层：第二个点号一律非法。
+  assert.equal(isRegisteredToolName("debug.hook." + "install"), false);
+  assert.equal(isRegisteredToolName("editor.play-mode." + "start"), false);
+  assert.equal(isRegisteredToolName("debug.code." + "flow.run"), false);
   assert.equal(isRegisteredToolName("UnityPipeline_project_reload_data"), false);
   assert.equal(isRegisteredToolName("scene.数据"), false);
   assert.equal(isRegisteredToolName("Scene.data"), false);
@@ -29,6 +37,7 @@ test("native Tool names retain the exact syntax and UTF-8 byte limit", () => {
 
   assert.throws(() => defineTool(invalidDefinition("scene.数据")), /registered Tool syntax.*128 UTF-8 bytes/);
   assert.throws(() => defineTool(invalidDefinition("a".repeat(129))), /registered Tool syntax.*128 UTF-8 bytes/);
+  assert.throws(() => defineTool(invalidDefinition("debug.hook." + "install")), /registered Tool syntax.*128 UTF-8 bytes/);
 });
 
 test("official attribute names preserve legal snake_case suffixes within the total byte budget", () => {

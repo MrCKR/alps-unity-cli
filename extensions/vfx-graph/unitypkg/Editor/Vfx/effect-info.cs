@@ -9,7 +9,7 @@ namespace UnityCli
 
         public ToolDescriptor Describe() => new()
         {
-            Name = "vfx.effect.info", Summary = "Read VisualEffect component information.",
+            Name = "vfx.effect-info", Summary = "Read VisualEffect component information.",
             Description = "Report the existing VisualEffect component and assigned VFX Graph without modifying the scene.",
             Group = "vfx",RequiresPackages = new[] { "com.unity.visualeffectgraph" },
             SideEffects = new string[0], Target = "editor", PlayModeSupport = "supported",
@@ -19,7 +19,7 @@ namespace UnityCli
 
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext context, System.Threading.CancellationToken ct = default)
         {
-            var effect = VfxActionToolSupport.RequireEffect(request.Target, "vfx.effect.info");
+            var effect = VfxActionToolSupport.RequireEffect(request.Target, "vfx.effect-info");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Effect = VfxToolSupport.BuildEffectInfo(effect)

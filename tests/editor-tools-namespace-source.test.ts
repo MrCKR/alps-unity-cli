@@ -4,7 +4,7 @@ import test from "node:test";
 
 const sources = [
   "unitypkg/Editor/Tools/editor/active-tool.cs",
-  "unitypkg/Editor/Tools/editor/active-tool/set.cs",
+  "unitypkg/Editor/Tools/editor/active-tool-set.cs",
   "unitypkg/Editor/Tools/editor/tool-states.cs",
 ];
 

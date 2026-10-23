@@ -63,7 +63,7 @@ namespace UnityCli
             var profileType = BuildProfileType();
             if (profileType == null)
             {
-                throw new UnityCliBridge.BridgeCommandException("E_BUILD_PROFILE_API_UNAVAILABLE", "Unity Build Profile API is not available in this Editor version.", "Use build.settings.get, build.scene.list, or build.platform.get, or upgrade Unity.");
+                throw new UnityCliBridge.BridgeCommandException("E_BUILD_PROFILE_API_UNAVAILABLE", "Unity Build Profile API is not available in this Editor version.", "Use build.settings-get, build.scene-list, or build.platform-get, or upgrade Unity.");
             }
             return profileType;
         }
@@ -73,7 +73,7 @@ namespace UnityCli
         {
             if (string.IsNullOrEmpty(path)) throw new UnityCliBridge.BridgeCommandException("E_BUILD_PROFILE_PATH_REQUIRED", toolName + " requires path.", "Pass an existing Build Profile asset path.");
             var profile = AssetDatabase.LoadAssetAtPath(path, profileType);
-            if (profile == null) throw new UnityCliBridge.BridgeCommandException("E_BUILD_PROFILE_NOT_FOUND", "Build Profile was not found: " + path, "Run build.profile.list and pass an existing path.");
+            if (profile == null) throw new UnityCliBridge.BridgeCommandException("E_BUILD_PROFILE_NOT_FOUND", "Build Profile was not found: " + path, "Run build.profile-list and pass an existing path.");
             return profile;
         }
 
@@ -96,7 +96,7 @@ namespace UnityCli
             var prop = typeof(EditorUserBuildSettings).GetProperty("activeBuildProfile", BindingFlags.Public | BindingFlags.Static);
             if (prop == null || !prop.CanWrite || !profileType.IsAssignableFrom(prop.PropertyType))
             {
-                throw new UnityCliBridge.BridgeCommandException("E_BUILD_PROFILE_SWITCH_UNSUPPORTED", "This Unity version does not expose EditorUserBuildSettings.activeBuildProfile.", "Use build.platform.get or build.settings.get, or upgrade Unity.");
+                throw new UnityCliBridge.BridgeCommandException("E_BUILD_PROFILE_SWITCH_UNSUPPORTED", "This Unity version does not expose EditorUserBuildSettings.activeBuildProfile.", "Use build.platform-get or build.settings-get, or upgrade Unity.");
             }
             prop.SetValue(null, profile, null);
         }

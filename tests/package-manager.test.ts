@@ -358,7 +358,8 @@ test("ensurePackageBridge restores the previous target when staged publish exhau
     assert.ok(error instanceof PackageManagerError);
     assert.equal(error.code, "PACKAGE_DIRECTORY_LOCKED");
     assert.equal(error.transient, false);
-    assert.match(error.nextActions[0], /Close the exact target Unity Editor/);
+    assert.match(error.nextActions[0], /locked package directory/);
+    assert.match(error.nextActions[1], /--close-editor/);
     return true;
   });
 

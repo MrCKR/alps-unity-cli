@@ -13,8 +13,8 @@ import { handleToolsCommand } from "../src/tools/commands.js";
 import { dispatchTool, enrichTargetFailureWithObservedBlocker } from "../src/tools/dispatcher.js";
 import { findToolByName } from "../src/tools/metadata/index.js";
 
-const OPERABILITY_TOOLS = ["editor.state", "editor.dialogs", "editor.dialog.click"] as const;
-const DURABLE_STATUS_TOOLS = ["asset.refresh.status", "build.player.status", "editor.play-mode.status", "package.install.status", "package.remove.status", "test.run.status"] as const;
+const OPERABILITY_TOOLS = ["editor.state", "editor.dialogs", "editor.dialog-click"] as const;
+const DURABLE_STATUS_TOOLS = ["asset.refresh-status", "build.player-status", "editor.play-mode-status", "package.install-status", "package.remove-status", "test.run-status"] as const;
 
 test("only exact operability and durable status tools own catalog-independent descriptors", () => {
   for (const name of OPERABILITY_TOOLS) {
@@ -28,7 +28,7 @@ test("only exact operability and durable status tools own catalog-independent de
     assert.equal(resolved?.handler, "hybrid");
     assert.equal(resolved?.destructiveHint, false);
   }
-  for (const name of ["dialogs", "editor.compile", "docs.get", "package.registry.set"])
+  for (const name of ["dialogs", "editor.compile", "docs.get", "package.registry-set"])
     assert.equal(resolveCatalogIndependentOperabilityTool(name), undefined, name);
 });
 
@@ -64,7 +64,7 @@ test("exact Editor operability definitions bypass business admission while anoth
     const cases = [
       ["editor.state", {}],
       ["editor.dialogs", {}],
-      ["editor.dialog.click", { dialogId: "dialog_test", button: "Close" }],
+      ["editor.dialog-click", { dialogId: "dialog_test", button: "Close" }],
     ] as const;
     for (const [name, input] of cases) {
       const result = await dispatchTool(name, undefined, { input: JSON.stringify(input), instance: "missing" }, runtime, `req_lane_${name.replaceAll(".", "_")}`);
@@ -109,7 +109,7 @@ test("catalog failure leaves exact operability execution and describe routable b
     for (const [name, input] of [
       ["editor.state", {}],
       ["editor.dialogs", {}],
-      ["editor.dialog.click", { dialogId: "dialog_test", button: "Close" }],
+      ["editor.dialog-click", { dialogId: "dialog_test", button: "Close" }],
     ] as const) {
       const execution = await dispatchTool(name, undefined, { input: JSON.stringify(input), instance: "missing" }, { dataDir }, `req_catalog_${name.replaceAll(".", "_")}`);
       assert.equal(execution.ok, false, name);

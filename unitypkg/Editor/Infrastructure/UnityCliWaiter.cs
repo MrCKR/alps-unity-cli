@@ -629,7 +629,7 @@ namespace UnityCli
             if (!enable) return;
             var method = SignalTickMethod();
             if (method == null)
-                throw new UnityCliBridge.BridgeCommandException("E_EDITOR_AUTOTICK_UNAVAILABLE", "EditorApplication.SignalTick is unavailable in Unity " + UnityEngine.Application.unityVersion + ".", "Use a supported Unity version before enabling editor.autotick.set.");
+                throw new UnityCliBridge.BridgeCommandException("E_EDITOR_AUTOTICK_UNAVAILABLE", "EditorApplication.SignalTick is unavailable in Unity " + UnityEngine.Application.unityVersion + ".", "Use a supported Unity version before enabling editor.autotick-set.");
             try
             {
                 if (AutoTickSignal == null) AutoTickSignal = (Action)Delegate.CreateDelegate(typeof(Action), method);

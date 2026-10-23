@@ -12,22 +12,22 @@ import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
 
 const UI_COMMANDS = [
   "ui.attach-document",
-  "ui.button.create",
-  "ui.canvas.create",
+  "ui.button-create",
+  "ui.canvas-create",
   "ui.create-panel-settings",
   "ui.detach-document",
-  "ui.document.create",
-  "ui.document.delete",
-  "ui.document.info",
-  "ui.document.update",
+  "ui.document-create",
+  "ui.document-delete",
+  "ui.document-info",
+  "ui.document-update",
   "ui.get-visual-tree",
   "ui.hierarchy",
-  "ui.image.create",
+  "ui.image-create",
   "ui.link-stylesheet",
   "ui.list-documents",
   "ui.modify-visual-element",
   "ui.render-preview",
-  "ui.text.create",
+  "ui.text-create",
   "ui.update-panel-settings"
 ];
 
@@ -37,33 +37,33 @@ test("ui group exposes the UI tools via contract discovery", () => {
 
 test("ui live descriptors expose representative safety and schema semantics", async () => {
   const tools = await discoverLiveTools(
-    makeLiveTool({ name: "ui.canvas.create", summary: "Create a Canvas.", description: "Create a Canvas.", group: "ui", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] }),
-    makeLiveTool({ name: "ui.text.create", summary: "Create a UI Text.", description: "Create a UI Text.", group: "ui", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] }),
-    makeLiveTool({ name: "ui.button.create", summary: "Create a UI Button.", description: "Create a UI Button.", group: "ui", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] }),
-    makeLiveTool({ name: "ui.image.create", summary: "Create a UI Image.", description: "Create a UI Image.", group: "ui", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] }),
-    makeLiveTool({ name: "ui.document.create", summary: "Create a UI Document.", description: "Create a UI Document.", group: "ui", playModeSupport: "session-affecting", sideEffects: ["asset-write"] }),
-    makeLiveTool({ name: "ui.document.info", summary: "Read UI document info.", description: "Read UI document info.", group: "ui", outputSchema: { type: "object", properties: { document: { type: "object" } } } }),
+    makeLiveTool({ name: "ui.canvas-create", summary: "Create a Canvas.", description: "Create a Canvas.", group: "ui", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] }),
+    makeLiveTool({ name: "ui.text-create", summary: "Create a UI Text.", description: "Create a UI Text.", group: "ui", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] }),
+    makeLiveTool({ name: "ui.button-create", summary: "Create a UI Button.", description: "Create a UI Button.", group: "ui", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] }),
+    makeLiveTool({ name: "ui.image-create", summary: "Create a UI Image.", description: "Create a UI Image.", group: "ui", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] }),
+    makeLiveTool({ name: "ui.document-create", summary: "Create a UI Document.", description: "Create a UI Document.", group: "ui", playModeSupport: "session-affecting", sideEffects: ["asset-write"] }),
+    makeLiveTool({ name: "ui.document-info", summary: "Read UI document info.", description: "Read UI document info.", group: "ui", outputSchema: { type: "object", properties: { document: { type: "object" } } } }),
     makeLiveTool({ name: "ui.hierarchy", summary: "Read UI hierarchy.", description: "Read UI hierarchy.", group: "ui", inputSchema: { type: "object", properties: { parent: { type: "string" }, query: { type: "string" }, className: { type: "string" }, pageSize: { type: "integer" } } }, outputSchema: { type: "object", properties: { items: { type: "array" } } } }),
     makeLiveTool({ name: "ui.get-visual-tree", summary: "Read UI Toolkit visual tree.", description: "Read UI Toolkit visual tree.", group: "ui", inputSchema: { type: "object", properties: { parent: { type: "string" }, query: { type: "string" }, className: { type: "string" }, pageSize: { type: "integer" } } }, outputSchema: { type: "object", properties: { items: { type: "array" } } } }),
     makeLiveTool({ name: "ui.list-documents", summary: "List UI documents.", description: "List UI documents.", group: "ui", outputSchema: { type: "object", properties: { items: { type: "array" } } } }),
     makeLiveTool({ name: "ui.attach-document", summary: "Attach a UIDocument.", description: "Attach a UIDocument.", group: "ui", playModeSupport: "session-affecting" }),
     makeLiveTool({ name: "ui.detach-document", summary: "Detach a UIDocument.", description: "Detach a UIDocument.", group: "ui", supportsDryRun: true, playModeSupport: "session-affecting" }),
-    makeLiveTool({ name: "ui.document.update", summary: "Update a UI document asset.", description: "Update a UI document asset.", group: "ui", destructiveHint: true, playModeSupport: "session-affecting" }),
-    makeLiveTool({ name: "ui.document.delete", summary: "Delete a UI document asset.", description: "Delete a UI document asset.", group: "ui", destructiveHint: true, playModeSupport: "session-affecting" }),
+    makeLiveTool({ name: "ui.document-update", summary: "Update a UI document asset.", description: "Update a UI document asset.", group: "ui", destructiveHint: true, playModeSupport: "session-affecting" }),
+    makeLiveTool({ name: "ui.document-delete", summary: "Delete a UI document asset.", description: "Delete a UI document asset.", group: "ui", destructiveHint: true, playModeSupport: "session-affecting" }),
     makeLiveTool({ name: "ui.create-panel-settings", summary: "Create PanelSettings.", description: "Create PanelSettings.", group: "ui", destructiveHint: true, playModeSupport: "session-affecting" }),
     makeLiveTool({ name: "ui.update-panel-settings", summary: "Update PanelSettings.", description: "Update PanelSettings.", group: "ui", destructiveHint: true, playModeSupport: "session-affecting" }),
     makeLiveTool({ name: "ui.link-stylesheet", summary: "Link a stylesheet.", description: "Link a stylesheet.", group: "ui", destructiveHint: true, playModeSupport: "session-affecting" }),
     makeLiveTool({ name: "ui.render-preview", summary: "Render a preview.", description: "Render a preview.", group: "ui", destructiveHint: true, playModeSupport: "session-affecting" })
   );
 
-  for (const name of ["ui.canvas.create", "ui.text.create", "ui.button.create", "ui.image.create", "ui.document.create"]) {
+  for (const name of ["ui.canvas-create", "ui.text-create", "ui.button-create", "ui.image-create", "ui.document-create"]) {
     const tool = tools.get(name)!;
     assert.equal(tool.destructiveHint, false);
     assert.equal(tool.playModeSupport, "session-affecting");
     assert.ok(tool.sideEffects?.length);
   }
 
-  for (const name of ["ui.document.info", "ui.hierarchy", "ui.get-visual-tree", "ui.list-documents"]) {
+  for (const name of ["ui.document-info", "ui.hierarchy", "ui.get-visual-tree", "ui.list-documents"]) {
     const tool = tools.get(name)!;
     assert.equal(tool.destructiveHint, false);
     assert.equal(tool.playModeSupport, "supported");
@@ -90,19 +90,19 @@ test("ui live descriptors expose representative safety and schema semantics", as
   assert.equal(detach.destructiveHint, false);
   assert.equal(detach.supportsDryRun, true);
 
-  for (const name of ["ui.document.update", "ui.document.delete", "ui.create-panel-settings", "ui.update-panel-settings", "ui.link-stylesheet", "ui.render-preview"]) {
+  for (const name of ["ui.document-update", "ui.document-delete", "ui.create-panel-settings", "ui.update-panel-settings", "ui.link-stylesheet", "ui.render-preview"]) {
     const tool = tools.get(name)!;
     assert.equal(tool.destructiveHint, true, `${name} should expose destructiveHint`);
     assert.equal(tool.playModeSupport, "session-affecting");
   }
 });
 
-test("ui.document.info descriptor states that every mode uses the selected open Editor", async () => {
-  const source = await readFile("unitypkg/Editor/Tools/ui/document/info.cs", "utf8");
+test("ui.document-info descriptor states that every mode uses the selected open Editor", async () => {
+  const source = await readFile("unitypkg/Editor/Tools/ui/document-info.cs", "utf8");
   assert.match(source, /Both modes execute through the selected open Editor\./);
 });
 
-test("ui.document.info cannot read a local file when the selected Unity Editor is offline", async () => {
+test("ui.document-info cannot read a local file when the selected Unity Editor is offline", async () => {
   const root = await mkdtemp(join(tmpdir(), "unity-cli-ui-document-live-only-"));
   const project = join(root, "Project");
   const dataDir = join(root, "data");
@@ -110,7 +110,7 @@ test("ui.document.info cannot read a local file when the selected Unity Editor i
   try {
     await createUnityProject(project);
     await writeFile(arbitraryFile, "private local content\n", "utf8");
-    const result = await dispatchTool("ui.document.info", undefined, {
+    const result = await dispatchTool("ui.document-info", undefined, {
       input: JSON.stringify({ path: arbitraryFile }),
       instance: project,
     }, { dataDir }, "req_ui_document_live_only");
@@ -123,14 +123,14 @@ test("ui.document.info cannot read a local file when the selected Unity Editor i
 
 test("bridge specs resolve for ui tools", () => {
   const lookups: Record<string, string> = {
-    "canvas.create": "ui.canvas.create",
-    "text.create": "ui.text.create",
-    "button.create": "ui.button.create",
-    "image.create": "ui.image.create",
-    "document.info": "ui.document.info",
-    "document.create": "ui.document.create",
-    "document.update": "ui.document.update",
-    "document.delete": "ui.document.delete",
+    "canvas-create": "ui.canvas-create",
+    "text-create": "ui.text-create",
+    "button-create": "ui.button-create",
+    "image-create": "ui.image-create",
+    "document-info": "ui.document-info",
+    "document-create": "ui.document-create",
+    "document-update": "ui.document-update",
+    "document-delete": "ui.document-delete",
     hierarchy: "ui.hierarchy",
     "attach-document": "ui.attach-document",
     "detach-document": "ui.detach-document",
@@ -167,14 +167,14 @@ test("ui C# handlers are registered", async () => {
 });
 
 test("ui C# error recovery hints identify valid targets", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Tools/ui/document/info.cs", import.meta.url), "utf8");
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/ui/document-info.cs", import.meta.url), "utf8");
   assert.match(source, /Pass a UIDocument GameObject or an Assets\/\*\.uxml path\./);
 });
 
 test("ui C# keeps one capability per physical file with CRUD, stylesheet, list, and preview behavior", async () => {
   const files = {
-    update: "document/update.cs",
-    delete: "document/delete.cs",
+    update: "document-update.cs",
+    delete: "document-delete.cs",
     detach: "detach-document.cs",
     stylesheet: "link-stylesheet.cs",
     list: "list-documents.cs",

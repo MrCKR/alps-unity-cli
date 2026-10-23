@@ -12,7 +12,7 @@ namespace UnityCli
 
         public ToolDescriptor Describe() => new()
         {
-            Name = "vfx.template.create", Summary = "Create a VFX Graph from a package template.",
+            Name = "vfx.template-create", Summary = "Create a VFX Graph from a package template.",
             Description = "Copy one installed VFX Graph template to an Assets/*.vfx destination. Supports --dry-run and explicit overwrite.",
             Group = "vfx",DestructiveHint = true, SupportsDryRun = true,
             RequiresPackages = new[] { "com.unity.visualeffectgraph" }, SideEffects = new[] { "asset-write" },
@@ -22,7 +22,7 @@ namespace UnityCli
 
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            VfxToolSupport.EnsureEditorReady("vfx.template.create");
+            VfxToolSupport.EnsureEditorReady("vfx.template-create");
             VfxToolSupport.RequireVfxPackageInstalled();
             var destinationPath = VfxToolSupport.RequireVfxGraphPath(request.Path);
             var graphType = VfxToolSupport.RequireVfxAssetType();
@@ -31,9 +31,9 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_VFX_GRAPH_EXISTS", "VFX Graph already exists: " + destinationPath, "Pass overwrite=true or choose a different Assets/*.vfx path.");
             var templatePath = VfxToolSupport.ResolveVfxTemplatePath(request.Template);
             if (string.IsNullOrEmpty(templatePath))
-                throw new UnityCliBridge.BridgeCommandException("E_VFX_TEMPLATE_NOT_FOUND", "VFX Graph template not found: " + request.Template, "Run vfx.template.list to discover available templates.");
+                throw new UnityCliBridge.BridgeCommandException("E_VFX_TEMPLATE_NOT_FOUND", "VFX Graph template not found: " + request.Template, "Run vfx.template-list to discover available templates.");
 
-            var effects = new List<VfxPlannedEffect> { new VfxPlannedEffect { Type = "vfx.template.create", Template = request.Template, Path = destinationPath } };
+            var effects = new List<VfxPlannedEffect> { new VfxPlannedEffect { Type = "vfx.template-create", Template = request.Template, Path = destinationPath } };
             if (ctx.DryRun)
                 return new System.Threading.Tasks.ValueTask<Result>(new Result { TemplateName = request.Template, DryRun = true, PlannedEffects = effects });
 

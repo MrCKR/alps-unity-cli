@@ -293,7 +293,7 @@ namespace UnityCli
             if (property == null)
             {
                 serialized.Dispose();
-                throw new UnityCliBridge.BridgeCommandException("E_URP_SETTING_NOT_FOUND", "URP setting not found: " + propertyName, "Run urp.settings.get to inspect readable settings.");
+                throw new UnityCliBridge.BridgeCommandException("E_URP_SETTING_NOT_FOUND", "URP setting not found: " + propertyName, "Run urp.settings-get to inspect readable settings.");
             }
             var expected = ConvertSerializedPropertyValue(property, value, "URP setting");
             return new SettingMutationPlan { Pipeline = pipelineAsset, PropertyName = propertyName, SerializedObject = serialized, SerializedProperty = property, SerializedPropertyPath = property.propertyPath, SerializedPropertyType = property.propertyType, ExpectedValue = expected, ExpectedReadback = FormatSerializedPropertyValue(property.propertyType, expected) };
@@ -590,9 +590,9 @@ namespace UnityCli
             if (effectType == null) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_EFFECT_TYPE_NOT_FOUND", "Volume effect type not found: " + effectTypeName, "Ensure the effect type is correct and the render pipeline package is fully imported.");
             var profile = UrpToolSupport.GetVolumeProfile(gameObject.GetComponent(UrpToolSupport.VolumeType)) as VolumeProfile;
             var addMethod = UrpToolSupport.VolumeProfileType.GetMethod("Add", new[] { typeof(Type), typeof(bool) });
-            if (profile == null || addMethod == null) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_PROFILE_NOT_FOUND", "The target Volume has no writable in-memory profile.", "Create a Volume with urp.volume.create or assign a profile before adding an effect.");
+            if (profile == null || addMethod == null) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_PROFILE_NOT_FOUND", "The target Volume has no writable in-memory profile.", "Create a Volume with urp.volume-create or assign a profile before adding an effect.");
             var countBefore = profile.components.Count(component => component != null && effectType.IsInstanceOfType(component));
-            if (countBefore != 0) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_EFFECT_EXISTS", "The requested effect is already present: " + effectTypeName, "Use urp.volume.set to modify the existing effect.");
+            if (countBefore != 0) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_EFFECT_EXISTS", "The requested effect is already present: " + effectTypeName, "Use urp.volume-set to modify the existing effect.");
             addMethod.Invoke(profile, new object[] { effectType, true });
             var observedObject = ResolveVolume(gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture), errorPrefix);
             var observedProfile = UrpToolSupport.GetVolumeProfile(observedObject.GetComponent(UrpToolSupport.VolumeType)) as VolumeProfile;
@@ -612,8 +612,8 @@ namespace UnityCli
             if (effectType == null || effectType == typeof(VolumeComponent) || effectType.IsAbstract || !typeof(VolumeComponent).IsAssignableFrom(effectType) || !IsPipelineEffectType(effectType)) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_EFFECT_TYPE_NOT_FOUND", "Concrete URP VolumeComponent effect type not found: " + effectTypeName, "Use a concrete effect from the active URP pipeline.");
             var profile = UrpToolSupport.GetProfileForPlanning(ResolveVolume(target, errorPrefix).GetComponent(UrpToolSupport.VolumeType)) as VolumeProfile;
             var addMethod = UrpToolSupport.VolumeProfileType.GetMethod("Add", new[] { typeof(Type), typeof(bool) });
-            if (profile == null || addMethod == null) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_PROFILE_NOT_FOUND", "The target Volume has no writable Add API.", "Create a Volume with urp.volume.create or assign a profile before adding an effect.");
-            if (profile.components.Any(component => component != null && effectType.IsInstanceOfType(component))) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_EFFECT_EXISTS", "The requested effect is already present: " + effectTypeName, "Use urp.volume.set to modify the existing effect.");
+            if (profile == null || addMethod == null) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_PROFILE_NOT_FOUND", "The target Volume has no writable Add API.", "Create a Volume with urp.volume-create or assign a profile before adding an effect.");
+            if (profile.components.Any(component => component != null && effectType.IsInstanceOfType(component))) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_EFFECT_EXISTS", "The requested effect is already present: " + effectTypeName, "Use urp.volume-set to modify the existing effect.");
         }
 
         internal sealed class VolumeSetMutationPlan
@@ -640,7 +640,7 @@ namespace UnityCli
             var volume = gameObject.GetComponent(UrpToolSupport.VolumeType);
             var profile = UrpToolSupport.GetProfileForPlanning(volume) as VolumeProfile;
             var effect = profile == null ? null : profile.components.FirstOrDefault(component => component != null && component.GetType() == effectType);
-            if (effect == null) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_EFFECT_NOT_FOUND", "The requested effect is not present: " + effectTypeName, "Add the effect with urp.volume.add-effect before setting it.");
+            if (effect == null) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_EFFECT_NOT_FOUND", "The requested effect is not present: " + effectTypeName, "Add the effect with urp.volume-add-effect before setting it.");
             using (var serialized = new SerializedObject(effect))
             {
                 var property = serialized.FindProperty(propertyPath);

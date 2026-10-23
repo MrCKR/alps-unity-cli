@@ -17,7 +17,7 @@ export interface PackageRegistrySetResult {
 }
 
 export default defineTool<PackageRegistrySetRequest, PackageRegistrySetResult>({
-  name: "package.registry.set",
+  name: "package.registry-set",
   summary: "Set the primary registry URL in the project manifest.",
   description: "Set the primary registry URL in Packages/manifest.json. Supports --dry-run.",
   group: "package",
@@ -28,7 +28,7 @@ export default defineTool<PackageRegistrySetRequest, PackageRegistrySetResult>({
   handler: "offline",
   supportStatus: "cli-only",
   examples: [
-    { description: "Preview setting the primary registry", argv: ["tools", "run", "package.registry.set", "--input", "{\"url\":\"https://npm.example.com\"}", "--dry-run"] }
+    { description: "Preview setting the primary registry", argv: ["tools", "run", "package.registry-set", "--input", "{\"url\":\"https://npm.example.com\"}", "--dry-run"] }
   ],
   async execute(request, context) {
     const projectPath = resolve(request.project ?? context.projectPath);

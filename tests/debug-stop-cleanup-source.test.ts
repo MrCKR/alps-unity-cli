@@ -122,8 +122,8 @@ test("a repeated stop returns the same terminal facts and never invents a revisi
   assert.match(shared, /report\.ConflictingFields\.AddRange\(previous\.ConflictingFields\);/, "a repeated stop carries the conflicting fields forward");
   assert.match(shared, /report\.StaleTargets\.AddRange\(previous\.StaleTargets\);/, "a repeated stop carries the stale targets forward");
   assert.match(shared, /report\.UnrecoverableEffects\.AddRange\(previous\.UnrecoverableEffects\);/, "a repeated stop carries the unrecoverable effects forward");
-  const stopTool = await source(sessionToolsRoot, "stop.cs");
-  assert.match(stopTool, /The definition and its evidence stay loaded; only debug\.session\.remove deletes it\./, "the descriptor states what stop does and does not do");
+  const stopTool = await source(sessionToolsRoot, "../session-stop.cs");
+  assert.match(stopTool, /The definition and its evidence stay loaded; only debug\.session-remove deletes it\./, "the descriptor states what stop does and does not do");
 });
 
 test("conditional restore separates restored, conflicting and stale targets at a trusted boundary", async () => {

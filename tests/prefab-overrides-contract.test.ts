@@ -2,15 +2,15 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const applyPath = "unitypkg/Editor/Tools/prefab/overrides/apply.cs";
-const revertPath = "unitypkg/Editor/Tools/prefab/overrides/revert.cs";
-const variantPath = "unitypkg/Editor/Tools/prefab/variant/create.cs";
+const applyPath = "unitypkg/Editor/Tools/prefab/overrides-apply.cs";
+const revertPath = "unitypkg/Editor/Tools/prefab/overrides-revert.cs";
+const variantPath = "unitypkg/Editor/Tools/prefab/variant-create.cs";
 const supportPath = "unitypkg/Editor/Tools/prefab/PrefabOverrideToolSupport.cs";
 
 test("Prefab override actions have independent atomic Tool owners", async () => {
   const [apply, revert] = await Promise.all([readFile(applyPath, "utf8"), readFile(revertPath, "utf8")]);
-  assert.match(apply, /Name = "prefab\.overrides\.apply"/);
-  assert.match(revert, /Name = "prefab\.overrides\.revert"/);
+  assert.match(apply, /Name = "prefab\.overrides-apply"/);
+  assert.match(revert, /Name = "prefab\.overrides-revert"/);
   for (const [source, action] of [[apply, "ApplyOverrides"], [revert, "RevertOverrides"]] as const) {
     assert.match(source, /SupportsDryRun = true/);
     assert.match(source, /PlayModeSupport = "editor-only"/);
@@ -36,7 +36,7 @@ test("Prefab apply and revert prove source hash and clean connected instance", a
 
 test("Prefab variant uses a cleaned preview scene and proves base identity", async () => {
   const [tool, support] = await Promise.all([readFile(variantPath, "utf8"), readFile(supportPath, "utf8")]);
-  assert.match(tool, /Name = "prefab\.variant\.create"/);
+  assert.match(tool, /Name = "prefab\.variant-create"/);
   assert.match(tool, /SupportsDryRun = true/);
   assert.equal((tool.match(/ctx\.CommitEffect\(\)/g) ?? []).length, 1);
   assert.ok(tool.indexOf("PrepareVariant") < tool.indexOf("ctx.CommitEffect()"));

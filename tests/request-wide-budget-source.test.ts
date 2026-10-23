@@ -24,7 +24,7 @@ test("request budget owns all six counters and injectable monotonic time", async
 
 test("console is bounded non-resumable while scene and GameObject discovery page raw positions", async () => {
   const [consoleGet, editorSupport, hierarchy, goFind] = await Promise.all([
-    source("Tools/debug/console/read.cs"), source("Tools/editor/EditorToolSupport.cs"),
+    source("Tools/debug/console-read.cs"), source("Tools/editor/EditorToolSupport.cs"),
     source("Tools/scene/hierarchy.cs"), source("Tools/game-object/find.cs"),
   ]);
   assert.match(editorSupport, /rawIndex/);
@@ -64,15 +64,15 @@ test("capture planning precedes effect and surround does not retain a tile list"
 
 test("profiler and snapshot paths remain raw-paged and governed", async () => {
   const [hierarchy, events, snapshots, take, list] = await Promise.all([
-    source("Tools/profiler/hierarchy.cs"), source("Tools/profiler/frame-debugger/events.cs"),
+    source("Tools/profiler/hierarchy.cs"), source("Tools/profiler/frame-debugger-events.cs"),
     source("Tools/profiler/ProfilerMemorySnapshotSupport.cs"),
-    source("Tools/profiler/memory-snapshot/take.cs"), source("Tools/profiler/memory-snapshot/list.cs"),
+    source("Tools/profiler/memory-snapshot-take.cs"), source("Tools/profiler/memory-snapshot-list.cs"),
   ]);
   assert.match(hierarchy, /GetSampleChildrenCountRecursive/);
   assert.doesNotMatch(hierarchy, /GetSampleChildAt/);
   assert.doesNotMatch(events, /GetFrameEvents|CopyTo\(/);
   assert.match(events, /pageInfo\.nextCursor|PageInfo|NextCursor/);
-  assert.match(events, /UnityCliContinuationToken\.Create\("profiler\.frame-debugger\.events"/);
+  assert.match(events, /UnityCliContinuationToken\.Create\("profiler\.frame-debugger-events"/);
   assert.match(events, /UnityCliContinuationToken\.TryParse/);
   assert.match(events, /index\.ToString\(CultureInfo\.InvariantCulture\)/);
   assert.match(snapshots, /Library.*UnityCli.*memory-snapshots/);
@@ -92,7 +92,7 @@ test("profiler and snapshot paths remain raw-paged and governed", async () => {
 test("reflection pages bind assembly generation and budgeted member definitions", async () => {
   const [reflection, typeTool, methodTool] = await Promise.all([
     source("Infrastructure/UnityCliReflection.cs"),
-    source("Tools/debug/type/schema.cs"), source("Tools/debug/method/find.cs"),
+    source("Tools/debug/type-schema.cs"), source("Tools/debug/method-find.cs"),
   ]);
   assert.match(reflection, /ResolvedTypeCache/);
   assert.match(reflection, /UnityCliReadGeneration\.Reflection/);

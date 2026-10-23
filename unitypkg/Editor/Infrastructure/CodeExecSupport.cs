@@ -23,7 +23,7 @@ namespace UnityCli
         private static void RegisterCodeExecCommand(BridgeCommandRegistry registry)
         {
             registry.Register<UnityCli.Protocol.BridgeRequest>(
-                "debug.code.execute",
+                "debug.code-execute",
                 "code",
                 true,
                 60000,
@@ -37,7 +37,7 @@ namespace UnityCli
         private static async ValueTask<string> CodeExec(UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
         {
             if (request.Execution != null && request.Execution.DryRun == true)
-                throw new BridgeCommandException("E_DRY_RUN_UNSUPPORTED", "Raw Bridge debug.code.execute dry-run cannot execute or compile caller source.", "Use the public tools run debug.code.execute --dry-run path, which returns the CLI-side source preview without Bridge dispatch.");
+                throw new BridgeCommandException("E_DRY_RUN_UNSUPPORTED", "Raw Bridge debug.code-execute dry-run cannot execute or compile caller source.", "Use the public tools run debug.code-execute --dry-run path, which returns the CLI-side source preview without Bridge dispatch.");
             var source = request.StringArg("sourceText");
             // raw Bridge不读取调用方路径；公开CLI已按入口deadline有界读取并内联唯一源码。
             if (string.IsNullOrWhiteSpace(source))
@@ -48,11 +48,11 @@ namespace UnityCli
             var result = await ExecuteCodeSource(request, source, cancellationToken);
             WriteLog("code_exec requestId=" + request.RequestId + " ok=" + result.Ok + " exitState=" + result.ExitState);
             var serialized = SerializeCodeExecutionResult(request.RequestId, result);
-            if (result.Ok) RecordDirectCompletionEvidence(request.RequestId, "debug.code.execute", ResolveRequestCompletionContract(request), result.Data);
+            if (result.Ok) RecordDirectCompletionEvidence(request.RequestId, "debug.code-execute", ResolveRequestCompletionContract(request), result.Data);
             return serialized;
         }
 
-        /// <summary>所有 debug.code.execute terminal 统一经过同一 Bridge envelope 与总 byte 上限。</summary>
+        /// <summary>所有 debug.code-execute terminal 统一经过同一 Bridge envelope 与总 byte 上限。</summary>
         private static string SerializeCodeExecutionResult(string requestId, CodeExecutionResult result)
         {
             object envelope = result.Ok
@@ -83,7 +83,7 @@ namespace UnityCli
             try
             {
                 var wrappedSource = WrapCodeSource(source);
-                var candidateIdentity = DebugCompilerOwner.CandidateIdentity("debug.code.execute", wrappedSource, request.StringArg("defines"));
+                var candidateIdentity = DebugCompilerOwner.CandidateIdentity("debug.code-execute", wrappedSource, request.StringArg("defines"));
                 // 编译前的粗判：数量或累计字节已经用尽时不再启动编译。
                 var admission = DebugCompilerOwner.TryAdmitCandidate(candidateIdentity, 0L);
                 if (!admission.Admitted) return BudgetExhausted(admission);
@@ -103,7 +103,7 @@ namespace UnityCli
                     compileRequest,
                     references,
                     deadlineOk,
-                    new UnityCliWaiter(request.RequestId, "debug.code.execute"),
+                    new UnityCliWaiter(request.RequestId, "debug.code-execute"),
                     TimeSpan.FromMilliseconds(Math.Max(1, deadlineRemainingMs)),
                     cancellationToken);
                 if (compilation.TimedOut)
@@ -251,7 +251,7 @@ namespace UnityCli
             BeginDirectEffect(request.RequestId);
         }
 
-        // 将源码包装为运行时约定的 Script.Run 入口。pause.evaluate 与 debug.code.execute 共用同一包装形状。
+        // 将源码包装为运行时约定的 Script.Run 入口。pause.evaluate 与 debug.code-execute 共用同一包装形状。
         internal static string WrapCodeSource(string source)
         {
             if (Regex.IsMatch(source, "\\bpublic\\s+static\\s+object\\s+Run\\s*\\("))

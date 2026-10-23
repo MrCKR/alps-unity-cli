@@ -159,7 +159,7 @@ namespace UnityCli
                         "E_DEBUG_STORE_FAILED",
                         "The official session file changed after it was observed, so this publication was refused.",
                         new Dictionary<string, object> { { "reason", "publication-cas-mismatch" }, { "expectedPublication", expected.Publication }, { "observedPublication", current.Publication } },
-                        new[] { "Run tools run debug.session.list to read the current store state, then submit a new request." });
+                        new[] { "Run tools run debug.session-list to read the current store state, then submit a new request." });
                 Directory.CreateDirectory(Root());
                 // 文件本身是普通磁盘写入，任何线程都可以完成；只有主线程专属的 SessionState 恢复事实需要分流。
                 UnityCliBridge.DurableWriteText(FilePath(), json);

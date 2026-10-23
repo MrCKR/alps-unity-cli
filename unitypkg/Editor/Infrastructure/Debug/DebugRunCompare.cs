@@ -9,7 +9,7 @@ using BridgeCommandException = UnityCli.UnityCliBridge.BridgeCommandException;
 namespace UnityCli
 {
     /// <summary>
-    /// debug.run.compare 的判定内核：把两个保留窗口里同一来源的事件按调用方声明的对齐键配对，
+    /// debug.run-compare 的判定内核：把两个保留窗口里同一来源的事件按调用方声明的对齐键配对，
     /// 在调用方声明的值路径与时钟上定位首个可证明差异。
     ///
     /// 规则：
@@ -49,7 +49,7 @@ namespace UnityCli
         /// <summary>校验比较输入；任何缺失或非法取值都在读取任何窗口之前拒绝。</summary>
         internal static Plan Validate(DebugRunCompareRequest request)
         {
-            if (request == null) throw SchemaInvalid("request", "a debug.run.compare body", "missing");
+            if (request == null) throw SchemaInvalid("request", "a debug.run-compare body", "missing");
             var plan = new Plan
             {
                 LeftRunId = RequireField(request.LeftRunId, "leftRunId"),
@@ -1095,7 +1095,7 @@ namespace UnityCli
                     { "expected", expected },
                     { "actual", actual ?? string.Empty }
                 },
-                new[] { "Run tools describe debug.run.compare to read the field contract, then submit the corrected input." });
+                new[] { "Run tools describe debug.run-compare to read the field contract, then submit the corrected input." });
         }
     }
 }

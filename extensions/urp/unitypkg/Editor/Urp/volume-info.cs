@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace UnityCli
 {
-    /// <summary>urp.volume.info：读取一个 URP Volume 的会话状态。</summary>
+    /// <summary>urp.volume-info：读取一个 URP Volume 的会话状态。</summary>
     public sealed class UrpVolumeInfoTool : IUnityCliTool<UrpVolumeInfoTool.Request, UrpVolumeInfoTool.Result>
     {
         public sealed class Request { [UnityCliRequired] public string Target { get; set; } }
@@ -11,7 +11,7 @@ namespace UnityCli
 
         public ToolDescriptor Describe() => new()
         {
-            Name = "urp.volume.info",
+            Name = "urp.volume-info",
             Summary = "Read one scene-session URP Volume component and in-memory profile reference.",
             Description = "Reads the URP Volume matching target by GameObject name or hierarchy path. Returns its current session state and profile reference. Requires com.unity.render-pipelines.universal and an active UniversalRenderPipelineAsset. Does not save scenes or assets.",
             Group = "urp",DestructiveHint = false,
@@ -21,7 +21,7 @@ namespace UnityCli
 
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            GameObjectToolSupport.EnsureEditorNotBusy("urp.volume.info");
+            GameObjectToolSupport.EnsureEditorNotBusy("urp.volume-info");
             UrpToolSupport.EnsureUrpAvailable();
             UrpVolumeOperations.RequireTarget(request.Target, "info");
             return new System.Threading.Tasks.ValueTask<Result>(new Result { Volumes = UrpToolSupport.ListVolumes(request.Target)});

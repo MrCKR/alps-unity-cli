@@ -36,13 +36,13 @@ const flowBudgetDefaultMs = 300_000;
 
 /** 提交一条流并立即返回句柄；它不等待，因此请求超时只需要覆盖编译。 */
 export async function executeRuntimeFlowSubmit(request: RuntimeFlowRequest, runtime: RuntimeCodeRuntime, requestId: string): Promise<Record<string, unknown>> {
-  return dispatchFlowStart("debug.code.flow.submit", request, runtime, requestId, 90_000);
+  return dispatchFlowStart("debug.code-flow-submit", request, runtime, requestId, 90_000);
 }
 
 /** 提交一条流并等到终态；请求超时覆盖流预算与余量，因此不会退回半途状态。 */
 export async function executeRuntimeFlowRun(request: RuntimeFlowRequest, runtime: RuntimeCodeRuntime, requestId: string): Promise<Record<string, unknown>> {
   const budget = request.flowBudgetMs ?? flowBudgetDefaultMs;
-  return dispatchFlowStart("debug.code.flow.run", request, runtime, requestId, budget + flowRunMarginMs);
+  return dispatchFlowStart("debug.code-flow-run", request, runtime, requestId, budget + flowRunMarginMs);
 }
 
 // 两个提交入口共用同一份源码读取、payload 组装与 dry-run 语义。
@@ -106,12 +106,12 @@ async function dispatchFlowStart(
 
 /** 观察一条流；省略 waitMs 时观察到本次请求超时为止，不取消流。 */
 export async function executeRuntimeFlowWait(request: RuntimeFlowWaitRequest, runtime: RuntimeCodeRuntime, requestId: string): Promise<Record<string, unknown>> {
-  return dispatchFlowObservation("debug.code.flow.wait", request, runtime, requestId, true);
+  return dispatchFlowObservation("debug.code-flow-wait", request, runtime, requestId, true);
 }
 
 /** 取消一条流；已终态时返回同一终态。 */
 export async function executeRuntimeFlowCancel(request: RuntimeFlowCancelRequest, runtime: RuntimeCodeRuntime, requestId: string): Promise<Record<string, unknown>> {
-  return dispatchFlowObservation("debug.code.flow.cancel", request, runtime, requestId, false);
+  return dispatchFlowObservation("debug.code-flow-cancel", request, runtime, requestId, false);
 }
 
 // 观察与取消都不编译、不执行用户代码，因此走只读派发并使用有界 deadline。
@@ -124,7 +124,7 @@ async function dispatchFlowObservation(
 ): Promise<Record<string, unknown>> {
   const flowId = typeof request.flowId === "string" ? request.flowId.trim() : "";
   if (flowId.length === 0)
-    throw new StructuredToolError("E_SCHEMA_INVALID", `${command} requires a non-empty flowId.`, ["Pass the flowId returned by debug.code.flow.submit."]);
+    throw new StructuredToolError("E_SCHEMA_INVALID", `${command} requires a non-empty flowId.`, ["Pass the flowId returned by debug.code-flow-submit."]);
   const timeoutMs = normalizeTimeout(request.timeoutMs);
   const absoluteDeadlineMs = request.absoluteDeadlineMs ?? Date.now() + timeoutMs;
   requireRuntimeCodeDeadline(absoluteDeadlineMs);

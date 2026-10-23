@@ -44,19 +44,19 @@ export const CINEMACHINE_MANIFEST: ExtensionManifest = {
         "name": "cinemachine.noise"
       },
       {
-        "name": "cinemachine.brain.ensure"
+        "name": "cinemachine.brain-ensure"
       },
       {
-        "name": "cinemachine.brain.status"
+        "name": "cinemachine.brain-status"
       },
       {
-        "name": "cinemachine.extension.list"
+        "name": "cinemachine.extension-list"
       },
       {
-        "name": "cinemachine.extension.add"
+        "name": "cinemachine.extension-add"
       },
       {
-        "name": "cinemachine.extension.remove"
+        "name": "cinemachine.extension-remove"
       }
     ],
     "csharpEntries": [
@@ -147,55 +147,55 @@ export const HDRP_MANIFEST: ExtensionManifest = {
   "contributions": {
     "tools": [
       {
-        "name": "hdrp.volume.list"
+        "name": "hdrp.volume-list"
       },
       {
-        "name": "hdrp.volume.create"
+        "name": "hdrp.volume-create"
       },
       {
-        "name": "hdrp.volume.info"
+        "name": "hdrp.volume-info"
       },
       {
-        "name": "hdrp.volume.add-effect"
+        "name": "hdrp.volume-add-effect"
       },
       {
-        "name": "hdrp.volume.set"
+        "name": "hdrp.volume-set"
       },
       {
-        "name": "hdrp.settings.get"
+        "name": "hdrp.settings-get"
       },
       {
-        "name": "hdrp.settings.set"
+        "name": "hdrp.settings-set"
       }
     ],
     "csharpEntries": [
       {
         "type": "UnityCli.HdrpVolumeListTool",
-        "description": "Implements hdrp.volume.list."
+        "description": "Implements hdrp.volume-list."
       },
       {
         "type": "UnityCli.HdrpVolumeInfoTool",
-        "description": "Implements hdrp.volume.info."
+        "description": "Implements hdrp.volume-info."
       },
       {
         "type": "UnityCli.HdrpVolumeCreateTool",
-        "description": "Implements hdrp.volume.create."
+        "description": "Implements hdrp.volume-create."
       },
       {
         "type": "UnityCli.HdrpVolumeAddEffectTool",
-        "description": "Implements hdrp.volume.add-effect."
+        "description": "Implements hdrp.volume-add-effect."
       },
       {
         "type": "UnityCli.HdrpVolumeSetTool",
-        "description": "Implements hdrp.volume.set."
+        "description": "Implements hdrp.volume-set."
       },
       {
         "type": "UnityCli.HdrpSettingsGetTool",
-        "description": "Implements hdrp.settings.get."
+        "description": "Implements hdrp.settings-get."
       },
       {
         "type": "UnityCli.HdrpSettingsSetTool",
-        "description": "Implements hdrp.settings.set."
+        "description": "Implements hdrp.settings-set."
       }
     ]
   },
@@ -520,90 +520,90 @@ export const URP_MANIFEST: ExtensionManifest = {
   "contributions": {
     "tools": [
       {
-        "name": "urp.feature.list"
+        "name": "urp.feature-list"
       },
       {
-        "name": "urp.feature.add"
+        "name": "urp.feature-add"
       },
       {
-        "name": "urp.feature.toggle"
+        "name": "urp.feature-toggle"
       },
       {
-        "name": "urp.feature.configure"
+        "name": "urp.feature-configure"
       },
       {
-        "name": "urp.feature.remove"
+        "name": "urp.feature-remove"
       },
       {
-        "name": "urp.volume.list"
+        "name": "urp.volume-list"
       },
       {
-        "name": "urp.volume.create"
+        "name": "urp.volume-create"
       },
       {
-        "name": "urp.volume.info"
+        "name": "urp.volume-info"
       },
       {
-        "name": "urp.volume.add-effect"
+        "name": "urp.volume-add-effect"
       },
       {
-        "name": "urp.volume.set"
+        "name": "urp.volume-set"
       },
       {
-        "name": "urp.settings.get"
+        "name": "urp.settings-get"
       },
       {
-        "name": "urp.settings.set"
+        "name": "urp.settings-set"
       }
     ],
     "csharpEntries": [
       {
         "type": "UnityCli.UrpFeatureListTool",
-        "description": "Implements urp.feature.list."
+        "description": "Implements urp.feature-list."
       },
       {
         "type": "UnityCli.UrpFeatureAddTool",
-        "description": "Implements urp.feature.add."
+        "description": "Implements urp.feature-add."
       },
       {
         "type": "UnityCli.UrpFeatureToggleTool",
-        "description": "Implements urp.feature.toggle."
+        "description": "Implements urp.feature-toggle."
       },
       {
         "type": "UnityCli.UrpFeatureConfigureTool",
-        "description": "Implements urp.feature.configure."
+        "description": "Implements urp.feature-configure."
       },
       {
         "type": "UnityCli.UrpFeatureRemoveTool",
-        "description": "Implements urp.feature.remove."
+        "description": "Implements urp.feature-remove."
       },
       {
         "type": "UnityCli.UrpVolumeListTool",
-        "description": "Implements urp.volume.list."
+        "description": "Implements urp.volume-list."
       },
       {
         "type": "UnityCli.UrpVolumeInfoTool",
-        "description": "Implements urp.volume.info."
+        "description": "Implements urp.volume-info."
       },
       {
         "type": "UnityCli.UrpVolumeCreateTool",
-        "description": "Implements urp.volume.create."
+        "description": "Implements urp.volume-create."
       },
       {
         "type": "UnityCli.UrpVolumeAddEffectTool",
-        "description": "Implements urp.volume.add-effect."
+        "description": "Implements urp.volume-add-effect."
       },
       {
         "type": "UnityCli.UrpVolumeSetTool",
-        "description": "Implements urp.volume.set."
+        "description": "Implements urp.volume-set."
       },
       {
         "type": "UnityCli.UrpSettingsGetTool",
-        "description": "Implements urp.settings.get."
+        "description": "Implements urp.settings-get."
       },
       {
         "type": "UnityCli.UrpSettingsSetTool",
-        "description": "Implements urp.settings.set."
+        "description": "Implements urp.settings-set."
       }
     ]
   },
@@ -631,31 +631,31 @@ export const VFX_GRAPH_MANIFEST: ExtensionManifest = {
   "contributions": {
     "tools": [
       {
-        "name": "vfx.graph.info",
+        "name": "vfx.graph-info",
         "requiresPackages": [
           "com.unity.visualeffectgraph"
         ]
       },
       {
-        "name": "vfx.graph.create",
+        "name": "vfx.graph-create",
         "requiresPackages": [
           "com.unity.visualeffectgraph"
         ]
       },
       {
-        "name": "vfx.effect.info",
+        "name": "vfx.effect-info",
         "requiresPackages": [
           "com.unity.visualeffectgraph"
         ]
       },
       {
-        "name": "vfx.effect.add",
+        "name": "vfx.effect-add",
         "requiresPackages": [
           "com.unity.visualeffectgraph"
         ]
       },
       {
-        "name": "vfx.effect.assign",
+        "name": "vfx.effect-assign",
         "requiresPackages": [
           "com.unity.visualeffectgraph"
         ]
@@ -667,49 +667,49 @@ export const VFX_GRAPH_MANIFEST: ExtensionManifest = {
         ]
       },
       {
-        "name": "vfx.control.play",
+        "name": "vfx.control-play",
         "requiresPackages": [
           "com.unity.visualeffectgraph"
         ]
       },
       {
-        "name": "vfx.control.stop",
+        "name": "vfx.control-stop",
         "requiresPackages": [
           "com.unity.visualeffectgraph"
         ]
       },
       {
-        "name": "vfx.control.pause",
+        "name": "vfx.control-pause",
         "requiresPackages": [
           "com.unity.visualeffectgraph"
         ]
       },
       {
-        "name": "vfx.control.reinitialize",
+        "name": "vfx.control-reinitialize",
         "requiresPackages": [
           "com.unity.visualeffectgraph"
         ]
       },
       {
-        "name": "vfx.control.set-rate",
+        "name": "vfx.control-set-rate",
         "requiresPackages": [
           "com.unity.visualeffectgraph"
         ]
       },
       {
-        "name": "vfx.control.set-seed",
+        "name": "vfx.control-set-seed",
         "requiresPackages": [
           "com.unity.visualeffectgraph"
         ]
       },
       {
-        "name": "vfx.template.list",
+        "name": "vfx.template-list",
         "requiresPackages": [
           "com.unity.visualeffectgraph"
         ]
       },
       {
-        "name": "vfx.template.create",
+        "name": "vfx.template-create",
         "requiresPackages": [
           "com.unity.visualeffectgraph"
         ]
@@ -735,19 +735,19 @@ export const VFX_GRAPH_MANIFEST: ExtensionManifest = {
         "requiresPackages": []
       },
       {
-        "name": "vfx.particle.play",
+        "name": "vfx.particle-play",
         "requiresPackages": []
       },
       {
-        "name": "vfx.particle.stop",
+        "name": "vfx.particle-stop",
         "requiresPackages": []
       },
       {
-        "name": "vfx.particle.pause",
+        "name": "vfx.particle-pause",
         "requiresPackages": []
       },
       {
-        "name": "vfx.particle.clear",
+        "name": "vfx.particle-clear",
         "requiresPackages": []
       },
       {
@@ -759,34 +759,34 @@ export const VFX_GRAPH_MANIFEST: ExtensionManifest = {
         "requiresPackages": []
       },
       {
-        "name": "vfx.trail.create",
+        "name": "vfx.trail-create",
         "requiresPackages": []
       },
       {
-        "name": "vfx.trail.set",
+        "name": "vfx.trail-set",
         "requiresPackages": []
       }
     ],
     "csharpEntries": [
       {
         "type": "UnityCli.VfxGraphInfoTool",
-        "description": "Implements vfx.graph.info."
+        "description": "Implements vfx.graph-info."
       },
       {
         "type": "UnityCli.VfxGraphCreateTool",
-        "description": "Implements vfx.graph.create."
+        "description": "Implements vfx.graph-create."
       },
       {
         "type": "UnityCli.VfxEffectInfoTool",
-        "description": "Implements vfx.effect.info."
+        "description": "Implements vfx.effect-info."
       },
       {
         "type": "UnityCli.VfxEffectAddTool",
-        "description": "Implements vfx.effect.add."
+        "description": "Implements vfx.effect-add."
       },
       {
         "type": "UnityCli.VfxEffectAssignTool",
-        "description": "Implements vfx.effect.assign."
+        "description": "Implements vfx.effect-assign."
       },
       {
         "type": "UnityCli.VfxParameterTool",
@@ -794,35 +794,35 @@ export const VFX_GRAPH_MANIFEST: ExtensionManifest = {
       },
       {
         "type": "UnityCli.VfxControlPlayTool",
-        "description": "Implements vfx.control.play."
+        "description": "Implements vfx.control-play."
       },
       {
         "type": "UnityCli.VfxControlStopTool",
-        "description": "Implements vfx.control.stop."
+        "description": "Implements vfx.control-stop."
       },
       {
         "type": "UnityCli.VfxControlPauseTool",
-        "description": "Implements vfx.control.pause."
+        "description": "Implements vfx.control-pause."
       },
       {
         "type": "UnityCli.VfxControlReinitializeTool",
-        "description": "Implements vfx.control.reinitialize."
+        "description": "Implements vfx.control-reinitialize."
       },
       {
         "type": "UnityCli.VfxControlSetRateTool",
-        "description": "Implements vfx.control.set-rate."
+        "description": "Implements vfx.control-set-rate."
       },
       {
         "type": "UnityCli.VfxControlSetSeedTool",
-        "description": "Implements vfx.control.set-seed."
+        "description": "Implements vfx.control-set-seed."
       },
       {
         "type": "UnityCli.VfxTemplateListTool",
-        "description": "Implements vfx.template.list."
+        "description": "Implements vfx.template-list."
       },
       {
         "type": "UnityCli.VfxTemplateCreateTool",
-        "description": "Implements vfx.template.create."
+        "description": "Implements vfx.template-create."
       },
       {
         "type": "UnityCli.VfxParticleCreateTool",
@@ -846,19 +846,19 @@ export const VFX_GRAPH_MANIFEST: ExtensionManifest = {
       },
       {
         "type": "UnityCli.VfxParticlePlayTool",
-        "description": "Implements vfx.particle.play."
+        "description": "Implements vfx.particle-play."
       },
       {
         "type": "UnityCli.VfxParticleStopTool",
-        "description": "Implements vfx.particle.stop."
+        "description": "Implements vfx.particle-stop."
       },
       {
         "type": "UnityCli.VfxParticlePauseTool",
-        "description": "Implements vfx.particle.pause."
+        "description": "Implements vfx.particle-pause."
       },
       {
         "type": "UnityCli.VfxParticleClearTool",
-        "description": "Implements vfx.particle.clear."
+        "description": "Implements vfx.particle-clear."
       },
       {
         "type": "UnityCli.VfxLineCreateTool",
@@ -870,11 +870,11 @@ export const VFX_GRAPH_MANIFEST: ExtensionManifest = {
       },
       {
         "type": "UnityCli.VfxTrailCreateTool",
-        "description": "Implements vfx.trail.create."
+        "description": "Implements vfx.trail-create."
       },
       {
         "type": "UnityCli.VfxTrailSetTool",
-        "description": "Implements vfx.trail.set."
+        "description": "Implements vfx.trail-set."
       }
     ]
   },

@@ -52,13 +52,14 @@
       "properties": {
         "action": { "const": "init_help" },
         "audience": { "const": "ai" },
-        "protocolVersion": { "const": 2 },
+        "protocolVersion": { "const": 3 },
+        "version": { "type": "string" },
         "aiInstructions": { "type": "array", "minItems": 1, "items": { "type": "string" } },
         "commands": { "type": "object", "additionalProperties": { "type": "string" } },
         "nextCommand": { "type": "string" },
         "nextActions": { "$ref": "#/$defs/nextActions" }
       },
-      "required": ["action", "audience", "protocolVersion", "aiInstructions", "commands", "nextCommand", "nextActions"],
+      "required": ["action", "audience", "protocolVersion", "version", "aiInstructions", "commands", "nextCommand", "nextActions"],
       "additionalProperties": false
     },
     "discoverData": {
@@ -123,7 +124,7 @@
           "items": {
             "type": "object",
             "properties": {
-              "id": { "enum": ["bridgeProjects", "closeEditor"] },
+              "id": { "enum": ["bridgeProjects"] },
               "question": { "type": "string" },
               "choices": { "type": "array", "items": { "type": "string" } },
               "projectPath": { "type": "string" },
@@ -156,6 +157,26 @@
         "action": { "enum": ["init_package", "init_package_check"] },
         "projectPath": { "type": "string" },
         "projectIdentity": { "type": "object" },
+        "cli": {
+          "type": "object",
+          "properties": {
+            "version": { "type": "string" },
+            "compatibilityRange": { "type": "string" }
+          },
+          "required": ["version", "compatibilityRange"],
+          "additionalProperties": false
+        },
+        "editor": {
+          "type": "object",
+          "properties": {
+            "status": { "enum": ["running", "stopped"] },
+            "processCount": { "type": "integer", "minimum": 0 },
+            "refreshRequired": { "type": "boolean" },
+            "refreshTool": { "type": "string" }
+          },
+          "required": ["status", "processCount"],
+          "additionalProperties": false
+        },
         "editorClose": {
           "type": "object",
           "properties": {

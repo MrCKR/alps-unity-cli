@@ -10,7 +10,7 @@ using BridgeCommandException = UnityCli.UnityCliBridge.BridgeCommandException;
 namespace UnityCli.Tests
 {
     /// <summary>
-    /// debug.thread.list、debug.value.read 与 debug.value.write 的引擎行为测试。
+    /// debug.thread-list、debug.value-read 与 debug.value-write 的引擎行为测试。
     ///
     /// 覆盖：安全投影、字段路径解析与拒绝、值类型副本链写回、句柄弱引用与失效、句柄预算、
     /// 命名逻辑时钟、四种时钟溯源与线程观察范围声明。
@@ -23,7 +23,7 @@ namespace UnityCli.Tests
 
         /// <summary>
         /// 恢复进程级全局现场：命名逻辑时钟表是同一 domain 内共享的，测试发布的时钟
-        /// 会继续出现在真实的 debug.value.read 结果里并占用有限名额，因此每个用例结束后必须清空。
+        /// 会继续出现在真实的 debug.value-read 结果里并占用有限名额，因此每个用例结束后必须清空。
         /// </summary>
         [TearDown]
         public void ReleaseGlobalClockState()
@@ -113,7 +113,7 @@ namespace UnityCli.Tests
             var failure = Reject(() => ResolveStatic(rootKind: "static-field", type: typeof(NoInitializerProbe), field: "Singleton", path: new List<string> { "GetterOnly" }));
             Assert.That(failure.Code, Is.EqualTo("E_DEBUG_SCOPE_UNSUPPORTED"));
             Assert.That((failure.Details as Dictionary<string, object>)["rule"], Is.EqualTo("property-getter-not-executed"));
-            Assert.That(string.Join(" ", failure.NextActions), Does.Contain("debug.code.execute"), "the refusal must route to explicit code execution");
+            Assert.That(string.Join(" ", failure.NextActions), Does.Contain("debug.code-execute"), "the refusal must route to explicit code execution");
             Assert.That(NoInitializerProbe.GetterCalls, Is.EqualTo(0), "the getter must never run");
         }
 
@@ -220,7 +220,7 @@ namespace UnityCli.Tests
             Assert.That(ctx.EffectCommitted, Is.False, "a refused write must not have crossed the effect barrier");
             Assert.That(commits, Is.EqualTo(0), "the commit action must never run for a refused write");
             Assert.That(NoInitializerProbe.MaxRecursionDepth, Is.EqualTo(8), "the constant must be untouched");
-            Assert.That(string.Join(" ", failure.NextActions), Does.Not.Contain("debug.code.execute"), "explicit code execution cannot write a constant either");
+            Assert.That(string.Join(" ", failure.NextActions), Does.Not.Contain("debug.code-execute"), "explicit code execution cannot write a constant either");
         }
 
         /// <summary>init-only（readonly）字段同样不是可变状态，必须在 effect 之前拒绝。</summary>

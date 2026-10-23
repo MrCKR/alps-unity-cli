@@ -51,8 +51,8 @@ test("editor.state progress kind remains extensible and blockers carry the two e
   for (const field of ["pauseId", "threadId", "mainThread", "methodIdentity", "targetKey", "position", "sessionId", "timeoutKind", "remainingMs", "pausedForMs", "resumeTool", "infoTool", "requiresUserAction", "source", "confidence"]) {
     assert.ok(debugPause.required.includes(field), `the debug-pause blocker must require ${field}`);
   }
-  assert.deepEqual(debugPause.properties.resumeTool, { const: "debug.pause.resume" });
-  assert.deepEqual(debugPause.properties.infoTool, { const: "debug.pause.list" });
+  assert.deepEqual(debugPause.properties.resumeTool, { const: "debug.pause-resume" });
+  assert.deepEqual(debugPause.properties.infoTool, { const: "debug.pause-list" });
   assert.deepEqual(debugPause.properties.source, { const: "unity-debug-pause" });
 });
 
@@ -67,7 +67,7 @@ test("direct-call semantics 固定 immutable request、单 generation read 与 o
   };
   assert.match(semantics.request.digest, /exactRequestBodyBytes/);
   assert.match(semantics.request.redelivery, /editorSessionId is unchanged/);
-  assert.deepEqual(semantics.admission.exactObservationExclusion, ["editor.state", "editor.dialogs", "editor.dialog.click"]);
+  assert.deepEqual(semantics.admission.exactObservationExclusion, ["editor.state", "editor.dialogs", "editor.dialog-click"]);
   assert.match(semantics.admission.exactObservationRule, /without business admission acquire\/revoke/);
   assert.equal(semantics.contextRead.ordinary.journal, false);
   assert.match(semantics.contextRead.ordinary.completion, /one validated listener generation/);

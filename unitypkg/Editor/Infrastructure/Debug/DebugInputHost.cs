@@ -172,7 +172,7 @@ namespace UnityCli
         {
             var sessionId = request == null ? null : request.SessionId;
             if (!DebugEventClocks.BindOrObserveMainThread())
-                throw OffMainThread("debug.input.key", "The device backend must be driven from the Unity main thread.");
+                throw OffMainThread("debug.input-key", "The device backend must be driven from the Unity main thread.");
             RequireOpenSession(sessionId);
             var keys = NormalizeControls(request == null ? null : request.Keys, "keys", true);
             var backend = RequireBackend(UnityCliDebugInputDeviceKinds.Keyboard);
@@ -231,7 +231,7 @@ namespace UnityCli
         {
             var sessionId = request == null ? null : request.SessionId;
             if (!DebugEventClocks.BindOrObserveMainThread())
-                throw OffMainThread("debug.input.pointer", "The declared pointer coordinate space must be resolved on the Unity main thread.");
+                throw OffMainThread("debug.input-pointer", "The declared pointer coordinate space must be resolved on the Unity main thread.");
             RequireOpenSession(sessionId);
             var space = request == null ? null : request.TargetSpace;
             if (!UnityCliDebugInputPointerSpaces.IsDefined(space))
@@ -374,8 +374,8 @@ namespace UnityCli
                     },
                     new[]
                     {
-                        "Run tools run debug.input.info to read the devices and records this owner still reports.",
-                        "Run tools run debug.input.release with scope all to request release again, then read the reported release state."
+                        "Run tools run debug.input-info to read the devices and records this owner still reports.",
+                        "Run tools run debug.input-release with scope all to request release again, then read the reported release state."
                     });
             }
 
@@ -758,7 +758,7 @@ namespace UnityCli
                 new[]
                 {
                     "Do not reset or remove that device: this owner never takes over another owner's device.",
-                    "Run tools run debug.input.info to read the devices this debug owner really owns.",
+                    "Run tools run debug.input-info to read the devices this debug owner really owns.",
                     "Release the conflicting device in the runtime that created it, then dispatch again."
                 });
         }
@@ -783,8 +783,8 @@ namespace UnityCli
                     },
                     new[]
                     {
-                        "Run tools run debug.input.release with the matching scope to release the current hold, then dispatch again.",
-                        "Run tools run debug.input.info to read the retained records and their declared end boundaries."
+                        "Run tools run debug.input-release with the matching scope to release the current hold, then dispatch again.",
+                        "Run tools run debug.input-info to read the retained records and their declared end boundaries."
                     });
             }
         }
@@ -811,8 +811,8 @@ namespace UnityCli
                 },
                 new[]
                 {
-                    "Run tools run debug.input.release to release the current holds, then dispatch again.",
-                    "Run tools run debug.input.info to read the retained records and their release states."
+                    "Run tools run debug.input-release to release the current holds, then dispatch again.",
+                    "Run tools run debug.input-info to read the retained records and their release states."
                 });
         }
 
@@ -832,9 +832,9 @@ namespace UnityCli
                 },
                 new[]
                 {
-                    "Run tools run debug.input.release to release inputs this owner no longer needs.",
-                    "Run tools run debug.hook.remove to release listeners that are no longer needed.",
-                    "Run tools run debug.session.info to read handles.listeners and handles.injections."
+                    "Run tools run debug.input-release to release inputs this owner no longer needs.",
+                    "Run tools run debug.hook-remove to release listeners that are no longer needed.",
+                    "Run tools run debug.session-info to read handles.listeners and handles.injections."
                 });
         }
 
@@ -985,7 +985,7 @@ namespace UnityCli
                     new[]
                     {
                         "Open a Game view that reports a size, then submit the pointer again.",
-                        "Run tools run debug.input.info to read the backend status before retrying."
+                        "Run tools run debug.input-info to read the backend status before retrying."
                     });
             resolvedX = x;
             resolvedY = y;

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace UnityCli
 {
-    /// <summary>urp.volume.list：列出当前场景会话中的 URP Volume。</summary>
+    /// <summary>urp.volume-list：列出当前场景会话中的 URP Volume。</summary>
     public sealed class UrpVolumeListTool : IUnityCliTool<UrpVolumeListTool.Request, UrpVolumeListTool.Result>
     {
         public sealed class Request { }
@@ -14,7 +14,7 @@ namespace UnityCli
 
         public ToolDescriptor Describe() => new()
         {
-            Name = "urp.volume.list",
+            Name = "urp.volume-list",
             Summary = "List scene-session URP Volume components and their in-memory profiles.",
             Description = "Lists URP Volume components in loaded scenes with their global state, priority, weight, and current in-memory profile reference. Requires com.unity.render-pipelines.universal and an active UniversalRenderPipelineAsset. Does not save scenes or assets.",
             Group = "urp",
@@ -30,7 +30,7 @@ namespace UnityCli
 
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            GameObjectToolSupport.EnsureEditorNotBusy("urp.volume.list");
+            GameObjectToolSupport.EnsureEditorNotBusy("urp.volume-list");
             UrpToolSupport.EnsureUrpAvailable();
             return new System.Threading.Tasks.ValueTask<Result>(new Result { Volumes = UrpToolSupport.ListVolumes(null)});
         }

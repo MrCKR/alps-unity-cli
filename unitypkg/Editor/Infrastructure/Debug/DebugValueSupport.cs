@@ -65,7 +65,7 @@ namespace UnityCli
     }
 
     /// <summary>
-    /// debug.value.read 与 debug.value.write 的唯一解析与效果 owner。
+    /// debug.value-read 与 debug.value-write 的唯一解析与效果 owner。
     ///
     /// 规则：
     /// - 根只能是精确静态字段、精确 Unity selector 或当前托管对象句柄；路径分段只能是字段名或一维数组下标。
@@ -90,7 +90,7 @@ namespace UnityCli
         // 读取
         // ------------------------------------------------------------------
 
-        /// <summary>debug.value.read 的完整读取：解析、读取、投影、时钟溯源与可选弱句柄。</summary>
+        /// <summary>debug.value-read 的完整读取：解析、读取、投影、时钟溯源与可选弱句柄。</summary>
         internal static DebugValueReadResult Read(DebugValueReadRequest request, UnityCliRequestBudget budget)
         {
             if (request == null) throw SchemaInvalid("rootKind", "static-field, selector or handle", "missing");
@@ -202,7 +202,7 @@ namespace UnityCli
                     },
                     new[]
                     {
-                        "Send a smaller JSON value; tools describe debug.value.write reports the per-value byte budget."
+                        "Send a smaller JSON value; tools describe debug.value-write reports the per-value byte budget."
                     });
             }
 
@@ -231,7 +231,7 @@ namespace UnityCli
                     "path-member-null",
                     DescribeNullChain(plan, nullAtPath),
                     plan,
-                    new[] { "Read the current value with tools run debug.value.read, then initialize that member first." });
+                    new[] { "Read the current value with tools run debug.value-read, then initialize that member first." });
             write.OriginalValue = current;
 
             if (request.GuardByExpectedValue)
@@ -239,7 +239,7 @@ namespace UnityCli
                 bool equal;
                 string refusal;
                 if (!TryCompareGuard(plan.LeafType, current, request.ExpectedValue, out equal, out refusal))
-                    throw Refuse(refusal, "The expectedValue guard cannot be evaluated without running user code for this member type.", plan, new[] { "Guard only primitives, strings, enums, decimal, DateTime, TimeSpan, Guid or Unity object references; otherwise use tools run debug.code.execute for a conditional write." });
+                    throw Refuse(refusal, "The expectedValue guard cannot be evaluated without running user code for this member type.", plan, new[] { "Guard only primitives, strings, enums, decimal, DateTime, TimeSpan, Guid or Unity object references; otherwise use tools run debug.code-execute for a conditional write." });
                 write.GuardEvaluated = true;
                 write.GuardSatisfied = equal;
                 if (!equal)
@@ -437,7 +437,7 @@ namespace UnityCli
                             { "runtimeId", DebugSessionHost.RuntimeId() }, { "domainGeneration", DebugSessionHost.DomainGeneration() },
                             { "knownHandles", (long)DebugHandleRegistry.GlobalCount }
                         },
-                        new[] { "Read the root again with tools run debug.value.read and take the handleId it returns for this Editor session." });
+                        new[] { "Read the root again with tools run debug.value-read and take the handleId it returns for this Editor session." });
                 }
                 if (status != "live")
                 {
@@ -453,7 +453,7 @@ namespace UnityCli
                             { "handleDomainGeneration", view == null ? string.Empty : view.DomainGeneration },
                             { "runtimeId", DebugSessionHost.RuntimeId() }, { "domainGeneration", DebugSessionHost.DomainGeneration() }
                         },
-                        new[] { "Re-read the root with tools run debug.value.read; a handle never rebinds across a runtime or domain change." });
+                        new[] { "Re-read the root with tools run debug.value-read; a handle never rebinds across a runtime or domain change." });
                 }
                 usedHandle = view;
                 plan.RootTarget = target;
@@ -468,7 +468,7 @@ namespace UnityCli
                     "E_SCHEMA_INVALID",
                     "rootKind is invalid: expected static-field, selector or handle.",
                     new Dictionary<string, object> { { "path", "$.rootKind" }, { "expected", "static-field, selector or handle" }, { "actual", rootKind ?? "null" } },
-                    new[] { "Run unitycli tools describe debug.value.read to read the root contract." });
+                    new[] { "Run unitycli tools describe debug.value-read to read the root contract." });
             }
 
             ParsePath(plan, plan.RootValueType, fieldPath);
@@ -491,7 +491,7 @@ namespace UnityCli
                     {
                         { "limit", "value-path-segments" }, { "used", (long)segments.Count }, { "max", (long)DebugLimits.MaxValuePathLength }
                     },
-                    new[] { "Address a shorter field path; tools describe debug.value.read reports the path budget." });
+                    new[] { "Address a shorter field path; tools describe debug.value-read reports the path budget." });
             }
             var currentType = rootValueType;
             var text = new StringBuilder();
@@ -516,7 +516,7 @@ namespace UnityCli
                             "array-index-required",
                             "The current value is a one-dimensional array, so this path segment must be a non-negative array index; reading a collection by member name would run user code.",
                             plan,
-                            new[] { "Pass the array index, or read the collection element through tools run debug.code.execute." });
+                            new[] { "Pass the array index, or read the collection element through tools run debug.code-execute." });
                     }
                     segment.ArrayIndex = arrayIndex;
                     segment.ValueType = currentType.GetElementType() ?? typeof(object);
@@ -802,12 +802,12 @@ namespace UnityCli
                     "property-getter-not-executed",
                     "Member " + name + " on " + typeName + " is a property, and a pure read must not execute a property getter.",
                     plan,
-                    new[] { "Read an exact field instead; run tools run debug.type.schema to list the real fields.", "Use tools run debug.code.execute when the property getter must actually run." });
+                    new[] { "Read an exact field instead; run tools run debug.type-schema to list the real fields.", "Use tools run debug.code-execute when the property getter must actually run." });
             return Refuse(
                 "member-not-a-field",
                 "No field named " + name + " exists on " + typeName + ".",
                 plan,
-                new[] { "Run tools run debug.type.schema to read the declared fields of " + typeName + "." });
+                new[] { "Run tools run debug.type-schema to read the declared fields of " + typeName + "." });
         }
 
         /// <summary>静态字段访问不得触发类型初始化：只有不存在静态构造函数的类型才可证明安全。</summary>
@@ -822,7 +822,7 @@ namespace UnityCli
                 "Type " + typeName + " declares a static constructor, so touching its static field " + field.Name
                 + " could run type initialisation; a pure read or structured write must not trigger it and cannot prove it already ran.",
                 plan,
-                new[] { "Use tools run debug.code.execute to read or write this static field explicitly, accepting that type initialisation may run." });
+                new[] { "Use tools run debug.code-execute to read or write this static field explicitly, accepting that type initialisation may run." });
         }
 
         /// <summary>写入值的类型检查；不匹配时返回稳定 schema 错误而不是静默转换失败。</summary>
@@ -915,8 +915,8 @@ namespace UnityCli
                 new Dictionary<string, object> { { "sessionId", sessionId }, { "state", state }, { "cleanupPending", info.Session != null && info.Session.CleanupPending } },
                 new[]
                 {
-                    "Run tools run debug.session.info to read the current session state and cleanup detail.",
-                    "Run tools run debug.session.create to start a new session for this investigation."
+                    "Run tools run debug.session-info to read the current session state and cleanup detail.",
+                    "Run tools run debug.session-create to start a new session for this investigation."
                 });
         }
 
@@ -950,7 +950,7 @@ namespace UnityCli
                 },
                 new[]
                 {
-                    "Run tools run debug.session.stop for a session whose handles you no longer need, then retry.",
+                    "Run tools run debug.session-stop for a session whose handles you no longer need, then retry.",
                     "Re-read or re-write with createHandle none when the handle is not required."
                 });
         }
@@ -993,7 +993,7 @@ namespace UnityCli
 
         /// <summary>
         /// 不可写目标的稳定拒绝。它发生在 effect barrier 之前，且显式代码执行也不能改变结果，
-        /// 因此不路由到 debug.code.execute，而是要求换一个可变字段。
+        /// 因此不路由到 debug.code-execute，而是要求换一个可变字段。
         /// </summary>
         private static BridgeCommandException FieldNotWritable(string rule, string message, DebugValuePlan plan)
         {
@@ -1008,7 +1008,7 @@ namespace UnityCli
                 },
                 new[]
                 {
-                    "Address a mutable field instead: tools run debug.value.read reports the declared fields, and only non-const, non-readonly fields can receive a structured write."
+                    "Address a mutable field instead: tools run debug.value-read reports the declared fields, and only non-const, non-readonly fields can receive a structured write."
                 });
         }
 
@@ -1028,7 +1028,7 @@ namespace UnityCli
                     { "reason", failure ?? "target-invalid" },
                     { "effectMayBePartial", true }
                 },
-                new[] { "Re-read the field with tools run debug.value.read before submitting a new request; the write may have partially applied." });
+                new[] { "Re-read the field with tools run debug.value-read before submitting a new request; the write may have partially applied." });
         }
 
         private static BridgeCommandException StaleOrUnresolvable(DebugValuePlan plan, string failure)
@@ -1042,7 +1042,7 @@ namespace UnityCli
                     { "path", plan == null ? string.Empty : plan.PathText },
                     { "reason", failure ?? "target-invalid" }
                 },
-                new[] { "Re-read the root with tools run debug.value.read so the target identity is resolved again." });
+                new[] { "Re-read the root with tools run debug.value-read so the target identity is resolved again." });
         }
 
         private static BridgeCommandException SchemaInvalid(string field, string expected, string actual)
@@ -1059,7 +1059,7 @@ namespace UnityCli
         {
             var actions = new List<string>
             {
-                "Use tools run debug.code.execute when this effect must run: a structured read never executes property getters, arbitrary ToString, user serializers or enumerators, and never triggers type initialisation."
+                "Use tools run debug.code-execute when this effect must run: a structured read never executes property getters, arbitrary ToString, user serializers or enumerators, and never triggers type initialisation."
             };
             if (extraActions != null) actions.AddRange(extraActions);
             return new BridgeCommandException(

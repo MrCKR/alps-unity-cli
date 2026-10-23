@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace UnityCli
 {
     /// <summary>
-    /// debug.thread.list 的公开输入契约。
+    /// debug.thread-list 的公开输入契约。
     ///
     /// 分页按稳定排序的观察线程列表推进；cursor 与 Editor session 绑定。
     /// </summary>
@@ -53,7 +53,7 @@ namespace UnityCli
     }
 
     /// <summary>
-    /// debug.thread.list 的公开输出契约。
+    /// debug.thread-list 的公开输出契约。
     /// 报告只描述被观察线程与保留窗口事实，并显式声明观察范围。
     /// </summary>
     public sealed class DebugThreadListResult

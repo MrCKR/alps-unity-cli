@@ -511,7 +511,7 @@ namespace UnityCli.Tests
                 UnityCliDebugInputRouteKinds.ThreadSafePointDelivery
             }));
             Assert.That(info.GenericRoutes.Select(route => route.Tool).Distinct().OrderBy(name => name, StringComparer.Ordinal).ToList(),
-                Is.EquivalentTo(new[] { "debug.code.execute", "debug.hook.install", "debug.method.invoke", "debug.program.run" }));
+                Is.EquivalentTo(new[] { "debug.code-execute", "debug.hook-install", "debug.method-invoke", "debug.program-run" }));
             foreach (var route in info.GenericRoutes)
             {
                 Assert.That(route.Thread, Is.Not.Empty, "every general input path must state its real thread");

@@ -30,6 +30,8 @@ test("help and version use the public success envelope", async () => {
   assert.ok(version.ok);
   assert.match(String((version.data as { version?: string }).version), /^\d+\.\d+\.\d+/);
   assert.deepEqual(Object.keys(version).sort(), ["data", "ok", "requestId"]);
+  // help 必须自报版本，调用方无需额外调用 --version 才能判定 CLI 侧版本。
+  assert.equal((help.data as { version?: string }).version, (version.data as { version?: string }).version);
 });
 
 test("JSON output is compact by default and pretty only when requested", () => {

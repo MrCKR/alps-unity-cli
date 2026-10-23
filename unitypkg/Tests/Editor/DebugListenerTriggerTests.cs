@@ -383,7 +383,7 @@ namespace UnityCli.Tests
                 };
                 var refused = Assert.Throws<UnityCliBridge.BridgeCommandException>(() => MethodHookHost.PrepareRemove(remove));
                 Assert.That(refused.Code, Is.EqualTo("E_HOOK_OWNED_BY_PROGRAM"), "a direct debug.hook.* call must not change a program-owned binding");
-                Assert.That(refused.NextActions.Any(action => action.Contains("debug.program.replace")), Is.True, "the refusal must point at the owning program Tools");
+                Assert.That(refused.NextActions.Any(action => action.Contains("debug.program-replace")), Is.True, "the refusal must point at the owning program Tools");
                 Assert.Throws<UnityCliBridge.BridgeCommandException>(() => MethodHookHost.PrepareDisable(new MethodHookDisableRequest
                 {
                     HookId = installed.HookId,

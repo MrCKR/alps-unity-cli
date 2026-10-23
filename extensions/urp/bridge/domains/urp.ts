@@ -2,18 +2,18 @@ import { boolFlag, compactArgs, floatFlag, numberFlag, stringFlag } from "../arg
 import type { BridgeCommandSpec } from "../types.js";
 
 export const urpBridgeSpecs: BridgeCommandSpec[] = markToolsOnly([
-  { group: "urp", command: "feature.list", bridgeCommand: "catalog.editor.run", toolName: "urp.feature.list", buildArgs: emptyArgs },
-  { group: "urp", command: "feature.add", bridgeCommand: "catalog.editor.run", toolName: "urp.feature.add", buildArgs: urpFeatureAddArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "urp", command: "feature.toggle", bridgeCommand: "catalog.editor.run", toolName: "urp.feature.toggle", buildArgs: urpFeatureToggleArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "urp", command: "feature.configure", bridgeCommand: "catalog.editor.run", toolName: "urp.feature.configure", buildArgs: urpFeatureConfigureArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "urp", command: "feature.remove", bridgeCommand: "catalog.editor.run", toolName: "urp.feature.remove", buildArgs: urpFeatureIndexArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "urp", command: "volume.list", bridgeCommand: "catalog.editor.run", toolName: "urp.volume.list", buildArgs: emptyArgs },
-  { group: "urp", command: "volume.create", bridgeCommand: "catalog.editor.run", toolName: "urp.volume.create", buildArgs: volumeCreateArgs },
-  { group: "urp", command: "volume.info", bridgeCommand: "catalog.editor.run", toolName: "urp.volume.info", buildArgs: volumeTargetArgs },
-  { group: "urp", command: "volume.add-effect", bridgeCommand: "catalog.editor.run", toolName: "urp.volume.add-effect", buildArgs: volumeEffectArgs },
-  { group: "urp", command: "volume.set", bridgeCommand: "catalog.editor.run", toolName: "urp.volume.set", buildArgs: volumeSetArgs },
-  { group: "urp", command: "settings.get", bridgeCommand: "catalog.editor.run", toolName: "urp.settings.get", buildArgs: emptyArgs },
-  { group: "urp", command: "settings.set", bridgeCommand: "catalog.editor.run", toolName: "urp.settings.set", buildArgs: urpSettingsArgs, destructiveHint: true, supportsDryRun: true }
+  { group: "urp", command: "feature-list", bridgeCommand: "catalog.editor.run", toolName: "urp.feature-list", buildArgs: emptyArgs },
+  { group: "urp", command: "feature-add", bridgeCommand: "catalog.editor.run", toolName: "urp.feature-add", buildArgs: urpFeatureAddArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "urp", command: "feature-toggle", bridgeCommand: "catalog.editor.run", toolName: "urp.feature-toggle", buildArgs: urpFeatureToggleArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "urp", command: "feature-configure", bridgeCommand: "catalog.editor.run", toolName: "urp.feature-configure", buildArgs: urpFeatureConfigureArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "urp", command: "feature-remove", bridgeCommand: "catalog.editor.run", toolName: "urp.feature-remove", buildArgs: urpFeatureIndexArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "urp", command: "volume-list", bridgeCommand: "catalog.editor.run", toolName: "urp.volume-list", buildArgs: emptyArgs },
+  { group: "urp", command: "volume-create", bridgeCommand: "catalog.editor.run", toolName: "urp.volume-create", buildArgs: volumeCreateArgs },
+  { group: "urp", command: "volume-info", bridgeCommand: "catalog.editor.run", toolName: "urp.volume-info", buildArgs: volumeTargetArgs },
+  { group: "urp", command: "volume-add-effect", bridgeCommand: "catalog.editor.run", toolName: "urp.volume-add-effect", buildArgs: volumeEffectArgs },
+  { group: "urp", command: "volume-set", bridgeCommand: "catalog.editor.run", toolName: "urp.volume-set", buildArgs: volumeSetArgs },
+  { group: "urp", command: "settings-get", bridgeCommand: "catalog.editor.run", toolName: "urp.settings-get", buildArgs: emptyArgs },
+  { group: "urp", command: "settings-set", bridgeCommand: "catalog.editor.run", toolName: "urp.settings-set", buildArgs: urpSettingsArgs, destructiveHint: true, supportsDryRun: true }
 ]);
 
 function markToolsOnly(specs: BridgeCommandSpec[]): BridgeCommandSpec[] {

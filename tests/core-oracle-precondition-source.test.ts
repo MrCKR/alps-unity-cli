@@ -37,8 +37,8 @@ test("ScriptableObject and UI mutations establish all preconditions before their
     source("Tools/scriptable-object/create.cs"),
     source("Tools/scriptable-object/modify.cs"),
     source("Tools/ui/UiToolSupport.cs"),
-    source("Tools/ui/document/create.cs"),
-    source("Tools/ui/document/delete.cs"),
+    source("Tools/ui/document-create.cs"),
+    source("Tools/ui/document-delete.cs"),
     source("Tools/ui/modify-visual-element.cs")
   ]);
 

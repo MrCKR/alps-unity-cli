@@ -126,10 +126,9 @@ export async function discoverInitEnvironment(cwdInput: string, userHomeInput: s
   const recommendedTarget = resolveSkillTarget(cwd, ".agents");
   const recommendedSkill = await inspectSkillTarget(sourcePath, recommendedTarget);
   const requiredDecisions: Array<Record<string, unknown>> = [];
+  // Editor 运行状态只是只读事实：安装可以就地完成，不产生关闭确认问题。
   if (unityProjects.length > 1) {
     requiredDecisions.push({ id: "bridgeProjects", question: "Which discovered Unity projects should receive the UnityCLI Bridge?", choices: unityProjects.map((project) => project.path), multiple: true });
-  } else if (((unityProjects[0]?.editor as Record<string, unknown> | undefined)?.status) === "running") {
-    requiredDecisions.push({ id: "closeEditor", question: "May UnityCLI normally close the exact target Unity project before Bridge installation?", projectPath: unityProjects[0].path, multiple: false });
   }
 
   return {

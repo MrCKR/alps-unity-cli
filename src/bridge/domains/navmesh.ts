@@ -4,7 +4,7 @@ import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 export const navMeshBridgeSpecs: BridgeCommandSpec[] = [
   { group: "navmesh", command: "bake-clear", bridgeCommand: "catalog.editor.run", toolName: "navmesh.bake-clear", buildArgs: () => ({}), destructiveHint: true, supportsDryRun: true },
   { group: "navmesh", command: "settings", bridgeCommand: "catalog.editor.run", toolName: "navmesh.settings", buildArgs: () => ({}), destructiveHint: false, supportsDryRun: false },
-  { group: "navmesh", command: "settings.set", bridgeCommand: "catalog.editor.run", toolName: "navmesh.settings.set", buildArgs: settingsSetArgs, destructiveHint: true, supportsDryRun: true }
+  { group: "navmesh", command: "settings-set", bridgeCommand: "catalog.editor.run", toolName: "navmesh.settings-set", buildArgs: settingsSetArgs, destructiveHint: true, supportsDryRun: true }
 ];
 
 // Settings mutation 保留 typed nullable fields；未知键仍由公开 schema 在 Bridge 前拒绝。

@@ -117,7 +117,7 @@ namespace UnityCli
         /// player-loop-phase 只在 Editor Play 下存在，必须同时声明 phase，Edit 模式下被拒绝；
         /// 一个 phase 到达没有方法实例与参数，因此该触发源上只能声明字段条件与字段捕获，
         /// 参数条件、instanceIdentity 与回调体在安装时被拒绝或被记录为稳定覆盖缺口；
-        /// editor-tick 不是 listener 触发源，需要主线程 tick 时用 debug.program.run 的 executionSite。
+        /// editor-tick 不是 listener 触发源，需要主线程 tick 时用 debug.program-run 的 executionSite。
         /// </summary>
         [UnityCliStringEnum("method-hit", "log", "host-signal", "player-loop-phase")] public string Trigger { get; set; }
 
@@ -343,7 +343,7 @@ namespace UnityCli
         public string State { get; set; }
 
         /// <summary>
-        /// 当前 revision；这正是 debug.hook.remove/replace/enable/disable 要求的 expectedRevision。
+        /// 当前 revision；这正是 debug.hook-remove/replace/enable/disable 要求的 expectedRevision。
         /// </summary>
         public long Revision { get; set; }
 
@@ -355,7 +355,7 @@ namespace UnityCli
 
         /// <summary>
         /// 拥有该定义的 Editor session。
-        /// debug.hook.remove/replace/enable/disable 都要求 editorSessionId，因此列表必须直接给出同一 identity，
+        /// debug.hook-remove/replace/enable/disable 都要求 editorSessionId，因此列表必须直接给出同一 identity，
         /// 使只持有列表输出的客户端不需要另一次调用也能完成清理。
         /// </summary>
         public string EditorSessionId { get; set; }

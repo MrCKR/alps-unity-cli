@@ -137,7 +137,7 @@ namespace UnityCli
     }
 
     /// <summary>
-    /// debug.value.read 的公开输入契约。
+    /// debug.value-read 的公开输入契约。
     ///
     /// rootKind 决定根身份：static-field 使用 typeName+fieldName，selector 使用现有 Unity selector 字段，
     /// handle 使用 handleId。fieldPath 是相对根的值的有界路径，分段只能是字段名或一维数组下标。
@@ -199,7 +199,7 @@ namespace UnityCli
     }
 
     /// <summary>
-    /// debug.value.read 的公开输出契约。
+    /// debug.value-read 的公开输出契约。
     /// 纯读取：只返回有界值投影、根身份、声明类型、线程与时钟溯源。
     /// </summary>
     public sealed class DebugValueReadResult
@@ -269,7 +269,7 @@ namespace UnityCli
     }
 
     /// <summary>
-    /// debug.value.write 的公开输入契约。
+    /// debug.value-write 的公开输入契约。
     /// 类型检查的结构化写入，不是属性 setter，也不是方法调用器。
     /// </summary>
     public sealed class DebugValueWriteRequest
@@ -317,7 +317,7 @@ namespace UnityCli
     }
 
     /// <summary>
-    /// debug.value.write 的公开输出契约。
+    /// debug.value-write 的公开输出契约。
     /// 结果区分"已写入"与"前置条件不满足因此未写入"，并给出条件恢复记录与效果类别。
     /// </summary>
     public sealed class DebugValueWriteResult

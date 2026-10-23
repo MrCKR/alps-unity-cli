@@ -157,7 +157,7 @@ namespace UnityCli.Tests
                     new DebugProgramEntrySpec { Name = "Step", Category = UnityCliDebugProgramEntryCategories.Step, DeclaringType = "DriverProbe" }
                 }
             };
-            // install 只编译与准备，不执行业务代码；这里与 debug.program.install Tool 使用同一 owner 入口。
+            // install 只编译与准备，不执行业务代码；这里与 debug.program-install Tool 使用同一 owner 入口。
             var plan = DebugProgramHost.PrepareInstallAsync(request, new TestWaiter(), TimeSpan.FromSeconds(180), CancellationToken.None)
                 .AsTask().GetAwaiter().GetResult();
             var installed = DebugProgramHost.ApplyInstall(plan);

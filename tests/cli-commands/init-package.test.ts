@@ -62,6 +62,8 @@ test("init package installs, checks read-only, and repairs managed damage", asyn
     const checked = await execute(["init", "package", "--project", project, "--check"], runtime(project) as never);
     assert.equal(checked.ok, true, JSON.stringify(checked));
     assert.equal((checked.data as any).package.status, "installed");
+    assert.match((checked.data as any).cli.version, /^\d+\.\d+\.\d+/);
+    assert.match((checked.data as any).cli.compatibilityRange, /^>=.*<.*$/);
     assert.equal(await hashPackageTree(bridgePath), beforeCheck);
 
     const managedFile = join(bridgePath, "Editor", "UnityCliBridge.cs");
@@ -80,7 +82,7 @@ test("init package installs, checks read-only, and repairs managed damage", asyn
   }
 });
 
-test("init package requires explicit close authorization for a running exact Editor", async () => {
+test("init package installs in place while the exact Editor stays open", async () => {
   const project = await makeUnityProject();
   try {
     let closeCalls = 0;
@@ -88,37 +90,54 @@ test("init package requires explicit close authorization for a running exact Edi
       findUnityProjectProcesses: async () => [runningEditor(project)],
       closeUnityProjectProcesses: async () => { closeCalls += 1; return { requested: 1, remaining: 0 }; },
     }) as never;
-    const blocked = await execute(["init", "package", "--project", project], processRuntime);
-    assert.equal(blocked.ok, false, JSON.stringify(blocked));
-    assert.equal(blocked.error.code, "E_INIT_EDITOR_RUNNING");
-    assert.equal(closeCalls, 0);
-    await assert.rejects(() => readFile(join(project, "Packages", "com.alpsckr.unitycli", "package.json")), { code: "ENOENT" });
-
-    const hot = await execute(["init", "package", "--project", project, "--hot"], processRuntime);
-    assert.equal(hot.ok, true, JSON.stringify(hot));
-    assert.equal(closeCalls, 0, "--hot must never close the Editor");
-    assert.deepEqual((hot as any).data.hotUpdate, { editorRunning: true, refreshRequired: true, refreshTool: "editor.refresh" });
-    assert.match((hot as any).data.nextActions[0], /editor\.refresh/);
-    assert.equal((hot as any).data.package.readback.status, "installed");
-
-    const installed = await execute(["init", "package", "--project", project, "--close-editor"], processRuntime);
+    const installed = await execute(["init", "package", "--project", project], processRuntime);
     assert.equal(installed.ok, true, JSON.stringify(installed));
-    assert.equal(closeCalls, 1);
-    assert.deepEqual((installed as any).data.editorClose, { status: "closed", requested: 1 });
+    assert.equal(closeCalls, 0, "a plain install must never close the Editor");
+    assert.deepEqual((installed as any).data.editor, { status: "running", processCount: 1, refreshRequired: true, refreshTool: "editor.refresh" });
+    assert.match((installed as any).data.cli.version, /^\d+\.\d+\.\d+/);
+    assert.equal((installed as any).data.cli.compatibilityRange, (installed as any).data.package.install.cliCompatibilityRange);
+    assert.match((installed as any).data.nextActions[0], /editor\.refresh/);
+    assert.match((installed as any).data.nextActions[0], /changed:false/);
     assert.equal((installed as any).data.package.readback.status, "installed");
+    assert.match(await readFile(join(project, "Packages", "com.alpsckr.unitycli", "package.json"), "utf8"), /com\.alpsckr\.unitycli/);
+
+    const closed = await execute(["init", "package", "--project", project, "--close-editor"], processRuntime);
+    assert.equal(closed.ok, true, JSON.stringify(closed));
+    assert.equal(closeCalls, 1);
+    assert.deepEqual((closed as any).data.editorClose, { status: "closed", requested: 1 });
+    assert.deepEqual((closed as any).data.editor, { status: "stopped", processCount: 0 });
+    assert.match((closed as any).data.nextActions[0], /Open or refresh this Unity project/);
+    assert.equal((closed as any).data.package.readback.status, "installed");
   } finally {
     await rm(project, { recursive: true, force: true });
   }
 });
 
-test("init package fails closed when exact Editor state cannot be verified", async () => {
+test("init package still installs and only warns when Editor state cannot be observed", async () => {
   const project = await makeUnityProject();
   try {
     const result = await execute(["init", "package", "--project", project], runtime(project, {
       findUnityProjectProcesses: async () => { throw new Error("process observation denied"); },
     }) as never);
+    assert.equal(result.ok, true, JSON.stringify(result));
+    if (!result.ok) throw new Error("Expected package installation.");
+    assert.equal((result.data as any).editor, undefined);
+    assert.match((result.warnings as string[])[0], /could not be observed/);
+    assert.match(await readFile(join(project, "Packages", "com.alpsckr.unitycli", "package.json"), "utf8"), /com\.alpsckr\.unitycli/);
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("init package --close-editor fails closed when the exact Editor state cannot be verified", async () => {
+  const project = await makeUnityProject();
+  try {
+    const result = await execute(["init", "package", "--project", project, "--close-editor"], runtime(project, {
+      findUnityProjectProcesses: async () => { throw new Error("process observation denied"); },
+    }) as never);
     assert.equal(result.ok, false, JSON.stringify(result));
     assert.equal(result.error.code, "E_EDITOR_STATE_UNVERIFIABLE");
+    assert.match(result.error.nextActions[0], /without --close-editor/);
     await assert.rejects(() => readFile(join(project, "Packages", "com.alpsckr.unitycli", "package.json")), { code: "ENOENT" });
   } finally {
     await rm(project, { recursive: true, force: true });
@@ -148,6 +167,7 @@ test("init package rejects missing project, positional arguments, old flags, and
       { argv: ["init", "package"], code: "E_INIT_PROJECT_REQUIRED" },
       { argv: ["init", "package", "extra", "--project", project], code: "E_INIT_ARGUMENT_UNEXPECTED" },
       { argv: ["init", "package", "--project", project, "--pkg-only"], code: "E_SHELL_OPTION_UNKNOWN" },
+      { argv: ["init", "package", "--project", project, "--hot"], code: "E_SHELL_OPTION_UNKNOWN" },
       { argv: ["init", "package", "--project", project, "--agent", ".agents"], code: "E_SHELL_OPTION_UNKNOWN" },
       { argv: ["init", "package", "--project", project, "--timeout-ms", "0"], code: "E_INIT_TIMEOUT_INVALID" },
       { argv: ["init", "package", "--project", project, "--check", "--close-editor"], code: "E_INIT_CLOSE_EDITOR_CHECK_FORBIDDEN" },

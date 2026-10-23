@@ -265,7 +265,7 @@ namespace UnityCli
                 if (!budget.TryReserveSerializedUtf8(value)) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                 values.Add(value);
             }
-            return UnityCliContinuationToken.Fingerprint(UnityCliReadGeneration.Session("profiler.memory-snapshot.list") + "\0" + string.Join("\n", values.ToArray()));
+            return UnityCliContinuationToken.Fingerprint(UnityCliReadGeneration.Session("profiler.memory-snapshot-list") + "\0" + string.Join("\n", values.ToArray()));
         }
 
         /// <summary>publication/retention/rollback删除失败必须返回稳定错误，禁止吞掉后继续宣称成功。</summary>

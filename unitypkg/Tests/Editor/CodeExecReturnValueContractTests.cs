@@ -4,7 +4,7 @@ using NUnit.Framework;
 namespace UnityCli.Tests
 {
     /// <summary>
-    /// debug.code.execute 返回值投影契约：返回值可以被有界裁剪，但裁剪事实必须一直随结果公开，
+    /// debug.code-execute 返回值投影契约：返回值可以被有界裁剪，但裁剪事实必须一直随结果公开，
     /// 调用方必须能够区分完整值与残片（ISSUE-098）。
     /// </summary>
     public sealed class CodeExecReturnValueContractTests

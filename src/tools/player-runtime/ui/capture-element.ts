@@ -15,7 +15,7 @@ export interface RuntimeCaptureElementResult {
 }
 
 export default defineTool<RuntimeCaptureElementRequest, RuntimeCaptureElementResult>({
-  name: "player-runtime.ui.capture-element",
+  name: "player-runtime.ui-capture-element",
   summary: "Capture one bounded UI Toolkit element from a development Player.",
   description: "Resolve one bounded selector in one live runtime UIDocument panel and write a PNG to the request artifact directory. The Tool is catalog-visible on supported projects but executes only on Unity 6000.7 or newer; it never returns base64 or accepts an output path.",
   group: "player-runtime",
@@ -26,6 +26,6 @@ export default defineTool<RuntimeCaptureElementRequest, RuntimeCaptureElementRes
   supportsDryRun: true,
   playModeSupport: "runtime-only",
   timeoutMs: 15_000,
-  examples: [{ description: "Capture the uniquely named runtime status label.", argv: ["tools", "run", "player-runtime.ui.capture-element", "--input", "{\"selector\":\"#status-label\"}"], input: { selector: "#status-label" } }],
-  execute() { throw new Error("player-runtime.ui.capture-element must execute through the bridge-runtime dispatcher"); },
+  examples: [{ description: "Capture the uniquely named runtime status label.", argv: ["tools", "run", "player-runtime.ui-capture-element", "--input", "{\"selector\":\"#status-label\"}"], input: { selector: "#status-label" } }],
+  execute() { throw new Error("player-runtime.ui-capture-element must execute through the bridge-runtime dispatcher"); },
 });

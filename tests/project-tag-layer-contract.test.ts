@@ -6,7 +6,7 @@ import { findCommandContract } from "../src/contracts/command-contract.js";
 import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
 import { discoverLiveTools, readEditorCsSources } from "./helpers/csharp-test-helpers.js";
 
-const PROJECT_TOOLS = ["project-settings.tag.add", "project-settings.tag.remove", "project-settings.layer.add", "project-settings.layer.remove"];
+const PROJECT_TOOLS = ["project-settings.tag-add", "project-settings.tag-remove", "project-settings.layer-add", "project-settings.layer-remove"];
 
 test("project-settings tag and layer tools expose independent persistent-write descriptors", async () => {
   const tools = await discoverLiveTools(...PROJECT_TOOLS.map((name) => makeLiveTool({ name, summary: "Mutate TagManager.", description: "Writes ProjectSettings/TagManager.asset.", group: "project-settings", destructiveHint: true, playModeSupport: "supported", sideEffects: ["project-settings-write"], inputSchema: { type: "object", required: ["name"], properties: { name: { type: "string" } } } })));

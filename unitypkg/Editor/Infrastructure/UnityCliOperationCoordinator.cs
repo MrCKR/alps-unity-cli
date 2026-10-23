@@ -242,7 +242,7 @@ namespace UnityCli
             });
         }
 
-        /// <summary>editor.play-mode.status只读取editor.play-mode.start/editor.play-mode.stop的direct owner或其已发布终态。</summary>
+        /// <summary>editor.play-mode-status只读取editor.play-mode-start/editor.play-mode-stop的direct owner或其已发布终态。</summary>
         private static object ReadEditorPlayModeStatus(string requestId)
         {
             string requestDigest;
@@ -250,14 +250,14 @@ namespace UnityCli
             object terminal;
             if (UnityCliActiveOperation.TryGetTerminalByRequestId(DirectMutationTerminalScope, requestId, out requestDigest, out statusDomain, out terminal))
             {
-                if (statusDomain != "editor.play-mode.start" && statusDomain != "editor.play-mode.stop")
+                if (statusDomain != "editor.play-mode-start" && statusDomain != "editor.play-mode-stop")
                     throw new BridgeCommandException("E_REQUEST_NOT_FOUND", "The requested Play Mode operation was not found in this status domain.");
                 return UnityCliDurableStatusCoordinator.Terminal(requestId, terminal);
             }
             var root = LoadDirectMutationRoot();
             var toolName = root == null ? null : root.ContainsKey("toolName") ? root["toolName"] as string : null;
             if (root == null || !string.Equals(root["requestId"] as string, requestId, StringComparison.Ordinal)
-                || (toolName != "editor.play-mode.start" && toolName != "editor.play-mode.stop"))
+                || (toolName != "editor.play-mode-start" && toolName != "editor.play-mode-stop"))
                 throw new BridgeCommandException("E_REQUEST_NOT_FOUND", "The requested Play Mode operation was not found in this Editor session.");
             return UnityCliDurableStatusCoordinator.Running(requestId, root["phase"] as string);
         }
@@ -270,7 +270,7 @@ namespace UnityCli
                 && !string.Equals(root["phase"] as string, "effect_started", StringComparison.Ordinal))
                 throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Direct mutation active state cannot cross its effect barrier.");
             var toolName = root["toolName"] as string;
-            if ((string.Equals(toolName, "editor.play-mode.start", StringComparison.Ordinal) || string.Equals(toolName, "editor.play-mode.stop", StringComparison.Ordinal))
+            if ((string.Equals(toolName, "editor.play-mode-start", StringComparison.Ordinal) || string.Equals(toolName, "editor.play-mode-stop", StringComparison.Ordinal))
                 && !root.ContainsKey("playModeWasPlaying"))
                 root["playModeWasPlaying"] = EditorApplication.isPlaying;
             root["phase"] = "effect_started";
@@ -376,7 +376,7 @@ namespace UnityCli
             catch (BridgeCommandException exception) { return SerializeBridgeExceptionEnvelope(requestId, exception); }
             var toolName = root["toolName"] as string;
             if (string.Equals(phase, "effect_started", StringComparison.Ordinal)
-                && (string.Equals(toolName, "editor.play-mode.start", StringComparison.Ordinal) || string.Equals(toolName, "editor.play-mode.stop", StringComparison.Ordinal)))
+                && (string.Equals(toolName, "editor.play-mode-start", StringComparison.Ordinal) || string.Equals(toolName, "editor.play-mode-stop", StringComparison.Ordinal)))
             {
                 if (!TryFinalizeRecoveredPlayModeRoot(
                     ProductionQueueState, requestId, requestDigest,
@@ -384,7 +384,7 @@ namespace UnityCli
                     EditorToolSupport.BuildEditorState, DateTimeOffset.UtcNow))
                     return UnityCliSerializer.Serialize(ProtocolEnvelopeFactory.Error(
                         requestId, "E_UNITY_BUSY", "The Play Mode transition is still active for this exact request.",
-                        null, new[] { "Run tools run editor.play-mode.status with the same requestId." }, true, 100));
+                        null, new[] { "Run tools run editor.play-mode-status with the same requestId." }, true, 100));
                 object recoveredTerminal;
                 if (UnityCliActiveOperation.TryGetTerminal(DirectMutationTerminalScope, requestId, requestDigest, out recoveredTerminal))
                     return UnityCliSerializer.Serialize(recoveredTerminal);
@@ -495,7 +495,7 @@ namespace UnityCli
                 try { root = LoadDirectMutationRoot(); }
                 catch { root = null; }
                 var toolName = root == null ? null : root["toolName"] as string;
-                if (toolName != "editor.play-mode.start" && toolName != "editor.play-mode.stop")
+                if (toolName != "editor.play-mode-start" && toolName != "editor.play-mode-stop")
                     finalized = TryResumeDirectMutation(requestId, requestDigest) != null;
             }
             if (finalized)
@@ -542,8 +542,8 @@ namespace UnityCli
             catch { return false; }
             if (!string.Equals(root["phase"] as string, "effect_started", StringComparison.Ordinal)) return false;
             var toolName = root["toolName"] as string;
-            var enterPlayMode = string.Equals(toolName, "editor.play-mode.start", StringComparison.Ordinal);
-            if (!enterPlayMode && !string.Equals(toolName, "editor.play-mode.stop", StringComparison.Ordinal)) return false;
+            var enterPlayMode = string.Equals(toolName, "editor.play-mode-start", StringComparison.Ordinal);
+            if (!enterPlayMode && !string.Equals(toolName, "editor.play-mode-stop", StringComparison.Ordinal)) return false;
 
             object beforeValue;
             object deadlineValue;
@@ -569,8 +569,8 @@ namespace UnityCli
                     IsPaused = isPaused
                 };
                 terminal = enterPlayMode
-                    ? (object)new EditorPlayModeStartTool.Response { Result = result, State = readState(), PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.play-mode.start" } } }
-                    : new EditorPlayModeStopTool.Response { Result = result, State = readState(), PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.play-mode.stop" } } };
+                    ? (object)new EditorPlayModeStartTool.Response { Result = result, State = readState(), PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.play-mode-start" } } }
+                    : new EditorPlayModeStopTool.Response { Result = result, State = readState(), PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.play-mode-stop" } } };
                 PublishDirectMutationTerminal(state, requestId, requestDigest,
                     UnityCliSerializer.Serialize(ProtocolEnvelopeFactory.Success(requestId, terminal)));
             }
@@ -582,7 +582,7 @@ namespace UnityCli
                     ? "Play Mode did not reach a stable playing state before the immutable deadline."
                     : "The Editor did not reach stable Edit Mode before the immutable deadline.";
                 terminal = ProtocolEnvelopeFactory.Error(requestId, code, message, null,
-                    new[] { "Run tools run editor.play-mode.status with the same requestId before deciding whether to submit a new request." });
+                    new[] { "Run tools run editor.play-mode-status with the same requestId before deciding whether to submit a new request." });
                 PublishDirectMutationTerminal(state, requestId, requestDigest, UnityCliSerializer.Serialize(terminal));
             }
             object published;
@@ -652,7 +652,7 @@ namespace UnityCli
             SessionState.SetBool(DirectMutationEffectCommittedSessionKey, true);
         }
 
-        /// <summary>debug.code.execute等内部direct命令在首个用户effect前同样重验完整lease identity。</summary>
+        /// <summary>debug.code-execute等内部direct命令在首个用户effect前同样重验完整lease identity。</summary>
         private static void BeginDirectEffect(string requestId)
         {
             var requestDigest = SessionState.GetString(DirectMutationRequestDigestSessionKey, string.Empty);
@@ -842,7 +842,7 @@ namespace UnityCli
             if (IsInstanceCleanupCommand(toolName)) return InstanceCleanupCompletionContract();
             UnityCliToolCompletionContract contract;
             if (UnityCliToolCompletionRegistry.TryGet(toolName, out contract)) return contract;
-            if (string.Equals(toolName, "debug.code.execute", StringComparison.Ordinal))
+            if (string.Equals(toolName, "debug.code-execute", StringComparison.Ordinal))
                 return UnityCliToolCompletionRegistry.CodeExec;
             return ResolveRegisteredCustomToolCompletionContract(toolName);
         }
@@ -889,7 +889,7 @@ namespace UnityCli
             if (IsInstanceCleanupCommand(toolName)) return InstanceCleanupCompletionContract();
             UnityCliToolCompletionContract contract;
             if (UnityCliToolCompletionRegistry.TryGet(toolName, out contract)) return contract;
-            return string.Equals(toolName, "debug.code.execute", StringComparison.Ordinal) ? UnityCliToolCompletionRegistry.CodeExec : null;
+            return string.Equals(toolName, "debug.code-execute", StringComparison.Ordinal) ? UnityCliToolCompletionRegistry.CodeExec : null;
         }
 
         private sealed class DurableMutationBarrierProof
@@ -948,14 +948,14 @@ namespace UnityCli
                 requiresSceneState = InputBoolean(input, "create");
                 return false;
             }
-            if (name == "lighting.skybox.set-properties") return HasAllMeaningfulInput(input, "property", "value");
-            if (name == "build.settings.set") return HasAnyInput(input, "apiCompatibilityLevel", "applicationIdentifier", "bundleVersion", "companyId", "productName", "scriptingBackend");
-            if (name == "lighting.bake.settings") return HasAnyInput(input, "bakedGI", "bounces", "directSamples", "environmentSamples", "filtering", "indirectSamples", "lightingMode", "realtimeGI");
+            if (name == "lighting.skybox-set-properties") return HasAllMeaningfulInput(input, "property", "value");
+            if (name == "build.settings-set") return HasAnyInput(input, "apiCompatibilityLevel", "applicationIdentifier", "bundleVersion", "companyId", "productName", "scriptingBackend");
+            if (name == "lighting.bake-settings") return HasAnyInput(input, "bakedGI", "bounces", "directSamples", "environmentSamples", "filtering", "indirectSamples", "lightingMode", "realtimeGI");
             if (name == "rendering.quality") return HasAnyInput(input, "anisotropicFiltering", "antiAliasing", "lodBias", "masterTextureLimit", "maximumLODLevel", "qualityLevel", "realtimeReflectionProbes", "shadowDistance", "shadowResolution", "shadows", "softParticles", "vSyncCount");
-            if (name == "rendering.pipeline.settings") return HasAnyInput(input, "renderPipeline");
-            if (name == "lighting.skybox.set-ambient") return HasAnyMeaningfulInput(input, "ambientEquatorColor", "ambientGroundColor", "ambientSkyColor", "color", "intensity", "mode");
-            if (name == "lighting.skybox.set-fog") return HasAnyMeaningfulInput(input, "color", "density", "enabled", "endDistance", "mode", "startDistance");
-            if (name == "lighting.skybox.set-reflection") return HasAnyMeaningfulInput(input, "bounces", "intensity", "mode", "resolution");
+            if (name == "rendering.pipeline-settings") return HasAnyInput(input, "renderPipeline");
+            if (name == "lighting.skybox-set-ambient") return HasAnyMeaningfulInput(input, "ambientEquatorColor", "ambientGroundColor", "ambientSkyColor", "color", "intensity", "mode");
+            if (name == "lighting.skybox-set-fog") return HasAnyMeaningfulInput(input, "color", "density", "enabled", "endDistance", "mode", "startDistance");
+            if (name == "lighting.skybox-set-reflection") return HasAnyMeaningfulInput(input, "bounces", "intensity", "mode", "resolution");
             if (name == "rendering.scene-debug") return HasAnyInput(input, "drawMode", "shadingMode");
             if (name == "physics.collision-matrix") return HasAllInput(input, "layerA", "layerB", "ignore");
             if (name == "physics.settings") return HasAnyInput(input, "autoSimulation", "bounceThreshold", "defaultContactOffset", "defaultSolverIterations", "defaultSolverVelocityIterations", "gravity", "gravity2d", "property", "queriesHitBackfaces", "queriesHitTriggers", "queriesStartInColliders", "value");

@@ -97,7 +97,7 @@ namespace UnityCli
             }
             if (!inBuildSettings && !string.IsNullOrEmpty(scene.path))
             {
-                nextActions.Add("Add the scene to Build Settings with build.scene.add using path " + scene.path);
+                nextActions.Add("Add the scene to Build Settings with build.scene-add using path " + scene.path);
             }
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {

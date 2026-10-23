@@ -39,19 +39,19 @@
         "name": "cinemachine.noise"
       },
       {
-        "name": "cinemachine.brain.ensure"
+        "name": "cinemachine.brain-ensure"
       },
       {
-        "name": "cinemachine.brain.status"
+        "name": "cinemachine.brain-status"
       },
       {
-        "name": "cinemachine.extension.list"
+        "name": "cinemachine.extension-list"
       },
       {
-        "name": "cinemachine.extension.add"
+        "name": "cinemachine.extension-add"
       },
       {
-        "name": "cinemachine.extension.remove"
+        "name": "cinemachine.extension-remove"
       }
     ],
     "csharpEntries": [

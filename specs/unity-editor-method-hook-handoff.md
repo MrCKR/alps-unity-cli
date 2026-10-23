@@ -54,10 +54,10 @@
 
 按计划的"工作项 C"从依赖闭包之后继续：
 
-1. **共享动态编译层**：从 `unitypkg/Editor/Infrastructure/CodeExecSupport.cs` 抽取"引用发现、固定临时文件、Unity 自带 mono/csc 子进程、诊断、assembly bytes"为共享 owner；`debug.code.execute` 的 wrapper、Run 入口、stdout、completion probe 语义**不得改变**。同步更新 closure 审计从新 owner 校验编译器不变式。
+1. **共享动态编译层**：从 `unitypkg/Editor/Infrastructure/CodeExecSupport.cs` 抽取"引用发现、固定临时文件、Unity 自带 mono/csc 子进程、诊断、assembly bytes"为共享 owner；`debug.code-execute` 的 wrapper、Run 入口、stdout、completion probe 语义**不得改变**。同步更新 closure 审计从新 owner 校验编译器不变式。
 2. **后端程序集** `unitypkg/Hooks/UnityCli.Hooks.Editor.asmdef`：Editor-only、`overrideReferences: true`、`precompiledReferences: ["0Harmony.dll"]`、单向引用 `UnityCli.Editor`。实现 exact target 适配、owner 化 patch 安装与撤销、Prefix/Postfix/内部 Finalizer、类型化参数与结果桥接。核心程序集定义窄接口，按固定程序集与类型身份创建后端，不扫描项目找 provider。
 3. **host / store / 事件缓冲**：定义与 revision 状态机、跨域快照（固定文件、原子发布、启动标识作废）、有界事件环与 cursor、回调上下文 API、资源上限。
-4. **八个 Tool**（独立文件、closed DTO）：`debug.hook.install/replace/enable/disable/remove/list/info/events`，group 固定 `method-hook`。
+4. **八个 Tool**（独立文件、closed DTO）：`debug.hook-install/replace/enable/disable/remove/list/info/events`，group 固定 `method-hook`。
 5. **completion 与生成投影**：`contracts/tool-completion-contract.json`、`src/tools/tools/group-summaries.ts` 的 `GROUP_SUMMARIES` 新增 exact `method-hook` 摘要、重新生成 registry/schema/command contract/package inventory。
 6. **测试与文档**，然后才进入验证。
 

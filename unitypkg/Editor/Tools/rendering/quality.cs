@@ -37,7 +37,7 @@ namespace UnityCli
         public ToolDescriptor Describe() => new()
         {
             Name = "rendering.quality", Summary = "Read and update Unity QualitySettings (quality level, vSync, anti-aliasing, shadows, LOD).",
-            Description = "Dedicated QualitySettings reader/writer for Edit and Play mode. Pass qualityLevel (name or index) and individual quality fields to update; omit every field for a pure read. Success returns a fresh QualitySettings snapshot and the applied effects; render-pipeline assignment belongs to rendering.pipeline.settings.",
+            Description = "Dedicated QualitySettings reader/writer for Edit and Play mode. Pass qualityLevel (name or index) and individual quality fields to update; omit every field for a pure read. Success returns a fresh QualitySettings snapshot and the applied effects; render-pipeline assignment belongs to rendering.pipeline-settings.",
             Group = "rendering",DestructiveHint = true, SideEffects = new[] { "settings-write" },
             Target = "editor", PlayModeSupport = "session-affecting",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,

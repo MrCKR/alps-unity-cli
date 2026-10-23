@@ -93,15 +93,15 @@ test("a dispatched failure proven paused becomes the typed partial outcome with 
   assert.equal(details.mainThread, true);
   assert.equal(details.timeoutKind, "bounded");
   assert.equal(details.remainingMs, 21_310);
-  assert.equal(details.pauseTool, "debug.pause.list");
-  assert.equal(details.resumeTool, "debug.pause.resume");
+  assert.equal(details.pauseTool, "debug.pause-list");
+  assert.equal(details.resumeTool, "debug.pause-resume");
   // 原失败原因保留：调用方仍能看到具体是哪一步没能拿到终态。
   assert.match(String(details.reason), /Post-dispatch listener rebind failed/);
   assert.equal(calls.count, 1);
   assert.deepEqual(calls.remainingMs, [DISPATCH_PAUSE_DIAGNOSIS_BUDGET_MS]);
   assert.equal(observerCalls.count, 0);
   const actions = enriched.error.nextActions.join(" ");
-  assert.ok(actions.indexOf("debug.pause.list") >= 0 && actions.indexOf("debug.pause.list") < actions.indexOf("debug.pause.resume"), actions);
+  assert.ok(actions.indexOf("debug.pause-list") >= 0 && actions.indexOf("debug.pause-list") < actions.indexOf("debug.pause-resume"), actions);
   assert.match(actions, /pauseId pause-9/);
   assert.match(actions, /never replayed automatically/);
 });
@@ -151,7 +151,7 @@ test("the pause attribution runs even after the caller deadline elapsed, and nev
 test("other routed failures and the pre-effect pause refusal are never rewritten", async () => {
   const cases = [
     failure("req_pre_effect", "E_DEBUG_MAIN_THREAD_PAUSED", "The Unity Editor main thread is deliberately paused at debug hook breakpoint.", [
-      "Run unitycli tools run debug.pause.list to read the pause site that is holding the main thread.",
+      "Run unitycli tools run debug.pause-list to read the pause site that is holding the main thread.",
     ], { pauseId: PAUSE_ID, threadId: 1, mainThread: true, timeoutKind: "unbounded", remainingMs: 0 }),
     failure("req_connection", "BRIDGE_CONNECTION_FAILED", "Live bridge failed.", ["Run unitycli instances list."], { instanceId: INSTANCE_ID, dispatch: "may-have-started" }),
     failure("req_deadline", "E_EXECUTION_TIMEOUT", "The absolute request deadline elapsed before a terminal result was proven.", ["Inspect editor.state."], { instanceId: INSTANCE_ID }),
@@ -182,8 +182,8 @@ test("the partial outcome builder keeps the pause facts and the caller-owned rep
   assert.equal(details.pauseId, PAUSE_ID);
   assert.equal(details.timeoutKind, "unbounded");
   assert.equal(details.remainingMs, 0);
-  assert.ok(envelope.error.nextActions.some((action) => action.includes("debug.pause.list")));
-  assert.ok(envelope.error.nextActions.some((action) => action.includes("debug.pause.resume")));
+  assert.ok(envelope.error.nextActions.some((action) => action.includes("debug.pause-list")));
+  assert.ok(envelope.error.nextActions.some((action) => action.includes("debug.pause-resume")));
   assert.ok(envelope.error.nextActions.some((action) => action.includes("never replayed automatically")));
   assert.equal(envelope.error.transient, false);
   assert.equal(envelope.error.retryAfterMs, 0);
@@ -263,11 +263,11 @@ test("the live post-dispatch rebind failure becomes the typed partial outcome fr
     assert.equal(details.timeoutKind, "bounded");
     assert.equal(details.remainingMs, LIVE_PAUSE.remainingMs);
     assert.equal(details.pauseFacts, "read");
-    assert.equal(details.pauseTool, "debug.pause.list");
-    assert.equal(details.resumeTool, "debug.pause.resume");
+    assert.equal(details.pauseTool, "debug.pause-list");
+    assert.equal(details.resumeTool, "debug.pause-resume");
     assert.match(String(details.reason), /Post-dispatch listener rebind failed with E_UNITY_TRANSITION_TIMEOUT/);
     const actions = enriched.error.nextActions.join(" ");
-    assert.ok(actions.includes("debug.pause.list") && actions.includes(`debug.pause.resume with pauseId ${LIVE_PAUSE.pauseId}`), actions);
+    assert.ok(actions.includes("debug.pause-list") && actions.includes(`debug.pause-resume with pauseId ${LIVE_PAUSE.pauseId}`), actions);
   } finally {
     await fixture.close();
   }
@@ -321,7 +321,7 @@ test("a publication without any pause keeps the unknown outcome on the real path
 });
 
 /**
- * 真实 `debug.code.execute` 调用路径夹具。
+ * 真实 `debug.code-execute` 调用路径夹具。
  *
  * 它走公开 CLI 入口，命中本地 definition + dispatcher 自己的 deadline race；业务 POST 由注入 transport 承载且永远不答复
  * （暂停中的主线程不可能回答它），因此失败信封是真实产生的，而不是合成信封。
@@ -330,7 +330,7 @@ async function runCodeExecuteAgainstLivePublication(debugPause: Record<string, u
   const fixture = await livePauseFixture(debugPause);
   try {
     const result = await execute([
-      "tools", "run", "debug.code.execute",
+      "tools", "run", "debug.code-execute",
       "--instance", fixture.instanceId,
       "--timeout-ms", "600",
       "--input", JSON.stringify({ code: "return null;" }),
@@ -344,7 +344,7 @@ async function runCodeExecuteAgainstLivePublication(debugPause: Record<string, u
   }
 }
 
-test("the real debug.code.execute caller-side timeout becomes the typed partial outcome from the live publication", async () => {
+test("the real debug.code-execute caller-side timeout becomes the typed partial outcome from the live publication", async () => {
   const { result } = await runCodeExecuteAgainstLivePublication({ ...LIVE_PAUSE, mainThread: true });
   assert.equal(result.ok, false);
   if (result.ok) throw new Error("unreachable");
@@ -364,22 +364,22 @@ test("the real debug.code.execute caller-side timeout becomes the typed partial 
   assert.equal(details.timeoutKind, "bounded");
   assert.equal(details.remainingMs, LIVE_PAUSE.remainingMs);
   assert.equal(details.pauseFacts, "read");
-  assert.equal(details.pauseTool, "debug.pause.list");
-  assert.equal(details.resumeTool, "debug.pause.resume");
+  assert.equal(details.pauseTool, "debug.pause-list");
+  assert.equal(details.resumeTool, "debug.pause-resume");
   const actions = result.error.nextActions.join(" ");
-  assert.ok(actions.indexOf("debug.pause.list") >= 0 && actions.indexOf("debug.pause.list") < actions.indexOf("debug.pause.resume"), actions);
-  assert.match(actions, new RegExp(`debug.pause.resume with pauseId ${LIVE_PAUSE.pauseId}`));
+  assert.ok(actions.indexOf("debug.pause-list") >= 0 && actions.indexOf("debug.pause-list") < actions.indexOf("debug.pause-resume"), actions);
+  assert.match(actions, new RegExp(`debug.pause-resume with pauseId ${LIVE_PAUSE.pauseId}`));
   assert.match(actions, /never replayed automatically/);
 });
 
-test("the same real debug.code.execute timeout without a live pause keeps unknown while still declaring the real dispatch fact", async () => {
+test("the same real debug.code-execute timeout without a live pause keeps unknown while still declaring the real dispatch fact", async () => {
   const { result, requests } = await runCodeExecuteAgainstLivePublication(null);
   assert.equal(result.ok, false);
   if (result.ok) throw new Error("unreachable");
   assert.equal(result.error.code, "E_EXECUTION_TIMEOUT");
   const details = result.error.details as Record<string, unknown>;
   assert.equal(details.outcome, "unknown");
-  // dispatcher 自己的 deadline race 只在 effect barrier 提交后声明该事实：这里证明 code.execute 已提交。
+  // dispatcher 自己的 deadline race 只在 effect barrier 提交后声明该事实：这里证明 debug.code-execute 已提交。
   assert.equal(details.dispatch, "may-have-started");
   assert.equal(details.replay, "new-decision-required");
   // 没有暂停证据时归因不伪造现场事实，也不改写原失败。
@@ -387,3 +387,4 @@ test("the same real debug.code.execute timeout without a live pause keeps unknow
   assert.equal("pauseTool" in details, false);
   assert.ok(requests > 0);
 });
+

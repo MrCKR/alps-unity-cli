@@ -187,7 +187,7 @@ test("callback self-recursion is suppressed separately from real business recurs
 
   const dtos = await source(hookToolsRoot, "MethodHookDtos.cs");
   assert.match(dtos, /public long BypassCount \{ get; set; \}/);
-  const info = await source(hookToolsRoot, "info.cs");
+  const info = await source(hookToolsRoot, "../hook-info.cs");
   assert.match(info, /bypassCount counts callbacks that re-entered their own hooked target and were suppressed/);
 });
 
@@ -254,14 +254,14 @@ test("obsolete thread rejection markers are gone from product, docs and tests", 
 
 test("every hook descriptor states the real thread scope", async () => {
   for (const tool of HOOK_TOOLS) {
-    const text = await source(hookToolsRoot, `${tool}.cs`);
+    const text = await source(hookToolsRoot, `../hook-${tool}.cs`);
     assert.match(text, /supported managed thread/, `${tool}.cs must state the supported thread scope`);
   }
-  const install = await source(hookToolsRoot, "install.cs");
+  const install = await source(hookToolsRoot, "../hook-install.cs");
   assert.match(install, /callbacks run inline on that same thread/);
   assert.match(install, /cannot be proven statically/);
   assert.match(install, /DebugLimits\.Summary\(\)/);
-  const info = await source(hookToolsRoot, "info.cs");
+  const info = await source(hookToolsRoot, "../hook-info.cs");
   assert.match(info, /staleFaults/);
   assert.match(info, /droppedSupplements/);
   const dtos = await source(hookToolsRoot, "MethodHookDtos.cs");

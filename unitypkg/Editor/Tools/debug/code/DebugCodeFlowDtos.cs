@@ -96,7 +96,7 @@ namespace UnityCli
             try
             {
                 var wrapped = WrapFlowSource(sourceText);
-                var identity = DebugCompilerOwner.CandidateIdentity("debug.code.flow.execute", wrapped, defines);
+                var identity = DebugCompilerOwner.CandidateIdentity("debug.code-flow-execute", wrapped, defines);
                 var admission = DebugCompilerOwner.TryAdmitCandidate(identity, 0L);
                 if (!admission.Admitted) throw BudgetExhausted(admission);
                 var references = DebugCompilerOwner.References(refs, null, deadlineOk);
@@ -114,7 +114,7 @@ namespace UnityCli
                     compileRequest,
                     references,
                     deadlineOk,
-                    new UnityCliWaiter(requestId ?? "debug.code.flow.execute", "debug.code.flow.execute"),
+                    new UnityCliWaiter(requestId ?? "debug.code-flow-execute", "debug.code-flow-execute"),
                     TimeSpan.FromMilliseconds(DebugLimits.FlowRequestWaitMaxMs),
                     ct);
                 if (compilation.TimedOut)

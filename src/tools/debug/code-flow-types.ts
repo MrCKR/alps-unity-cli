@@ -84,5 +84,5 @@ export interface CodeFlowDryRunResult {
     flowBudgetMs: number | null;
     args: CodeFlowJsonObject;
   };
-  plannedEffects: Array<{ type: "debug.code.flow.run" | "debug.code.flow.submit"; sideEffects: string }>;
+  plannedEffects: Array<{ type: "debug.code-flow-run" | "debug.code-flow-submit"; sideEffects: string }>;
 }

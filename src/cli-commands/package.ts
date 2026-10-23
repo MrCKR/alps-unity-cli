@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import { getBoolean, getString } from "../args.js";
+import { cliVersion } from "../cli-version.js";
 import { failure, success } from "../output.js";
 import { ProjectIdentityError, resolveProjectIdentity } from "../project-identity.js";
 import { refreshInstalledExtensionProjections } from "../extensions/installer.js";
@@ -26,15 +27,14 @@ async function handleInitPackage(args: string[], flags: Record<string, string | 
   if (timeoutMs === undefined) return failure(requestId, "E_INIT_TIMEOUT_INVALID", "init package --timeout-ms must be a positive integer.", ["Pass --timeout-ms <positive-integer>."], { option: "--timeout-ms" });
   const check = getBoolean(flags, "check");
   const closeEditor = getBoolean(flags, "close-editor");
-  const hot = getBoolean(flags, "hot");
   if (check && closeEditor) return failure(requestId, "E_INIT_CLOSE_EDITOR_CHECK_FORBIDDEN", "init package --check is read-only and cannot close Unity Editor.", ["Remove either --check or --close-editor."], { option: "--close-editor" });
-  if (check && hot) return failure(requestId, "E_INIT_HOT_CHECK_FORBIDDEN", "init package --check is read-only and cannot perform a hot install.", ["Remove either --check or --hot."], { option: "--hot" });
-  if (hot && closeEditor) return failure(requestId, "E_INIT_HOT_CLOSE_EDITOR_CONFLICT", "init package cannot both keep the Editor open and close it.", ["Choose either --hot or --close-editor."], { option: "--hot" });
   const absoluteDeadlineMs = Date.now() + timeoutMs;
   const remaining = (): number => Math.max(0, absoluteDeadlineMs - Date.now());
   try {
     const identity = resolveProjectIdentity(resolve(projectFlag));
-    const { ensurePackageBridge, inspectPackageBridge, preparePackageBridgeInstall, packageAssemblyConflictNextActions, PackageManagerError } = await import("../package-manager.js");
+    const { ensurePackageBridge, inspectPackageBridge, preparePackageBridgeInstall, packageAssemblyConflictNextActions, PackageManagerError, cliCompatibilityRange } = await import("../package-manager.js");
+    // CLI 版本与兼容范围是安装结果的事实字段：调用方无需再发一次 --version 才能判定一致性。
+    const cli = { version: await cliVersion(), compatibilityRange: cliCompatibilityRange };
     if (check) {
       const inspection = await inspectPackageBridge(identity.canonicalProjectPath);
       // 冲突指引与安装路径复用同一 owner，避免只报告状态却不给出处理办法。
@@ -42,28 +42,28 @@ async function handleInitPackage(args: string[], flags: Record<string, string | 
         : inspection.status === "conflict"
           ? packageAssemblyConflictNextActions()
           : ["Run `unitycli init package --project <UnityProject>` to converge the Bridge package to the bundled version."];
-      return success(requestId, { action: "init_package_check", projectPath: identity.canonicalProjectPath, package: inspection, nextActions });
+      return success(requestId, { action: "init_package_check", projectPath: identity.canonicalProjectPath, cli, package: inspection, nextActions });
     }
 
+    // Editor 打开是正常安装状态：观察只为报告事实与导入提示，不是安装前置条件。
     const findEditors = runtime.findUnityProjectProcesses ?? findUnityProjectProcesses;
-    let editors;
-    try {
-      const observationBudgetMs = Math.min(3_000, remaining());
-      if (observationBudgetMs < 1) throw new Error("installation deadline elapsed before Editor observation");
-      editors = await findEditors(identity.instanceId, identity.canonicalProjectPath, observationBudgetMs);
-    } catch {
-      throw new PackageManagerError("E_EDITOR_STATE_UNVERIFIABLE", "The exact target Unity Editor process state could not be verified before package installation.", ["Verify the target project is not open in Unity, then rerun init package."], { phase: "editor-observation" });
+    let editors: Awaited<ReturnType<typeof findEditors>> | undefined;
+    const observationBudgetMs = Math.min(3_000, remaining());
+    if (observationBudgetMs >= 1) {
+      try { editors = await findEditors(identity.instanceId, identity.canonicalProjectPath, observationBudgetMs); }
+      catch { editors = undefined; }
     }
+    const editorCount = editors?.length ?? 0;
 
     let editorClose: { status: "not-running" | "closed"; requested: number } | undefined;
-    if (editors.length > 0 && !closeEditor && !hot) {
-      throw new PackageManagerError("E_INIT_EDITOR_RUNNING", "The exact target Unity project is open and may hold Bridge package files.", [
-        "Keep the Editor open and update in place: rerun with --hot, then run `unitycli tools run editor.refresh` so the running Editor imports the replaced package, and verify with `unitycli init package --project <UnityProject> --check`.",
-        "Or ask the user once whether this exact Unity project may be closed normally, then rerun with --close-editor after approval.",
-        "Never force-terminate Unity and never let the installer start or restart the Editor.",
-      ], { editorCount: editors.length });
-    }
     if (closeEditor) {
+      // 只有显式关闭才需要精确进程身份：无法证明目标进程时不能替用户关闭。
+      if (!editors) {
+        throw new PackageManagerError("E_EDITOR_STATE_UNVERIFIABLE", "The exact target Unity Editor process state could not be verified, so --close-editor cannot identify which process to close.", [
+          "Rerun `unitycli init package --project <UnityProject>` without --close-editor to install in place while the Editor stays open.",
+          "Or close the exact target project normally yourself, then rerun the same command with --close-editor.",
+        ], { phase: "editor-observation" });
+      }
       if (editors.length === 0) editorClose = { status: "not-running", requested: 0 };
       else {
         const closeEditors = runtime.closeUnityProjectProcesses ?? closeUnityProjectProcesses;
@@ -73,7 +73,7 @@ async function handleInitPackage(args: string[], flags: Record<string, string | 
           if (closeBudgetMs < 1) throw new Error("installation deadline elapsed before Editor close");
           closeResult = await closeEditors(editors, closeBudgetMs);
         } catch {
-          throw new PackageManagerError("E_EDITOR_CLOSE_FAILED", "The exact target Unity Editor could not be closed normally.", ["Close the exact target project normally, then rerun init package without --close-editor."], { phase: "editor-close" });
+          throw new PackageManagerError("E_EDITOR_CLOSE_FAILED", "The exact target Unity Editor could not be closed normally.", ["Rerun `unitycli init package --project <UnityProject>` without --close-editor to install in place while the Editor stays open.", "Or close the exact target project normally yourself, then rerun the same command with --close-editor."], { phase: "editor-close" });
         }
         if (closeResult.remaining > 0) {
           throw new PackageManagerError("E_EDITOR_CLOSE_BLOCKED", "The exact target Unity Editor remained open after a normal close request.", ["Resolve any unsaved-scene or modal prompt in Unity, close the project normally, then rerun init package."], { requested: closeResult.requested, remaining: closeResult.remaining });
@@ -90,18 +90,30 @@ async function handleInitPackage(args: string[], flags: Record<string, string | 
     if (readback.status !== "installed") throw new PackageManagerError("INIT_CHECK_FAILED", "Bridge package installation did not reach an installed readback state.", ["Inspect the returned package state before submitting init again."], { package: readback });
     // 升级自愈：包发布后把已装扩展投影对齐到本版本内置 bundle，避免 Unity 增量编译漏编扩展程序集导致 bridge 启动校验失败；失败逐项透出且不回滚已发布的包。
     const extensionRepair = await refreshInstalledExtensionProjections(identity.canonicalProjectPath, absoluteDeadlineMs);
-    const warnings = extensionRepair.failures.map((repairFailure) => `${repairFailure.extensionId}: ${repairFailure.code} — ${repairFailure.message} ${repairFailure.nextActions[0] ?? ""}`.trim());
+    const warnings = [
+      ...(editors ? [] : ["Editor process state could not be observed; the package was installed without it. If this project is open in Unity, run `unitycli tools run editor.refresh --instance <projectPath|name|alias>` so the Editor imports the replaced package."]),
+      ...extensionRepair.failures.map((repairFailure) => `${repairFailure.extensionId}: ${repairFailure.code} — ${repairFailure.message} ${repairFailure.nextActions[0] ?? ""}`.trim()),
+    ];
+    // 报告安装后的真实状态：刚被正常关闭的 Editor 不能再报 running。
+    const editorStoppedByInstall = editorClose?.status === "closed";
+    const editorState = !editors
+      ? undefined
+      : editorStoppedByInstall || editorCount === 0
+        ? { status: "stopped" as const, processCount: 0 }
+        : { status: "running" as const, processCount: editorCount, refreshRequired: true, refreshTool: "editor.refresh" };
+    const editorNeedsImport = editorCount > 0 && !editorStoppedByInstall;
     return success(requestId, {
       action: "init_package",
       projectPath: identity.canonicalProjectPath,
       projectIdentity: identity,
+      cli,
       ...(editorClose ? { editorClose } : {}),
-      ...(hot && editors.length > 0 ? { hotUpdate: { editorRunning: true, refreshRequired: true, refreshTool: "editor.refresh" } } : {}),
+      ...(editorState ? { editor: editorState } : {}),
       package: { status: "installed", install, readback },
       ...(extensionRepair.repaired.length > 0 || extensionRepair.failures.length > 0 ? { extensionRepair } : {}),
-      nextActions: hot && editors.length > 0
+      nextActions: editorNeedsImport
         ? [
-            "Run `unitycli tools run editor.refresh --instance <projectPath|name|alias>` so the open Editor imports the replaced package, then run `unitycli init package --project <UnityProject> --check` to verify the installed bytes.",
+            "Run `unitycli tools run editor.refresh --instance <projectPath|name|alias>` so the open Editor imports the replaced package, then run `unitycli init package --project <UnityProject> --check` to verify the installed bytes. A refresh result with `changed:false` means the Editor had nothing left to import and is still a successful step; judge the installation by this response's readback and by the check's version and hash, not by whether the refresh reported an import.",
             ...(extensionRepair.repaired.length > 0 ? ["Switch focus to Unity Editor so it recompiles the refreshed extension projections before the next bridge call."] : []),
           ]
         : [

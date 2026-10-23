@@ -6,72 +6,86 @@
     {
       "old": "code.execute",
       "new": "debug.code.execute",
-      "group": "debug"
+      "group": "debug",
+      "final": "debug.code-execute"
     },
     {
       "old": "runtime-reflection.type.schema",
       "new": "debug.type.schema",
-      "group": "debug"
+      "group": "debug",
+      "final": "debug.type-schema"
     },
     {
       "old": "runtime-reflection.method.find",
       "new": "debug.method.find",
-      "group": "debug"
+      "group": "debug",
+      "final": "debug.method-find"
     },
     {
       "old": "runtime-reflection.method.invoke",
       "new": "debug.method.invoke",
-      "group": "debug"
+      "group": "debug",
+      "final": "debug.method-invoke"
     },
     {
       "old": "method-hook.install",
       "new": "debug.hook.install",
-      "group": "debug"
+      "group": "debug",
+      "final": "debug.hook-install"
     },
     {
       "old": "method-hook.replace",
       "new": "debug.hook.replace",
-      "group": "debug"
+      "group": "debug",
+      "final": "debug.hook-replace"
     },
     {
       "old": "method-hook.enable",
       "new": "debug.hook.enable",
-      "group": "debug"
+      "group": "debug",
+      "final": "debug.hook-enable"
     },
     {
       "old": "method-hook.disable",
       "new": "debug.hook.disable",
-      "group": "debug"
+      "group": "debug",
+      "final": "debug.hook-disable"
     },
     {
       "old": "method-hook.remove",
       "new": "debug.hook.remove",
-      "group": "debug"
+      "group": "debug",
+      "final": "debug.hook-remove"
     },
     {
       "old": "method-hook.list",
       "new": "debug.hook.list",
-      "group": "debug"
+      "group": "debug",
+      "final": "debug.hook-list"
     },
     {
       "old": "method-hook.info",
       "new": "debug.hook.info",
-      "group": "debug"
+      "group": "debug",
+      "final": "debug.hook-info"
     },
     {
       "old": "method-hook.events",
       "new": "debug.events.read",
-      "group": "debug"
+      "group": "debug",
+      "final": "debug.events-read"
     },
     {
       "old": "console.read",
       "new": "debug.console.read",
-      "group": "debug"
+      "group": "debug",
+      "final": "debug.console-read"
     },
     {
       "old": "console.clear",
       "new": "debug.console.clear",
-      "group": "debug"
+      "group": "debug",
+      "final": "debug.console-clear"
     }
   ]
 }

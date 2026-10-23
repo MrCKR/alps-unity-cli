@@ -24,14 +24,14 @@ for (const tool of inventory) {
 }
 const csharpEntries = normalized.filter((entry) => entry.descriptorOwner === "built-in" || entry.descriptorOwner.startsWith("extension:"));
 const editorCompile = normalized.find((entry) => entry.toolName === "editor.compile" && entry.descriptorOwner === "ts-local");
-const codeExec = normalized.find((entry) => entry.toolName === "debug.code.execute" && entry.descriptorOwner === "ts-local");
+const codeExec = normalized.find((entry) => entry.toolName === "debug.code-execute" && entry.descriptorOwner === "ts-local");
 const buildRun = normalized.find((entry) => entry.toolName === "build.run" && entry.descriptorOwner === "ts-local");
 const editorRefresh = normalized.find((entry) => entry.toolName === "editor.refresh" && entry.descriptorOwner === "ts-local");
 const testRun = normalized.find((entry) => entry.toolName === "test.run" && entry.descriptorOwner === "ts-local");
 const packageOperations = ["resolve", "install", "remove", "deploy", "restore"];
 const packageRoots = packageOperations.map((operation) => normalized.find((entry) => entry.toolName === `package.${operation}` && entry.descriptorOwner === "ts-local"));
 if (!editorCompile) failures.push("TS-owned editor.compile completion contract is required by the private C# coordinator");
-if (!codeExec) failures.push("TS-owned debug.code.execute completion contract is required by the C# coordinator");
+if (!codeExec) failures.push("TS-owned debug.code-execute completion contract is required by the C# coordinator");
 if (!buildRun) failures.push("TS-owned build.run completion contract is required by the private C# coordinator");
 if (!editorRefresh) failures.push("TS-owned editor.refresh completion contract is required by the private C# coordinator");
 if (!testRun) failures.push("TS-owned test.run completion contract is required by the private C# coordinator");
@@ -39,7 +39,7 @@ for (let index = 0; index < packageRoots.length; index += 1)
   if (!packageRoots[index]) failures.push(`TS-owned package.${packageOperations[index]} completion contract is required by the private C# coordinator`);
 if (failures.length > 0) throw new Error(failures.join("\n"));
 
-// 原生注册但由 TS 拥有 descriptor 的命令需要在 C# 侧也能解析完成契约（与 debug.code.execute 同形）。
+// 原生注册但由 TS 拥有 descriptor 的命令需要在 C# 侧也能解析完成契约（与 debug.code-execute 同形）。
 const tsLocalNativeContracts = normalized.filter((entry) => entry.descriptorOwner === "ts-local" && /^debug\.code\.flow\./.test(entry.toolName));
 
 const tsOutput = path.join(root, "src", "tools", ".generated-completion-registry.ts");

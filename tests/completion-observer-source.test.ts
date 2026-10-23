@@ -14,7 +14,7 @@ test("completion proof uses a private read Tool observer registry", async () => 
   assert.doesNotMatch(contract, /IUnityCliProofObserver|public string Context \{ get; set; \}/);
   assert.match(probe, /private static readonly Dictionary<string, CompletionProofObserverDefinition> CompletionProofObservers/);
   assert.match(probe, /"scene\.gameobject"/);
-  assert.match(probe, /"scene\.gameobject\.component"/);
+  assert.match(probe, /"scene\.gameobject-component"/);
   assert.match(probe, /CompletionProofObservers\.TryGetValue\(probe\.ReadTool/);
   assert.doesNotMatch(probe, /DiscoverContexts\(|RegisteredContext|Contexts\.TryGetValue/);
 });

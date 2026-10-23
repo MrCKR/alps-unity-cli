@@ -14,7 +14,7 @@ namespace UnityCli
 
         public ToolDescriptor Describe() => new()
         {
-            Name = "urp.settings.set", Summary = "Set one active URP pipeline asset setting.",
+            Name = "urp.settings-set", Summary = "Set one active URP pipeline asset setting.",
             Description = "Set one public property or SerializedProperty on the active UniversalRenderPipelineAsset. Supports --dry-run without saving the asset.",
             Group = "urp",DestructiveHint = true, SupportsDryRun = true,
             RequiresPackages = new[] { "com.unity.render-pipelines.universal" }, SideEffects = new[] { "asset-write", "render-pipeline-settings" },
@@ -24,13 +24,13 @@ namespace UnityCli
 
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            GameObjectToolSupport.EnsureEditorNotBusy("urp.settings.set");
+            GameObjectToolSupport.EnsureEditorNotBusy("urp.settings-set");
             var pipeline = UrpToolSupport.GetActivePipelineAsset();
             var plan = UrpToolSupport.PrepareSetting(pipeline, request.Property, request.Value);
             var pipelinePath = AssetDatabase.GetAssetPath(pipeline);
             if (!ctx.DryRun && string.IsNullOrEmpty(pipelinePath)) throw new UnityCliBridge.BridgeCommandException("E_URP_SETTING_PERSISTENCE_UNPROVABLE", "URP pipeline setting cannot be independently persisted because the active pipeline has no asset path.", "Use an asset-backed pipeline or add a contract strategy for transient pipeline settings.");
             if (!ctx.DryRun) ctx.CommitEffect();
-            var effects = new List<UrpPlannedEffect> { new UrpPlannedEffect { Type = "urp.settings.set", Property = request.Property, Value = request.Value } };
+            var effects = new List<UrpPlannedEffect> { new UrpPlannedEffect { Type = "urp.settings-set", Property = request.Property, Value = request.Value } };
             var observedValue = request.Value;
             if (!ctx.DryRun)
             {

@@ -9,7 +9,7 @@ using BridgeCommandException = UnityCli.UnityCliBridge.BridgeCommandException;
 namespace UnityCli
 {
     /// <summary>
-    /// debug.code.flow.submit / run / wait / cancel 的 Bridge 命令面。
+    /// debug.code-flow-submit / run / wait / cancel 的 Bridge 命令面。
     ///
     /// submit 只提交并交回句柄，它的完成含义是“已被接受”，因此不等待、不返回流状态；
     /// run 提交并等到终态，提交前先证明“流预算加余量能落在本次请求超时内”，所以它不会退回半途态；
@@ -27,25 +27,25 @@ namespace UnityCli
         private static void RegisterCodeFlowCommands(BridgeCommandRegistry registry)
         {
             registry.Register<UnityCli.Protocol.BridgeRequest>(
-                "debug.code.flow.submit",
+                "debug.code-flow-submit",
                 "code",
                 true,
                 FlowSubmitTimeoutMs,
                 async (request, cancellationToken) => (object)await CodeFlowSubmit(request, cancellationToken));
             registry.Register<UnityCli.Protocol.BridgeRequest>(
-                "debug.code.flow.run",
+                "debug.code-flow-run",
                 "code",
                 true,
                 FlowRunTimeoutMs,
                 async (request, cancellationToken) => (object)await CodeFlowRun(request, cancellationToken));
             registry.Register<UnityCli.Protocol.BridgeRequest>(
-                "debug.code.flow.wait",
+                "debug.code-flow-wait",
                 "code",
                 false,
                 FlowWaitTimeoutMs,
                 async (request, cancellationToken) => (object)await CodeFlowWait(request, cancellationToken));
             registry.Register<UnityCli.Protocol.BridgeRequest>(
-                "debug.code.flow.cancel",
+                "debug.code-flow-cancel",
                 "code",
                 true,
                 FlowCancelTimeoutMs,
@@ -69,12 +69,12 @@ namespace UnityCli
                 MaxFlowsPerInstance = DebugLimits.MaxFlowsPerInstance,
                 MaxFlowsPerSession = DebugLimits.MaxFlowsPerSession,
                 EditorSessionId = EditorSessionId(),
-                Note = "registered means the flow is stored and will advance on the central editor tick. The receipt is not a result: read it with debug.code.flow.wait."
+                Note = "registered means the flow is stored and will advance on the central editor tick. The receipt is not a result: read it with debug.code-flow-wait."
             };
             // 提交是偏变动作：完成证据只允许登记在多变契约上。
             var contract = ResolveRequestCompletionContract(request);
             if (contract != null && contract.Mutation)
-                RecordDirectCompletionEvidence(request.RequestId, "debug.code.flow.submit", contract, receipt);
+                RecordDirectCompletionEvidence(request.RequestId, "debug.code-flow-submit", contract, receipt);
             return receipt;
         }
 
@@ -102,12 +102,12 @@ namespace UnityCli
                     new[]
                     {
                         "Raise the request timeout so it covers flowBudgetMs plus the declared margin.",
-                        "Or submit with debug.code.flow.submit and read the flow with debug.code.flow.wait, which never needs one long request."
+                        "Or submit with debug.code-flow-submit and read the flow with debug.code-flow-wait, which never needs one long request."
                     });
             var record = await CreateFlowAsync(request, budgetMs, cancellationToken);
             // 预算已在前面证明落在请求超时内，因此这里等到终态是必然的；剩余额度只作传输层的最后兜底。
-            var result = await DebugCodeFlowWait.AwaitAsync(record, remaining > 0 ? remaining : needed, new UnityCliWaiter(request.RequestId, "debug.code.flow.run"), cancellationToken);
-            return CompleteOrThrow(request, "debug.code.flow.run", result);
+            var result = await DebugCodeFlowWait.AwaitAsync(record, remaining > 0 ? remaining : needed, new UnityCliWaiter(request.RequestId, "debug.code-flow-run"), cancellationToken);
+            return CompleteOrThrow(request, "debug.code-flow-run", result);
         }
 
         /// <summary>只观察一条已存在的流；不编译、不执行、不取消。省略 waitMs 时观察到请求超时为止。</summary>
@@ -123,8 +123,8 @@ namespace UnityCli
                 request.TryDeadlineRemainingMs(out remaining);
                 waitMs = remaining > 0 ? remaining : DebugLimits.FlowRequestWaitDefaultMs;
             }
-            var result = await DebugCodeFlowWait.AwaitAsync(record, waitMs, new UnityCliWaiter(request.RequestId, "debug.code.flow.wait"), cancellationToken);
-            return CompleteOrThrow(request, "debug.code.flow.wait", result);
+            var result = await DebugCodeFlowWait.AwaitAsync(record, waitMs, new UnityCliWaiter(request.RequestId, "debug.code-flow-wait"), cancellationToken);
+            return CompleteOrThrow(request, "debug.code-flow-wait", result);
         }
 
         /// <summary>取消一条流；已终态时返回同一终态。</summary>
@@ -132,7 +132,7 @@ namespace UnityCli
         {
             var record = RequireFlow(request.StringArg("flowId"));
             DebugFlowHost.Cancel(record);
-            return new ValueTask<DebugCodeFlowResult>(CompleteOrThrow(request, "debug.code.flow.cancel", DebugCodeFlowWait.Project(record, false, 0d)));
+            return new ValueTask<DebugCodeFlowResult>(CompleteOrThrow(request, "debug.code-flow-cancel", DebugCodeFlowWait.Project(record, false, 0d)));
         }
 
         // 提交路径的共用前置：模式门、源码校验、嵌套拒绝、编译与登记。
@@ -238,7 +238,7 @@ namespace UnityCli
                     : "The flow reached the terminal state " + result.Status + ".",
                 details,
                 pending
-                    ? new[] { "Observe the same flowId with debug.code.flow.wait; never resubmit the flow to obtain its result." }
+                    ? new[] { "Observe the same flowId with debug.code-flow-wait; never resubmit the flow to obtain its result." }
                     : new[] { "Read the details for the terminal facts; a completed flow is the only success outcome of this Tool." });
         }
 

@@ -62,7 +62,7 @@ namespace UnityCli
                     var component = GameObjectToolSupport.ResolveComponent(gameObject, name, null);
                     if (component == null)
                     {
-                        throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_NOT_FOUND", "Component not found on target: " + name, "Run unitycli tools run component.get or tools run scene.gameobject.components to list components.");
+                        throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_NOT_FOUND", "Component not found on target: " + name, "Run unitycli tools run component.get or tools run scene.gameobject-components to list components.");
                     }
                     EnsureNotTransform(component, name);
                     targets.Add(component);
@@ -96,7 +96,7 @@ namespace UnityCli
             var singleComponent = GameObjectToolSupport.ResolveComponent(gameObject, componentName, request.ComponentIndex);
             if (singleComponent == null)
             {
-                throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_NOT_FOUND", "Component not found on target: " + componentName, "Run unitycli tools run component.get or tools run scene.gameobject.components to list components.");
+                throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_NOT_FOUND", "Component not found on target: " + componentName, "Run unitycli tools run component.get or tools run scene.gameobject-components to list components.");
             }
             EnsureNotTransform(singleComponent, componentName);
             EnsureDependenciesRemain(gameObject, new[] { singleComponent });

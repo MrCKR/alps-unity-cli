@@ -6,8 +6,8 @@ export const physicsBridgeSpecs: BridgeCommandSpec[] = [
   { group: "physics", command: "collision-matrix", bridgeCommand: "catalog.editor.run", toolName: "physics.collision-matrix", buildArgs: physicsArgs, destructiveHint: true },
   { group: "physics", command: "material", bridgeCommand: "catalog.editor.run", toolName: "physics.material", buildArgs: physicsArgs, destructiveHint: true },
   { group: "physics", command: "assign-material", bridgeCommand: "catalog.editor.run", toolName: "physics.assign-material", buildArgs: physicsArgs, supportsDryRun: true },
-  { group: "physics", command: "joint.add", bridgeCommand: "catalog.editor.run", toolName: "physics.joint.add", buildArgs: physicsArgs, supportsDryRun: true },
-  { group: "physics", command: "joint.remove", bridgeCommand: "catalog.editor.run", toolName: "physics.joint.remove", buildArgs: physicsArgs, supportsDryRun: true },
+  { group: "physics", command: "joint-add", bridgeCommand: "catalog.editor.run", toolName: "physics.joint-add", buildArgs: physicsArgs, supportsDryRun: true },
+  { group: "physics", command: "joint-remove", bridgeCommand: "catalog.editor.run", toolName: "physics.joint-remove", buildArgs: physicsArgs, supportsDryRun: true },
   { group: "physics", command: "force", bridgeCommand: "catalog.editor.run", toolName: "physics.force", buildArgs: physicsArgs },
   { group: "physics", command: "overlap", bridgeCommand: "catalog.editor.run", toolName: "physics.overlap", buildArgs: physicsArgs },
   { group: "physics", command: "rigidbody", bridgeCommand: "catalog.editor.run", toolName: "physics.rigidbody", buildArgs: physicsArgs },
@@ -108,10 +108,10 @@ function physicsArgs({ command, flags }: Parameters<BridgeCommandSpec["buildArgs
   if (command === "physics.assign-material") {
     return compactArgs({ target: stringFlag(flags, "target") ?? stringField(flags, "target"), materialPath: stringFlag(flags, "material-path") ?? stringFlag(flags, "path") ?? stringField(flags, "materialPath") ?? stringField(flags, "path"), path: stringFlag(flags, "path") ?? stringField(flags, "path"), collider: stringFlag(flags, "collider") ?? stringField(flags, "collider"), colliderIndex: numberFlag(flags, "collider-index") ?? numberField(flags, "colliderIndex") });
   }
-  if (command === "physics.joint.add") {
+  if (command === "physics.joint-add") {
     return compactArgs({ target: stringFlag(flags, "target") ?? stringField(flags, "target"), type: stringFlag(flags, "type") ?? stringField(flags, "type"), connectedBody: stringFlag(flags, "connected-body") ?? stringField(flags, "connectedBody") });
   }
-  if (command === "physics.joint.remove") {
+  if (command === "physics.joint-remove") {
     return compactArgs({ target: stringFlag(flags, "target") ?? stringField(flags, "target"), type: stringFlag(flags, "type") ?? stringField(flags, "type"), componentIndex: numberFlag(flags, "component-index") ?? numberField(flags, "componentIndex") });
   }
   if (command === "physics.force") {

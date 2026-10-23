@@ -16,7 +16,7 @@ namespace UnityCli
             var scenes = ReadScenes();
             var index = scenes.ToList().FindIndex(scene => scene.path == path);
             if (index < 0)
-                throw new UnityCliBridge.BridgeCommandException("E_BUILD_SCENE_NOT_FOUND", "Build Settings does not contain scene: " + path, "Run build.scene.list and pass a listed path.");
+                throw new UnityCliBridge.BridgeCommandException("E_BUILD_SCENE_NOT_FOUND", "Build Settings does not contain scene: " + path, "Run build.scene-list and pass a listed path.");
             var changed = scenes[index].enabled != enabled;
             var plannedEffects = changed
                 ? new List<BuildScenePlannedEffect> { new BuildScenePlannedEffect { Type = toolName, Path = path, Enabled = enabled } }
@@ -29,7 +29,7 @@ namespace UnityCli
                 scenes = ReadScenes();
                 index = scenes.ToList().FindIndex(scene => scene.path == path);
                 if (index < 0 || scenes[index].enabled != enabled)
-                    throw new UnityCliBridge.BridgeCommandException("E_BUILD_SCENE_STATE_MISMATCH", "Build Settings did not apply the requested enabled state for " + path + ".", "Inspect build.scene.list and retry.");
+                    throw new UnityCliBridge.BridgeCommandException("E_BUILD_SCENE_STATE_MISMATCH", "Build Settings did not apply the requested enabled state for " + path + ".", "Inspect build.scene-list and retry.");
             }
             return new(new BuildSceneMutationResult
             {

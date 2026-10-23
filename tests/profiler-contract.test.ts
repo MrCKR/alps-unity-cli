@@ -14,15 +14,15 @@ const PROFILER_COMMANDS = [
   "profiler.deep",
   "profiler.export",
   "profiler.frame",
-  "profiler.frame-debugger.disable",
-  "profiler.frame-debugger.enable",
-  "profiler.frame-debugger.events",
+  "profiler.frame-debugger-disable",
+  "profiler.frame-debugger-enable",
+  "profiler.frame-debugger-events",
   "profiler.hierarchy",
   "profiler.load",
   "profiler.memory",
-  "profiler.memory-snapshot.compare",
-  "profiler.memory-snapshot.list",
-  "profiler.memory-snapshot.take",
+  "profiler.memory-snapshot-compare",
+  "profiler.memory-snapshot-list",
+  "profiler.memory-snapshot-take",
   "profiler.module-enable",
   "profiler.modules",
   "profiler.object-memory",
@@ -51,9 +51,9 @@ test("profiler live descriptors expose representative play mode, package, and sc
     makeLiveTool({ name: "profiler.script-stats", summary: "Read script stats.", description: "Read script stats.", group: "profiler" }),
     makeLiveTool({ name: "profiler.deep", summary: "Read deep profiling stats.", description: "Read deep profiling stats.", group: "profiler" }),
     makeLiveTool({ name: "profiler.hierarchy", summary: "Read profiler hierarchy.", description: "Read profiler hierarchy with childrenTruncated summaries.", group: "profiler", inputSchema: { type: "object", properties: { top: { type: "integer", default: 20 }, depth: { type: "integer", default: 5 } } } }),
-    makeLiveTool({ name: "profiler.memory-snapshot.list", summary: "List memory snapshots.", description: "List memory snapshots.", group: "profiler", requiresPackages: ["com.unity.memoryprofiler"] }),
-    makeLiveTool({ name: "profiler.memory-snapshot.compare", summary: "Compare memory snapshots.", description: "Compare memory snapshots.", group: "profiler", requiresPackages: ["com.unity.memoryprofiler"] }),
-    makeLiveTool({ name: "profiler.frame-debugger.events", summary: "Read frame debugger events.", description: "Read frame debugger events.", group: "profiler" }),
+    makeLiveTool({ name: "profiler.memory-snapshot-list", summary: "List memory snapshots.", description: "List memory snapshots.", group: "profiler", requiresPackages: ["com.unity.memoryprofiler"] }),
+    makeLiveTool({ name: "profiler.memory-snapshot-compare", summary: "Compare memory snapshots.", description: "Compare memory snapshots.", group: "profiler", requiresPackages: ["com.unity.memoryprofiler"] }),
+    makeLiveTool({ name: "profiler.frame-debugger-events", summary: "Read frame debugger events.", description: "Read frame debugger events.", group: "profiler" }),
     makeLiveTool({ name: "profiler.start", summary: "Start the profiler.", description: "Start the profiler.", group: "profiler", playModeSupport: "session-affecting", inputSchema: { type: "object", properties: { logFile: { type: "string" }, enableCallstacks: { type: "boolean" } } } }),
     makeLiveTool({ name: "profiler.stop", summary: "Stop the profiler.", description: "Stop the profiler.", group: "profiler", playModeSupport: "session-affecting" }),
     makeLiveTool({ name: "profiler.pause", summary: "Pause the profiler.", description: "Pause the profiler.", group: "profiler", playModeSupport: "session-affecting" }),
@@ -62,16 +62,16 @@ test("profiler live descriptors expose representative play mode, package, and sc
     makeLiveTool({ name: "profiler.load", summary: "Load profiler capture.", description: "Load profiler capture.", group: "profiler", playModeSupport: "session-affecting" }),
     makeLiveTool({ name: "profiler.capture", summary: "Capture profiler data.", description: "Capture profiler data.", group: "profiler", playModeSupport: "session-affecting" }),
     makeLiveTool({ name: "profiler.export", summary: "Export profiler data.", description: "Export profiler data.", group: "profiler", playModeSupport: "session-affecting" }),
-    makeLiveTool({ name: "profiler.frame-debugger.enable", summary: "Enable the frame debugger.", description: "Enable the frame debugger.", group: "profiler", playModeSupport: "session-affecting" }),
-    makeLiveTool({ name: "profiler.frame-debugger.disable", summary: "Disable the frame debugger.", description: "Disable the frame debugger.", group: "profiler", playModeSupport: "session-affecting" }),
-    makeLiveTool({ name: "profiler.memory-snapshot.take", summary: "Take a memory snapshot.", description: "Take a memory snapshot.", group: "profiler", requiresPackages: ["com.unity.memoryprofiler"] })
+    makeLiveTool({ name: "profiler.frame-debugger-enable", summary: "Enable the frame debugger.", description: "Enable the frame debugger.", group: "profiler", playModeSupport: "session-affecting" }),
+    makeLiveTool({ name: "profiler.frame-debugger-disable", summary: "Disable the frame debugger.", description: "Disable the frame debugger.", group: "profiler", playModeSupport: "session-affecting" }),
+    makeLiveTool({ name: "profiler.memory-snapshot-take", summary: "Take a memory snapshot.", description: "Take a memory snapshot.", group: "profiler", requiresPackages: ["com.unity.memoryprofiler"] })
   );
 
-  for (const name of ["profiler.status", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.modules", "profiler.areas", "profiler.object-memory", "profiler.rendering-stats", "profiler.script-stats", "profiler.deep", "profiler.hierarchy", "profiler.memory-snapshot.list", "profiler.memory-snapshot.compare", "profiler.frame-debugger.events"]) {
+  for (const name of ["profiler.status", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.modules", "profiler.areas", "profiler.object-memory", "profiler.rendering-stats", "profiler.script-stats", "profiler.deep", "profiler.hierarchy", "profiler.memory-snapshot-list", "profiler.memory-snapshot-compare", "profiler.frame-debugger-events"]) {
     assert.equal(tools.get(name)?.playModeSupport, "supported", `${name} should be supported`);
   }
 
-  for (const name of ["profiler.start", "profiler.stop", "profiler.pause", "profiler.module-enable", "profiler.clear", "profiler.load", "profiler.capture", "profiler.export", "profiler.frame-debugger.enable", "profiler.frame-debugger.disable"]) {
+  for (const name of ["profiler.start", "profiler.stop", "profiler.pause", "profiler.module-enable", "profiler.clear", "profiler.load", "profiler.capture", "profiler.export", "profiler.frame-debugger-enable", "profiler.frame-debugger-disable"]) {
     assert.equal(tools.get(name)?.playModeSupport, "session-affecting", `${name} should be session-affecting`);
   }
 
@@ -90,7 +90,7 @@ test("profiler live descriptors expose representative play mode, package, and sc
   assert.ok(startProps.logFile);
   assert.ok(startProps.enableCallstacks);
 
-  for (const name of ["profiler.memory-snapshot.take", "profiler.memory-snapshot.list", "profiler.memory-snapshot.compare"]) {
+  for (const name of ["profiler.memory-snapshot-take", "profiler.memory-snapshot-list", "profiler.memory-snapshot-compare"]) {
     assert.deepEqual(tools.get(name)?.requiresPackages, ["com.unity.memoryprofiler"]);
   }
 
@@ -98,9 +98,9 @@ test("profiler live descriptors expose representative play mode, package, and sc
   assert.ok(status.outputSchema);
   const frame = tools.get("profiler.frame")!;
   assert.ok(frame.outputSchema);
-  assert.equal(tools.get("profiler.memory-snapshot.take")?.destructiveHint, false);
-  assert.equal(tools.get("profiler.frame-debugger.enable")?.destructiveHint, false);
-  assert.equal(tools.get("profiler.frame-debugger.disable")?.destructiveHint, false);
+  assert.equal(tools.get("profiler.memory-snapshot-take")?.destructiveHint, false);
+  assert.equal(tools.get("profiler.frame-debugger-enable")?.destructiveHint, false);
+  assert.equal(tools.get("profiler.frame-debugger-disable")?.destructiveHint, false);
 });
 
 test("profiler.hierarchy C# supports current hierarchy API and latest-frame default", async () => {
@@ -126,7 +126,7 @@ test("profiler.start records Editor frames and profiler.stop restores profileEdi
 });
 
 test("bridge specs resolve for profiler tools", () => {
-  for (const [cmd, expected] of [["status", "catalog.editor.run"], ["start", "catalog.editor.run"], ["stop", "catalog.editor.run"], ["pause", "catalog.editor.run"], ["counter", "catalog.editor.run"], ["memory", "catalog.editor.run"], ["frame", "catalog.editor.run"], ["capture", "catalog.editor.run"], ["export", "catalog.editor.run"], ["modules", "catalog.editor.run"], ["module-enable", "catalog.editor.run"], ["clear", "catalog.editor.run"], ["load", "catalog.editor.run"], ["areas", "catalog.editor.run"], ["object-memory", "catalog.editor.run"], ["rendering-stats", "catalog.editor.run"], ["script-stats", "catalog.editor.run"], ["deep", "catalog.editor.run"], ["hierarchy", "catalog.editor.run"], ["memory-snapshot.take", "catalog.editor.run"], ["memory-snapshot.list", "catalog.editor.run"], ["memory-snapshot.compare", "catalog.editor.run"], ["frame-debugger.enable", "catalog.editor.run"], ["frame-debugger.disable", "catalog.editor.run"], ["frame-debugger.events", "catalog.editor.run"]] as const) {
+  for (const [cmd, expected] of [["status", "catalog.editor.run"], ["start", "catalog.editor.run"], ["stop", "catalog.editor.run"], ["pause", "catalog.editor.run"], ["counter", "catalog.editor.run"], ["memory", "catalog.editor.run"], ["frame", "catalog.editor.run"], ["capture", "catalog.editor.run"], ["export", "catalog.editor.run"], ["modules", "catalog.editor.run"], ["module-enable", "catalog.editor.run"], ["clear", "catalog.editor.run"], ["load", "catalog.editor.run"], ["areas", "catalog.editor.run"], ["object-memory", "catalog.editor.run"], ["rendering-stats", "catalog.editor.run"], ["script-stats", "catalog.editor.run"], ["deep", "catalog.editor.run"], ["hierarchy", "catalog.editor.run"], ["memory-snapshot-take", "catalog.editor.run"], ["memory-snapshot-list", "catalog.editor.run"], ["memory-snapshot-compare", "catalog.editor.run"], ["frame-debugger-enable", "catalog.editor.run"], ["frame-debugger-disable", "catalog.editor.run"], ["frame-debugger-events", "catalog.editor.run"]] as const) {
     const spec = bridgeCommandRegistry.lookup("profiler", cmd);
     assert.equal(spec?.bridgeCommand, expected, `profiler ${cmd} should resolve`);
   }
@@ -237,17 +237,17 @@ test("profiler.load and capture require real terminal artifacts before reporting
 
 test("profiler memory-snapshot and frame-debugger tools implement IUnityCliTool", async () => {
   const allSource = await readEditorCsSources();
-  for (const command of ["profiler.memory-snapshot.list", "profiler.memory-snapshot.compare", "profiler.frame-debugger.enable", "profiler.frame-debugger.disable", "profiler.frame-debugger.events"]) {
+  for (const command of ["profiler.memory-snapshot-list", "profiler.memory-snapshot-compare", "profiler.frame-debugger-enable", "profiler.frame-debugger-disable", "profiler.frame-debugger-events"]) {
     assert.ok(!allSource.includes(`RegisterCommand(registry, "${command}"`));
     assert.ok(allSource.includes(`Name = "${command}"`));
   }
-  const memoryListSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/memory-snapshot/list.cs", import.meta.url), "utf8");
-  const memoryCompareSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/memory-snapshot/compare.cs", import.meta.url), "utf8");
+  const memoryListSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/memory-snapshot-list.cs", import.meta.url), "utf8");
+  const memoryCompareSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/memory-snapshot-compare.cs", import.meta.url), "utf8");
   assert.match(memoryListSource, /class ProfilerMemorySnapshotListTool : IUnityCliTool</);
   assert.match(memoryCompareSource, /class ProfilerMemorySnapshotCompareTool : IUnityCliTool</);
-  const frameEnableSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/frame-debugger/enable.cs", import.meta.url), "utf8");
-  const frameDisableSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/frame-debugger/disable.cs", import.meta.url), "utf8");
-  const frameEventsSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/frame-debugger/events.cs", import.meta.url), "utf8");
+  const frameEnableSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/frame-debugger-enable.cs", import.meta.url), "utf8");
+  const frameDisableSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/frame-debugger-disable.cs", import.meta.url), "utf8");
+  const frameEventsSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/frame-debugger-events.cs", import.meta.url), "utf8");
   assert.match(frameEnableSource, /class ProfilerFrameDebuggerEnableTool : IUnityCliTool/);
   assert.match(frameDisableSource, /class ProfilerFrameDebuggerDisableTool : IUnityCliTool/);
   assert.match(frameEventsSource, /class ProfilerFrameDebuggerEventsTool : IUnityCliTool/);
@@ -267,7 +267,7 @@ test("profiler memory-snapshot and frame-debugger tools implement IUnityCliTool"
   assert.match(frameSupportSource, /GetProperty\("enabled", BindingFlags\.Public \| BindingFlags\.Static\)/);
   assert.doesNotMatch(frameSupportSource, /GetMethod\("IsLocalEnabled"/);
   assert.match(frameSupportSource, /new object\[\] \{ value, 0 \}/);
-  assert.match(frameSupportSource, /UnityCliReadGeneration\.Session\("profiler\.frame-debugger\.events"\)/);
+  assert.match(frameSupportSource, /UnityCliReadGeneration\.Session\("profiler\.frame-debugger-events"\)/);
   assert.match(frameSupportSource, /Interlocked\.Read\(ref captureGeneration\)/);
   assert.doesNotMatch(frameSupportSource, /eventsCount|isEnabled|GetMethod\("GetEnabled"/);
 });
@@ -283,7 +283,7 @@ test("profiler.capture and memory-snapshot.take use async IUnityCliTool", async 
   assert.match(captureSource, /Description = "Capture one raw profiler snapshot with tag"/);
   assert.match(captureSource, /Frames = 1/);
   assert.doesNotMatch(captureSource, /Frames = 30/);
-  const snapshotSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/memory-snapshot/take.cs", import.meta.url), "utf8");
+  const snapshotSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/memory-snapshot-take.cs", import.meta.url), "utf8");
   const snapshotSupport = await readFile(new URL("../unitypkg/Editor/Tools/profiler/ProfilerMemorySnapshotSupport.cs", import.meta.url), "utf8");
   assert.match(snapshotSource, /class ProfilerMemorySnapshotTakeTool : IUnityCliTool</);
   assert.match(snapshotSource, /public async ValueTask<Result> ExecuteAsync\(Request request, UnityCliProjectToolContext ctx, CancellationToken ct = default\)/);

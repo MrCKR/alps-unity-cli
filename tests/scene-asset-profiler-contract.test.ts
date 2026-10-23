@@ -33,9 +33,9 @@ test("cross-domain new tools keep contract entries with present C# handlers", ()
     "game-object.set-parent", "prefab.instantiate", "prefab.unpack",
     "asset.search-built-in", "asset.get-data", "asset.get-components", "asset.preview",
     "shader.list", "shader.get-data", "texture.generate",
-    "debug.console.read", "debug.console.clear", "editor.selection.set", "editor.active-tool.set",
-    "build.scene.list", "build.scene.add", "build.scene.remove", "build.scene.enable", "build.scene.disable",
-    "build.platform.get", "build.platform.set", "build.profile.list", "build.profile.create", "build.profile.switch", "build.profile.modify", "build.settings.get", "build.settings.set",
+    "debug.console-read", "debug.console-clear", "editor.selection-set", "editor.active-tool-set",
+    "build.scene-list", "build.scene-add", "build.scene-remove", "build.scene-enable", "build.scene-disable",
+    "build.platform-get", "build.platform-set", "build.profile-list", "build.profile-create", "build.profile-switch", "build.profile-modify", "build.settings-get", "build.settings-set",
     "physics.linecast", "physics.shapecast", "physics.validate", "physics.assign-material"
   ];
   for (const name of newTools) {
@@ -47,7 +47,7 @@ test("cross-domain new tools keep contract entries with present C# handlers", ()
 
 test("Build Profile Tools stay registered on every supported Unity version", async () => {
   for (const name of ["create", "modify", "switch"]) {
-    const source = await readFile(new URL(`../unitypkg/Editor/Tools/build/profile/${name}.cs`, import.meta.url), "utf8");
+    const source = await readFile(new URL(`../unitypkg/Editor/Tools/build/profile-${name}.cs`, import.meta.url), "utf8");
     assert.match(source, /^#if UNITY_EDITOR\b/);
     assert.doesNotMatch(source, /UNITY_6000_0_OR_NEWER/);
     assert.match(source, /RequireBuildProfileType/);
@@ -64,8 +64,10 @@ test("asset/search scene/hierarchy game-object.find and editor/console sources k
   const assetSupportSource = await readFile(new URL("../unitypkg/Editor/Tools/asset/AssetToolSupport.cs", import.meta.url), "utf8");
   const sceneSource = await readCsSources(new URL("../unitypkg/Editor/Tools/scene/", import.meta.url));
   const goSource = await readCsSources(new URL("../unitypkg/Editor/Tools/game-object/", import.meta.url));
-  const consoleSource = await readFile(new URL("../unitypkg/Editor/Tools/debug/console/read.cs", import.meta.url), "utf8");
-  const menuSource = await readFile(new URL("../unitypkg/Editor/Tools/editor/menu.cs", import.meta.url), "utf8");
+  const consoleSource = await readFile(new URL("../unitypkg/Editor/Tools/debug/console-read.cs", import.meta.url), "utf8");
+  const menuExecuteSource = await readFile(new URL("../unitypkg/Editor/Tools/editor/menu-execute.cs", import.meta.url), "utf8");
+  const menuListSource = await readFile(new URL("../unitypkg/Editor/Tools/editor/menu-list.cs", import.meta.url), "utf8");
+  const menuSupportSource = await readFile(new URL("../unitypkg/Editor/Tools/editor/EditorMenuSupport.cs", import.meta.url), "utf8");
 
   assert.match(assetSource, /AssetToolSupport\.NormalizeAssetSearchFolders\(request\.Path, request\.SearchInFolders\)/);
   assert.match(assetSource, /AssetDatabase\.FindAssets\(resolvedFilter, searchInFolders\.Length == 0 \? null : searchInFolders\)/);
@@ -95,12 +97,17 @@ test("asset/search scene/hierarchy game-object.find and editor/console sources k
 
   assert.match(consoleSource, /class ConsoleReadTool : IUnityCliTool/);
   assert.match(consoleSource, /EditorToolSupport\.ReadConsolePage\(request\.Type, request\.Filter, pageSize, ctx\.UseReadBudget\(request\.Budget\)\)/);
-  assert.match(menuSource, /class EditorMenuTool : IUnityCliTool[\s\S]*ExecuteMenuItem\(request\.Path\)/);
-  assert.match(menuSource, /E_MENU_COMPLETION_UNSUPPORTED[\s\S]*Use a dedicated Tool, or use File\/Save/);
-  assert.match(menuSource, /string\.Equals\(request\.Path, "File\/Save"/);
-  assert.match(menuSource, /ctx\.Wait\.UntilStable\([\s\S]*!activeScene\.isDirty/);
-  assert.match(menuSource, /scene\.isDirty/);
-  assert.doesNotMatch(menuSource, /unitycli editor menu/);
+  assert.match(menuExecuteSource, /class EditorMenuExecuteTool : IUnityCliTool[\s\S]*ExecuteMenuItem\(path\)/);
+  assert.match(menuExecuteSource, /ctx\.CommitEffect\(\);[\s\S]*EditorApplication\.ExecuteMenuItem\(path\)/);
+  assert.match(menuExecuteSource, /E_MENU_NOT_FOUND[\s\S]*E_MENU_DISABLED/);
+  assert.match(menuExecuteSource, /TryGetItemEnabled\(path, out enabled\)[\s\S]*ctx\.CommitEffect\(\)/);
+  assert.doesNotMatch(menuExecuteSource, /File\/Save/);
+  assert.match(menuListSource, /class EditorMenuListTool : IUnityCliTool/);
+  assert.match(menuListSource, /EditorMenuSupport\.Scan\(/);
+  assert.doesNotMatch(menuListSource, /CommitEffect/);
+  assert.match(menuSupportSource, /GetMenuItems\"[\s\S]*typeof\(string\), typeof\(bool\), typeof\(bool\)/);
+  assert.match(menuSupportSource, /TypeCache\.GetMethodsWithAttribute<MenuItem>\(\)/);
+  assert.doesNotMatch(menuListSource, /GetEnabled\(/);
 });
 
 test("scene.view-frame synchronizes the hidden SceneView camera before frustum proof", async () => {
@@ -137,10 +144,10 @@ test("build/animation-clip/package sources keep current typed-result flows", asy
   const packageSource = await readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliPackageEmbedCoordinator.cs", import.meta.url), "utf8");
 
   assert.match(buildSource, /class BuildSceneListTool : IUnityCliTool/);
-  assert.match(buildSource, /Name = "build\.scene\.add"/);
-  assert.match(buildSource, /Name = "build\.profile\.create"/);
+  assert.match(buildSource, /Name = "build\.scene-add"/);
+  assert.match(buildSource, /Name = "build\.profile-create"/);
   assert.match(buildSource, /class BuildSettingsGetTool : IUnityCliTool/);
-  assert.match(buildSource, /Name = "build\.settings\.set"/);
+  assert.match(buildSource, /Name = "build\.settings-set"/);
   assert.doesNotMatch(buildSource, /Path = request\.Path|Name = request\.Name/);
 
   assert.match(animationSource, /AnimationUtility\.GetCurveBindings\(clip\)/);
@@ -194,11 +201,11 @@ test("bridge specs resolve for all new domain 4-8 tools", () => {
 
     ["shader", "list", "catalog.editor.run"],
     ["texture", "generate", "catalog.editor.run"],
-    ["debug", "console.read", "catalog.editor.run", "debug.console.read"],
+    ["debug", "console-read", "catalog.editor.run", "debug.console-read"],
 
-    ["editor", "selection.set", "catalog.editor.run"],
-    ["build", "scene.list", "catalog.editor.run"],
-    ["build", "profile.list", "catalog.editor.run"],
+    ["editor", "selection-set", "catalog.editor.run"],
+    ["build", "scene-list", "catalog.editor.run"],
+    ["build", "profile-list", "catalog.editor.run"],
     ["physics", "validate", "catalog.editor.run", "physics.validate"],
     ["physics", "assign-material", "catalog.editor.run", "physics.assign-material"]
   ] as const;

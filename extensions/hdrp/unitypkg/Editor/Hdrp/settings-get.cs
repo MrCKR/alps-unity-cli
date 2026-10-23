@@ -11,7 +11,7 @@ namespace UnityCli
 
         public ToolDescriptor Describe() => new()
         {
-            Name = "hdrp.settings.get", Summary = "Read active HDRP pipeline asset settings.",
+            Name = "hdrp.settings-get", Summary = "Read active HDRP pipeline asset settings.",
             Description = "Read supported public settings from the active HDRenderPipelineAsset without modifying it.",
             Group = "hdrp",RequiresPackages = new[] { "com.unity.render-pipelines.high-definition" },
             SideEffects = new string[0], Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
@@ -20,7 +20,7 @@ namespace UnityCli
 
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext context, System.Threading.CancellationToken ct = default)
         {
-            GameObjectToolSupport.EnsureEditorNotBusy("hdrp.settings.get");
+            GameObjectToolSupport.EnsureEditorNotBusy("hdrp.settings-get");
             var pipeline = HdrpToolSupport.GetActivePipelineAsset();
             return new System.Threading.Tasks.ValueTask<Result>(new Result { Settings = HdrpToolSupport.ReadSettings(pipeline)});
         }

@@ -17,7 +17,7 @@ export interface EditorDialogBlocker {
 
 /**
  * 由当前 live pause publication 证明的故意主线程暂停。
- * 它不是 Windows 观察结果，也不要求用户操作：解除路径是 debug.pause.resume。
+ * 它不是 Windows 观察结果，也不要求用户操作：解除路径是 debug.pause-resume。
  */
 export interface EditorDebugPauseBlocker {
   type: "debug-pause";
@@ -31,8 +31,8 @@ export interface EditorDebugPauseBlocker {
   timeoutKind: "bounded" | "unbounded";
   remainingMs: number;
   pausedForMs: number;
-  resumeTool: "debug.pause.resume";
-  infoTool: "debug.pause.list";
+  resumeTool: "debug.pause-resume";
+  infoTool: "debug.pause-list";
   requiresUserAction: false;
   source: "unity-debug-pause";
   confidence: "exact";
@@ -83,7 +83,7 @@ function sanitizeDebugPauseBlocker(record: Record<string, unknown>): EditorDebug
   if (typeof record.sessionId !== "string") return [];
   if (typeof record.timeoutKind !== "string" || !DEBUG_PAUSE_TIMEOUT_KINDS.has(record.timeoutKind)) return [];
   if (!Number.isFinite(record.remainingMs) || (record.remainingMs as number) < 0 || !Number.isFinite(record.pausedForMs) || (record.pausedForMs as number) < 0) return [];
-  if (record.resumeTool !== "debug.pause.resume" || record.infoTool !== "debug.pause.list") return [];
+  if (record.resumeTool !== "debug.pause-resume" || record.infoTool !== "debug.pause-list") return [];
   if (record.requiresUserAction !== false) return [];
   if (record.source !== "unity-debug-pause" || record.confidence !== "exact") return [];
   return [{
@@ -98,8 +98,8 @@ function sanitizeDebugPauseBlocker(record: Record<string, unknown>): EditorDebug
     timeoutKind: record.timeoutKind as EditorDebugPauseBlocker["timeoutKind"],
     remainingMs: record.remainingMs as number,
     pausedForMs: record.pausedForMs as number,
-    resumeTool: "debug.pause.resume",
-    infoTool: "debug.pause.list",
+    resumeTool: "debug.pause-resume",
+    infoTool: "debug.pause-list",
     requiresUserAction: false,
     source: "unity-debug-pause",
     confidence: "exact",

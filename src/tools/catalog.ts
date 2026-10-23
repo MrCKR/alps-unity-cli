@@ -20,10 +20,10 @@ export type ToolCatalogResult = { ok: true; tools: ToolMetadata[] } | (CliResult
 
 const OFFICIAL_ATTRIBUTE_PREFIX = "UnityPipeline_";
 const OFFICIAL_ATTRIBUTE_GROUP = "UnityPipeline";
-const CATALOG_INDEPENDENT_OFFLINE_TOOLS = new Set(["editor.state", "editor.dialogs", "editor.dialog.click"]);
+const CATALOG_INDEPENDENT_OFFLINE_TOOLS = new Set(["editor.state", "editor.dialogs", "editor.dialog-click"]);
 const CATALOG_INDEPENDENT_DURABLE_STATUS_TOOLS = new Set([
-  "asset.refresh.status", "build.player.status", "editor.play-mode.status",
-  "package.install.status", "package.remove.status", "test.run.status",
+  "asset.refresh-status", "build.player-status", "editor.play-mode-status",
+  "package.install-status", "package.remove-status", "test.run-status",
 ]);
 
 /** 固定观察与durable status在Live catalog被transition、modal或业务mutation阻断时仍进入原dispatcher。 */

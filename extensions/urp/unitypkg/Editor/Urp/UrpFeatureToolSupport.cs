@@ -32,7 +32,7 @@ namespace UnityCli
         /// <summary>读取 active URP renderer feature，并把旧读取入口的可用性诊断并入 canonical Tool。</summary>
         internal static UrpFeatureListResult List(string logPath)
         {
-            GameObjectToolSupport.EnsureEditorNotBusy("urp.feature.list");
+            GameObjectToolSupport.EnsureEditorNotBusy("urp.feature-list");
             try
             {
                 var pipeline = UrpToolSupport.GetActivePipelineAsset();
@@ -60,7 +60,7 @@ namespace UnityCli
         // 提交前冻结新增所需的资产、类型和可写序列化字段，避免子资产已创建后才暴露版本不兼容。
         internal static AddMutationPlan ValidateAdd(string featureTypeName, int rendererIndex)
         {
-            GameObjectToolSupport.EnsureEditorNotBusy("urp.feature.add");
+            GameObjectToolSupport.EnsureEditorNotBusy("urp.feature-add");
             UrpToolSupport.EnsureUrpAvailable();
             var featureType = UrpToolSupport.FindFeatureType(featureTypeName);
             if (featureType == null || featureType.IsAbstract || UrpToolSupport.RendererFeatureType == null || !UrpToolSupport.RendererFeatureType.IsAssignableFrom(featureType)) throw new UnityCliBridge.BridgeCommandException("E_URP_FEATURE_TYPE_NOT_FOUND", "Concrete ScriptableRendererFeature type not found: " + featureTypeName, "Pass a concrete ScriptableRendererFeature-derived type such as ScreenSpaceAmbientOcclusion.");
@@ -82,7 +82,7 @@ namespace UnityCli
         // 提交前选择唯一的 active 写入机制；提交后不得重新解析反射或 SerializedProperty。
         internal static ToggleMutationPlan ValidateToggle(int featureIndex, int rendererIndex)
         {
-            var target = RequireFeature(featureIndex, rendererIndex, "urp.feature.toggle");
+            var target = RequireFeature(featureIndex, rendererIndex, "urp.feature-toggle");
             RequireStableRendererAsset(target.RendererData);
             var setActive = target.Feature.GetType().GetMethod("SetActive", BindingFlags.Instance | BindingFlags.Public, null, new[] { typeof(bool) }, null);
             var activePropertyPath = (string)null;
@@ -105,7 +105,7 @@ namespace UnityCli
 
         internal static void ValidateConfigure(int featureIndex, int rendererIndex, string propertyName, string value)
         {
-            var target = RequireFeature(featureIndex, rendererIndex, "urp.feature.configure");
+            var target = RequireFeature(featureIndex, rendererIndex, "urp.feature-configure");
             using (var serialized = new SerializedObject(target.Feature))
             {
                 var property = serialized.FindProperty(propertyName) ?? serialized.FindProperty("m_" + char.ToUpper(propertyName[0]) + propertyName.Substring(1));
@@ -116,7 +116,7 @@ namespace UnityCli
 
         internal static UrpFeatureResult Add(AddMutationPlan plan, bool dryRun, string logPath)
         {
-            var effect = new UrpPlannedEffect { Type = "urp.feature.add", FeatureType = plan.FeatureTypeName, RendererIndex = plan.RendererIndex };
+            var effect = new UrpPlannedEffect { Type = "urp.feature-add", FeatureType = plan.FeatureTypeName, RendererIndex = plan.RendererIndex };
             if (dryRun) return new UrpFeatureResult { DryRun = true, PlannedEffects = new List<UrpPlannedEffect> { effect }};
 
             var feature = ScriptableObject.CreateInstance(plan.FeatureType);
@@ -146,7 +146,7 @@ namespace UnityCli
 
         internal static UrpFeatureResult Toggle(ToggleMutationPlan plan, bool enabled, bool dryRun, string logPath)
         {
-            var effect = new UrpPlannedEffect { Type = "urp.feature.toggle", Index = plan.FeatureIndex, RendererIndex = plan.RendererIndex, Enabled = enabled };
+            var effect = new UrpPlannedEffect { Type = "urp.feature-toggle", Index = plan.FeatureIndex, RendererIndex = plan.RendererIndex, Enabled = enabled };
             if (dryRun) return new UrpFeatureResult { FeatureIndex = plan.FeatureIndex, DryRun = true, PlannedEffects = new List<UrpPlannedEffect> { effect }};
             if (plan.SetActive != null) plan.SetActive.Invoke(plan.Feature, new object[] { enabled });
             else
@@ -167,7 +167,7 @@ namespace UnityCli
 
         internal static UrpFeatureResult Configure(int featureIndex, int rendererIndex, string propertyName, string value, bool dryRun, string logPath)
         {
-            var target = RequireFeature(featureIndex, rendererIndex, "urp.feature.configure");
+            var target = RequireFeature(featureIndex, rendererIndex, "urp.feature-configure");
             using (var serialized = new SerializedObject(target.Feature))
             {
                 var property = serialized.FindProperty(propertyName) ?? serialized.FindProperty("m_" + char.ToUpper(propertyName[0]) + propertyName.Substring(1));
@@ -192,14 +192,14 @@ namespace UnityCli
                     }
                 }
             }
-            var effect = new UrpPlannedEffect { Type = "urp.feature.configure", Index = featureIndex, RendererIndex = rendererIndex, Property = propertyName, Value = value };
+            var effect = new UrpPlannedEffect { Type = "urp.feature-configure", Index = featureIndex, RendererIndex = rendererIndex, Property = propertyName, Value = value };
             return new UrpFeatureResult { FeatureIndex = featureIndex, DryRun = dryRun, PlannedEffects = new List<UrpPlannedEffect> { effect }};
         }
 
         internal static UrpFeatureResult Remove(int featureIndex, int rendererIndex, bool dryRun, string logPath)
         {
-            var target = RequireFeature(featureIndex, rendererIndex, "urp.feature.remove");
-            var effect = new UrpPlannedEffect { Type = "urp.feature.remove", Index = featureIndex, RendererIndex = rendererIndex };
+            var target = RequireFeature(featureIndex, rendererIndex, "urp.feature-remove");
+            var effect = new UrpPlannedEffect { Type = "urp.feature-remove", Index = featureIndex, RendererIndex = rendererIndex };
             if (!dryRun)
             {
                 using (var serialized = new SerializedObject(target.RendererData))
@@ -316,7 +316,7 @@ namespace UnityCli
             {
                 var features = serialized.FindProperty("m_RendererFeatures");
                 if (features == null || featureIndex < 0 || featureIndex >= features.arraySize)
-                    throw new UnityCliBridge.BridgeCommandException("E_URP_FEATURE_INDEX_OUT_OF_RANGE", "Renderer feature index is out of range: " + featureIndex.ToString(CultureInfo.InvariantCulture), "Run urp.feature.list and pass an existing index.");
+                    throw new UnityCliBridge.BridgeCommandException("E_URP_FEATURE_INDEX_OUT_OF_RANGE", "Renderer feature index is out of range: " + featureIndex.ToString(CultureInfo.InvariantCulture), "Run urp.feature-list and pass an existing index.");
                 var feature = features.GetArrayElementAtIndex(featureIndex).objectReferenceValue;
                 if (feature == null) throw new UnityCliBridge.BridgeCommandException("E_URP_FEATURE_NULL", "Renderer feature is null at index " + featureIndex.ToString(CultureInfo.InvariantCulture) + ".", "Remove the invalid entry or recreate the feature.");
                 return new FeatureTarget { RendererData = rendererData, Feature = feature };

@@ -47,7 +47,7 @@ namespace UnityCli
                 new DebugInputRouteView
                 {
                     Kind = UnityCliDebugInputRouteKinds.BusinessEntry,
-                    Tool = "debug.method.invoke",
+                    Tool = "debug.method-invoke",
                     Thread = "the entry runs synchronously on the calling Unity main thread",
                     LogicalFrame = "no logical frame is required: the entry is called between frames",
                     Proof = "the declared completionProbe plus a fresh read Tool readback"
@@ -55,7 +55,7 @@ namespace UnityCli
                 new DebugInputRouteView
                 {
                     Kind = UnityCliDebugInputRouteKinds.ManagedWrapperInjection,
-                    Tool = "debug.hook.install",
+                    Tool = "debug.hook-install",
                     Thread = "the callback runs synchronously on the thread that calls the intercepted wrapper",
                     LogicalFrame = "the wrapper call itself is the boundary, so no logical frame is required",
                     Proof = "the recorded hook event proves the wrapper really ran; parameter replacement, result replacement and skipping the original method are reported by the hook itself"
@@ -63,7 +63,7 @@ namespace UnityCli
                 new DebugInputRouteView
                 {
                     Kind = UnityCliDebugInputRouteKinds.ArbitraryCode,
-                    Tool = "debug.code.execute",
+                    Tool = "debug.code-execute",
                     Thread = "the code runs synchronously on the Unity main thread",
                     LogicalFrame = "no logical frame is required",
                     Proof = "the returned value plus a later readback; a return value is never acceptance proof by itself"
@@ -71,15 +71,15 @@ namespace UnityCli
                 new DebugInputRouteView
                 {
                     Kind = UnityCliDebugInputRouteKinds.ProgramEntry,
-                    Tool = "debug.program.run",
+                    Tool = "debug.program-run",
                     Thread = "the declared execution site decides the thread: the central editor tick or a named PlayerLoop phase",
                     LogicalFrame = "the step driver can wait on frames, time, a signal or a condition instead of being tied to one logical frame",
-                    Proof = "named context.Check results read back by debug.run.begin and debug.run.end"
+                    Proof = "named context.Check results read back by debug.run-begin and debug.run-end"
                 },
                 new DebugInputRouteView
                 {
                     Kind = UnityCliDebugInputRouteKinds.ThreadSafePointDelivery,
-                    Tool = "debug.program.run",
+                    Tool = "debug.program-run",
                     Thread = "the delivery executes on the bound exact target or the declared framework phase, never on a different thread",
                     LogicalFrame = "deliveries are bounded, single-winner and expire instead of being replayed in a later frame",
                     Proof = "the delivery fact plus the program check observed at that execution point"
@@ -98,10 +98,10 @@ namespace UnityCli
                 Supported = false,
                 DriveWindows = new List<string>
                 {
-                    "debug.hook.install with a prefix callback can replace arguments or skip the original method on the hit thread",
-                    "debug.hook.install with a postfix callback can replace the returned value",
-                    "debug.method.invoke can call the business input entry directly",
-                    "debug.program.run can deliver a bounded signal to that exact target"
+                    "debug.hook-install with a prefix callback can replace arguments or skip the original method on the hit thread",
+                    "debug.hook-install with a postfix callback can replace the returned value",
+                    "debug.method-invoke can call the business input entry directly",
+                    "debug.program-run can deliver a bounded signal to that exact target"
                 }
             };
             if (spec == null)
@@ -446,8 +446,8 @@ namespace UnityCli
                 },
                 new[]
                 {
-                    "Run tools run debug.session.info to read the current session state and cleanup detail.",
-                    "Run tools run debug.session.create to start a new session for this investigation."
+                    "Run tools run debug.session-info to read the current session state and cleanup detail.",
+                    "Run tools run debug.session-create to start a new session for this investigation."
                 });
         }
 
@@ -484,8 +484,8 @@ namespace UnityCli
                 details,
                 new[]
                 {
-                    "Run tools run debug.input.info to read the backend status this Editor reports.",
-                    "Drive this input through a general path instead: debug.method.invoke for a business entry, debug.hook.install for an interceptable managed wrapper, debug.code.execute for explicit code, or debug.program.run for a bounded cross-thread delivery.",
+                    "Run tools run debug.input-info to read the backend status this Editor reports.",
+                    "Drive this input through a general path instead: debug.method-invoke for a business entry, debug.hook-install for an interceptable managed wrapper, debug.code-execute for explicit code, or debug.program-run for a bounded cross-thread delivery.",
                     "Install an input package yourself only if the project really needs it; this owner never installs or changes packages."
                 });
         }
@@ -528,8 +528,8 @@ namespace UnityCli
                     },
                     new[]
                     {
-                        "Run tools run debug.input.release with scope all to end this owner's device lifetime for that session.",
-                        "Run tools run debug.session.info to read the active resource usage of that session."
+                        "Run tools run debug.input-release with scope all to end this owner's device lifetime for that session.",
+                        "Run tools run debug.session-info to read the active resource usage of that session."
                     });
             }
             return BackendRejection(backend, "The device backend refused to create the session-owned virtual device.",
@@ -551,7 +551,7 @@ namespace UnityCli
                 new[]
                 {
                     "Submit this call from the Unity main thread; the device backend and the declared coordinate space both need it.",
-                    "Run tools run debug.input.info to read the backend status and the records this owner reports."
+                    "Run tools run debug.input-info to read the backend status and the records this owner reports."
                 });
         }
 
@@ -561,7 +561,7 @@ namespace UnityCli
                 "E_DEBUG_SESSION_NOT_FOUND",
                 "No loaded session definition has that sessionId in the current Editor session.",
                 new Dictionary<string, object> { { "sessionId", sessionId ?? string.Empty } },
-                new[] { "Run tools run debug.session.list to read the currently loaded session definitions." });
+                new[] { "Run tools run debug.session-list to read the currently loaded session definitions." });
         }
 
         private static BridgeCommandException InvalidField(string field, string expected, string actual)

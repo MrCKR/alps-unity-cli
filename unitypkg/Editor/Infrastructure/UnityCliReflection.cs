@@ -56,7 +56,7 @@ namespace UnityCli
                         Generation = generation,
                         Data = new Dictionary<string, object>
                         {
-                            { "command", "debug.type.schema" }, { "typeName", FriendlyTypeName(type, context) }, { "schema", rootSchema },
+                            { "command", "debug.type-schema" }, { "typeName", FriendlyTypeName(type, context) }, { "schema", rootSchema },
                             { "memberCount", 0L }, { "returnedMemberCount", 0L }, { "definitionCount", (long)context.Definitions.Count }
                         }
                     };
@@ -80,7 +80,7 @@ namespace UnityCli
                 var typeDisplayName = FriendlyTypeName(type, context);
                 var schema = new Dictionary<string, object> { { "type", "object" }, { "typeName", typeDisplayName }, { "properties", rootProperties } };
                 if (context.Definitions.Count > 0) schema["$defs"] = context.Definitions;
-                var next = index < members.Length ? UnityCliContinuationToken.Create("debug.type.schema", generation, "member:" + index.ToString(CultureInfo.InvariantCulture)) : null;
+                var next = index < members.Length ? UnityCliContinuationToken.Create("debug.type-schema", generation, "member:" + index.ToString(CultureInfo.InvariantCulture)) : null;
                 return new Page
                 {
                     Truncated = next != null || context.Truncated,
@@ -88,7 +88,7 @@ namespace UnityCli
                     Generation = generation,
                     Data = new Dictionary<string, object>
                     {
-                        { "command", "debug.type.schema" }, { "typeName", typeDisplayName }, { "schema", schema },
+                        { "command", "debug.type-schema" }, { "typeName", typeDisplayName }, { "schema", schema },
                         { "memberCount", (long)members.Length }, { "returnedMemberCount", (long)rootProperties.Count },
                         { "definitionCount", (long)context.Definitions.Count }
                     }
@@ -99,7 +99,7 @@ namespace UnityCli
             {
                 string position;
                 index = -1;
-                if (!UnityCliContinuationToken.TryParse(cursor, "debug.type.schema", generation, out position)
+                if (!UnityCliContinuationToken.TryParse(cursor, "debug.type-schema", generation, out position)
                     || !position.StartsWith("member:", StringComparison.Ordinal)
                     || !int.TryParse(position.Substring(7), NumberStyles.Integer, CultureInfo.InvariantCulture, out index)
                     || index < 0 || index > memberCount) throw StaleSchemaCursor();
@@ -107,7 +107,7 @@ namespace UnityCli
 
             private static BridgeCommandException StaleSchemaCursor()
             {
-                return new BridgeCommandException("E_CONTINUATION_STALE", "The debug.type.schema continuation does not match the current assembly generation and limits.", "Start a new debug.type.schema read without cursor.");
+                return new BridgeCommandException("E_CONTINUATION_STALE", "The debug.type-schema continuation does not match the current assembly generation and limits.", "Start a new debug.type-schema read without cursor.");
             }
 
             /// <summary>递归生成 schema；复杂嵌套类型通过 $defs/$ref 去重，避免循环类型无限展开。</summary>
@@ -538,9 +538,9 @@ namespace UnityCli
                 if (!string.IsNullOrEmpty(cursor))
                 {
                     string position;
-                    if (!UnityCliContinuationToken.TryParse(cursor, "debug.method.find", generation, out position)
+                    if (!UnityCliContinuationToken.TryParse(cursor, "debug.method-find", generation, out position)
                         || !int.TryParse(position, NumberStyles.Integer, CultureInfo.InvariantCulture, out index) || index < 0 || index > methods.Length)
-                        throw new BridgeCommandException("E_CONTINUATION_STALE", "The reflection method continuation does not match the current assembly generation and selector.", "Start a new debug.method.find read without cursor.");
+                        throw new BridgeCommandException("E_CONTINUATION_STALE", "The reflection method continuation does not match the current assembly generation and selector.", "Start a new debug.method-find read without cursor.");
                 }
                 var pageStartIndex = index;
                 var result = new List<ReflectionMethodDescriptor>();
@@ -580,7 +580,7 @@ namespace UnityCli
                 }
                 if (index == pageStartIndex && index < methods.Length)
                     throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension ?? "scannedRecords");
-                var next = index < methods.Length ? UnityCliContinuationToken.Create("debug.method.find", generation, index.ToString(CultureInfo.InvariantCulture)) : null;
+                var next = index < methods.Length ? UnityCliContinuationToken.Create("debug.method-find", generation, index.ToString(CultureInfo.InvariantCulture)) : null;
                 return new MethodPage { Methods = result, Total = methods.Length, NextCursor = next, Generation = generation, Truncated = next != null || budget.IsExhausted };
             }
 
@@ -688,7 +688,7 @@ namespace UnityCli
                     || typeof(CustomYieldInstruction).IsAssignableFrom(returnType))
                     throw new BridgeCommandException(
                         "E_METHOD_COMPLETION_UNPROVABLE",
-                        "debug.method.invoke cannot prove immediate completion for awaitable, yield, or AsyncOperation returns: " + returnType.FullName + ".",
+                        "debug.method-invoke cannot prove immediate completion for awaitable, yield, or AsyncOperation returns: " + returnType.FullName + ".",
                         "Use a dedicated Tool with an explicit business predicate and proof source.");
             }
 
@@ -705,7 +705,7 @@ namespace UnityCli
                         if (parameterType == null)
                         {
                             if (budget.IsExhausted) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-                            throw new BridgeCommandException("E_TYPE_NOT_FOUND", "Parameter type not found: " + parameterTypeName, "Use the full parameterType returned by debug.method.find.");
+                            throw new BridgeCommandException("E_TYPE_NOT_FOUND", "Parameter type not found: " + parameterTypeName, "Use the full parameterType returned by debug.method-find.");
                         }
                         selectedParameterTypes.Add(parameterType);
                     }
@@ -743,7 +743,7 @@ namespace UnityCli
                 {
                     throw new BridgeCommandException("E_METHOD_NOT_FOUND", "No overload matches the supplied reflection method signature: " + type.FullName + "." + methodName,
                         new Dictionary<string, object> { { "typeName", type.FullName }, { "methodName", methodName }, { "parameterTypes", parameterTypeNames ?? new List<string>() } },
-                        new[] { "Run debug.method.find and pass the returned parameterType values as parameterTypes." });
+                        new[] { "Run debug.method-find and pass the returned parameterType values as parameterTypes." });
                 }
 
                 var signatures = new List<string>();
@@ -759,7 +759,7 @@ namespace UnityCli
                 }
                 throw new BridgeCommandException("E_METHOD_AMBIGUOUS", "Multiple overloads match: " + type.FullName + "." + methodName,
                     new Dictionary<string, object> { { "typeName", type.FullName }, { "methodName", methodName }, { "candidateSignatures", signatures } },
-                    new[] { "Run debug.method.find and pass one returned signature's parameterType values as parameterTypes." });
+                    new[] { "Run debug.method-find and pass one returned signature's parameterType values as parameterTypes." });
             }
 
             private static bool MethodMatchesBindings(MethodInfo method, BindingFlags bindings, bool declaredOnTarget)

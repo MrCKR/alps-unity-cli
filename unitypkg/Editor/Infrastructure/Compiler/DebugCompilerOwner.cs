@@ -68,7 +68,7 @@ namespace UnityCli
     /// <summary>
     /// debug 域动态编译的唯一 owner：编译所有权、每 domain generation 的引用快照、已加载产物预算与准入判定。
     ///
-    /// 四个提交形状（debug.code.execute、hook 回调源码、program 源码、pause evaluate）只能经由本类：
+    /// 四个提交形状（debug.code-execute、hook 回调源码、program 源码、pause evaluate）只能经由本类：
     /// 先用 TryBeginOwnership 取得唯一所有权，再用 References 取同一 generation 的引用快照，用 TryAdmitCandidate
     /// 判定准入，加载成功后用 CommitLoadedArtifact 记账。形状侧不得另建计数器、队列、引用快照或临时区。
     /// 预算常量只在 DebugLimits 声明，本类不重复声明任何数值。

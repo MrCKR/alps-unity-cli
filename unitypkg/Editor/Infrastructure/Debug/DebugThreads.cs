@@ -7,7 +7,7 @@ using BridgeCommandException = UnityCli.UnityCliBridge.BridgeCommandException;
 namespace UnityCli
 {
     /// <summary>
-    /// debug.thread.list 的唯一观察投影 owner。
+    /// debug.thread-list 的唯一观察投影 owner。
     ///
     /// 职责：
     /// - 把「debug 设施实际观察到的线程」投影为公开事实：统一事件存储中产生过事件的线程，
@@ -21,7 +21,7 @@ namespace UnityCli
     /// </summary>
     internal static class DebugThreads
     {
-        private const string ListScope = "debug.thread.list";
+        private const string ListScope = "debug.thread-list";
         private const string SourceEvents = "retained-debug-events";
         private const string SourceFrames = "active-hook-hit-frames";
 
@@ -46,7 +46,7 @@ namespace UnityCli
                         "E_CONTINUATION_STALE",
                         "The thread list continuation does not match the current Editor session or observation scope.",
                         null,
-                        new[] { "Start a new debug.thread.list read without a cursor." });
+                        new[] { "Start a new debug.thread-list read without a cursor." });
             }
             var limit = request == null || request.Limit == null
                 ? DebugLimits.ThreadListDefaultLimit

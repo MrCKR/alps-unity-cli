@@ -59,7 +59,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-matrix-setup.cs\",\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":${proofBefore},\"after\":31337,\"tolerance\":0.001}]}}"
     ],
@@ -104,7 +104,7 @@
     "argv": [
      "tools",
      "run",
-     "vfx.graph.create",
+     "vfx.graph-create",
      "--input",
      "{\"path\":\"Assets/VFX/Explosion.vfx\",\"overwrite\":true}"
     ],
@@ -193,7 +193,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-matrix-setup.cs\",\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":${proofBefore},\"after\":31337,\"tolerance\":0.001}]}}"
     ],
@@ -289,7 +289,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"cinemachine-extension-absent\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
@@ -326,7 +326,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"probuilder-generic\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
@@ -359,7 +359,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"ui-panel-settings-absent\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
@@ -392,7 +392,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"vfx-parameter\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
@@ -425,7 +425,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scene-create\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
@@ -458,7 +458,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scene-main-open\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
@@ -491,7 +491,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scene-gameplay-open\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
@@ -524,7 +524,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scene-level2-open\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
@@ -557,7 +557,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"ui-document-create\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
@@ -590,7 +590,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scriptable-object\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
@@ -623,7 +623,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scriptable-object-create-absent\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
@@ -656,7 +656,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"ui-detach-target\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
@@ -689,7 +689,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"ui-visual-element\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
@@ -722,7 +722,7 @@
     "argv": [
      "tools",
      "run",
-     "vfx.template.list",
+     "vfx.template-list",
      "--input",
      "{}"
     ],
@@ -744,7 +744,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"vfx-line-target\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
@@ -777,7 +777,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"prefab-create\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
@@ -810,7 +810,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"prefab-unpack\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
@@ -932,7 +932,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"profiler-snapshots\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
@@ -987,7 +987,7 @@
     "argv": [
      "tools",
      "run",
-     "profiler.frame-debugger.enable",
+     "profiler.frame-debugger-enable",
      "--input",
      "{}"
     ],
@@ -1009,7 +1009,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-pipeline-setup.cs\",\"args\":{\"pipeline\":\"urp\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":33000,\"tolerance\":0.001}]}}"
     ],
@@ -1042,7 +1042,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-pipeline-setup.cs\",\"args\":{\"pipeline\":\"hdrp\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":33000,\"tolerance\":0.001}]}}"
     ],
@@ -1093,7 +1093,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-pipeline-setup.cs\",\"args\":{\"pipeline\":\"restore\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":${proofBefore},\"after\":33000,\"tolerance\":0.001}]}}"
     ],
@@ -1130,7 +1130,7 @@
      "--input",
      "{\"name\":\"com.unity.textmeshpro\",\"version\":\"3.0.7\"}"
     ],
-    "statusTool": "package.install.status",
+    "statusTool": "package.install-status",
     "expect": {
      "equals": {
       "data.action": "install",
@@ -1175,7 +1175,7 @@
     "argv": [
      "tools",
      "run",
-     "package.scoped-registry.add",
+     "package.scoped-registry-add",
      "--input",
      "{\"name\":\"Acme\",\"url\":\"https://registry.acme.test\",\"scope\":\"com.acme\"}"
     ],
@@ -1198,7 +1198,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-playmode-options.cs\",\"args\":{\"action\":\"enable\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":34000,\"tolerance\":0.001}]}}"
     ],
@@ -1231,7 +1231,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-playmode-options.cs\",\"args\":{\"action\":\"restore\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":34000,\"tolerance\":0.001}]}}"
     ],
@@ -1381,7 +1381,7 @@
     "argv": [
      "tools",
      "run",
-     "debug.code.execute",
+     "debug.code-execute",
      "--input",
      "{\"file\":\"scripts/live-matrix/fixtures/live-domain-reload-setup.cs\",\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":35000,\"tolerance\":0.001}]}}"
     ],
@@ -1557,7 +1557,7 @@
     "argv": [
      "tools",
      "run",
-     "ui.document.update",
+     "ui.document-update",
      "--input",
      "{\"uxml\":\"Assets/UnityCLIValidation/Matrix.uxml\",\"content\":\"<ui:UXML xmlns:ui=\\\"UnityEngine.UIElements\\\"><ui:Label name=\\\"MatrixCacheLabel\\\" text=\\\"cache-final\\\" /></ui:UXML>\"}"
     ],

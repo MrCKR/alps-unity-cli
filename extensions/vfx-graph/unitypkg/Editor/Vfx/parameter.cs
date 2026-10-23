@@ -71,7 +71,7 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException(
                     "E_VFX_COMPONENT_NOT_FOUND",
                     "VisualEffect component not found on target: " + GameObjectToolSupport.HierarchyPath(gameObject),
-                    "Use vfx.effect.add or choose a target with VisualEffect.");
+                    "Use vfx.effect-add or choose a target with VisualEffect.");
             }
 
             if (string.IsNullOrWhiteSpace(request.Name)) throw new UnityCliBridge.BridgeCommandException("E_VFX_PARAMETER_NAME_REQUIRED", "VFX parameter name is required.", "Pass a non-empty exposed parameter name.");

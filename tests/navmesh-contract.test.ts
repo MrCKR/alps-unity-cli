@@ -10,7 +10,7 @@ const reloadOperation = read("unitypkg/Editor/Infrastructure/UnityCliReloadOpera
 const mutationLease = read("unitypkg/Editor/Infrastructure/UnityCliSessionMutationLease.cs");
 const support = read("unitypkg/Editor/Tools/navmesh/NavMeshToolSupport.cs");
 const settings = read("unitypkg/Editor/Tools/navmesh/settings.cs");
-const settingsSet = read("unitypkg/Editor/Tools/navmesh/settings/set.cs");
+const settingsSet = read("unitypkg/Editor/Tools/navmesh/settings-set.cs");
 const clear = read("unitypkg/Editor/Tools/navmesh/bake-clear.cs");
 const live = read("src/tools/navmesh/live.ts");
 const bake = read("src/tools/navmesh/bake.ts");
@@ -20,7 +20,7 @@ const status = read("src/tools/navmesh/bake-status.ts");
 const bridge = read("src/bridge/domains/navmesh.ts");
 const completion = JSON.parse(read("contracts/tool-completion-contract.json")) as { tools: Array<Record<string, unknown>> };
 
-const names = ["navmesh.bake", "navmesh.surface.bake", "navmesh.bake-cancel", "navmesh.bake-clear", "navmesh.bake-status", "navmesh.settings", "navmesh.settings.set"];
+const names = ["navmesh.bake", "navmesh.surface-bake", "navmesh.bake-cancel", "navmesh.bake-clear", "navmesh.bake-status", "navmesh.settings", "navmesh.settings-set"];
 
 test("NavMesh exposes exactly the seven approved canonical capabilities", () => {
   for (const name of names) {
@@ -147,7 +147,7 @@ test("NavMesh running cancel is cooperative and corrupt recovery is exact", () =
 });
 
 test("bake runner returns only a strict root terminal", () => {
-  assert.match(live, /bind\(context, kind === "legacy" \? "navmesh\.bake" : "navmesh\.surface\.bake", false\)/);
+  assert.match(live, /bind\(context, kind === "legacy" \? "navmesh\.bake" : "navmesh\.surface-bake", false\)/);
   assert.match(coordinator, /ValidateStartShape\(args\)[\s\S]*RecoveredLedgerTerminal[\s\S]*inspectedRoot != null[\s\S]*ValidateStart\(args\)[\s\S]*CreateFirst/);
   assert.match(live, /internal\.navmesh\.bake\.start/);
   assert.match(live, /internal\.navmesh\.bake\.status/);
@@ -215,7 +215,7 @@ test("settings read fails closed and settings set uses one barrier with persiste
   assert.match(support, /NavMeshProjectSettings/);
   assert.match(support, /DefaultAgentPrefix/);
   assert.match(support, /SettingsHash = Sha256/);
-  assert.match(settingsSet, /Name = "navmesh\.settings\.set"/);
+  assert.match(settingsSet, /Name = "navmesh\.settings-set"/);
   assert.equal(settingsSet.match(/ctx\.CommitEffect\(\);/g)?.length, 1);
   assert.ok(settingsSet.indexOf("PrepareSettings") < settingsSet.indexOf("if (ctx.DryRun || !plan.Changed)"));
   assert.ok(settingsSet.indexOf("if (ctx.DryRun || !plan.Changed)") < settingsSet.indexOf("ctx.CommitEffect();"));

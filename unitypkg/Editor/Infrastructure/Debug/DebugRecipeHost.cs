@@ -65,7 +65,7 @@ namespace UnityCli
                     "E_DEBUG_SESSION_NOT_FOUND",
                     "The session to export does not exist in the current Editor session.",
                     new Dictionary<string, object> { { "sessionId", sessionId }, { "path", "$.sessionId" } },
-                    new[] { "Run tools run debug.session.list to read the loaded session definitions." });
+                    new[] { "Run tools run debug.session-list to read the loaded session definitions." });
             var pageBytes = request.PageBytes.HasValue && request.PageBytes.Value > 0 ? request.PageBytes.Value : DebugLimits.RecipePageDefaultBytes;
             if (pageBytes > DebugLimits.RecipePageMaxBytes)
                 throw new BridgeCommandException(
@@ -99,7 +99,7 @@ namespace UnityCli
                         failure == DebugRecipeFailures.SnapshotMissing ? "E_DEBUG_SESSION_NOT_FOUND" : "E_DEBUG_EXPORT_CURSOR_EXPIRED",
                         message,
                         new Dictionary<string, object> { { "sessionId", plan.SessionId }, { "cursor", plan.Cursor }, { "reason", failure } },
-                        new[] { "Run tools run debug.session.export again without cursor to freeze a new snapshot of the current publication." });
+                        new[] { "Run tools run debug.session-export again without cursor to freeze a new snapshot of the current publication." });
             }
             return new DebugSessionExportResult
             {
@@ -152,7 +152,7 @@ namespace UnityCli
                     "E_DEBUG_SESSION_NOT_FOUND",
                     "The session disappeared before its recipe could be built.",
                     new Dictionary<string, object> { { "sessionId", sessionId } },
-                    new[] { "Run tools run debug.session.list to read the loaded session definitions." });
+                    new[] { "Run tools run debug.session-list to read the loaded session definitions." });
             var programs = new List<object>();
             foreach (var program in DebugProgramHost.Registry().ProgramsFor(sessionId).OrderBy(item => item.ProgramId, StringComparer.Ordinal))
             {
@@ -373,7 +373,7 @@ namespace UnityCli
                 DomainGeneration = DebugSessionHost.DomainGeneration(),
                 RuntimeId = DebugSessionHost.RuntimeId(),
                 StorePublication = created.StorePublication,
-                Note = "Import validated the recipe, compiled the declared program sources as candidate assemblies and registered inactive definitions. Every declared hook keeps its configuration, and its declared session reference is re-established as the new session so the new session owns it; no reference to the exported session survives. A listener's live thread identity is never part of a recipe: the imported listener keeps its declared trigger, conditions and hit budget and matches any managed thread until the caller declares a new thread filter. It executed no startup or cleanup code, attached no detour, armed no listener, replayed no operation and activated no resource; the new session stays inactive until an explicit debug.program.run or debug.hook.enable call in this domain."
+                Note = "Import validated the recipe, compiled the declared program sources as candidate assemblies and registered inactive definitions. Every declared hook keeps its configuration, and its declared session reference is re-established as the new session so the new session owns it; no reference to the exported session survives. A listener's live thread identity is never part of a recipe: the imported listener keeps its declared trigger, conditions and hit budget and matches any managed thread until the caller declares a new thread filter. It executed no startup or cleanup code, attached no detour, armed no listener, replayed no operation and activated no resource; the new session stays inactive until an explicit debug.program-run or debug.hook-enable call in this domain."
             };
         }
 
@@ -482,7 +482,7 @@ namespace UnityCli
                 },
                 new[]
                 {
-                    "Fix or re-export the recipe with tools run debug.session.export, then submit debug.session.import again.",
+                    "Fix or re-export the recipe with tools run debug.session-export, then submit debug.session-import again.",
                     "Candidate assemblies already loaded by this attempt stay loaded for this domain; loaded bytes are reported above and are not reclaimed by stopping the session."
                 });
         }

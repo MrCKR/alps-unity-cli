@@ -47,7 +47,7 @@ namespace UnityCli
     /// </summary>
     internal static class DebugPauseHost
     {
-        private const string ListScope = "debug.pause.list";
+        private const string ListScope = "debug.pause-list";
 
         private static readonly object Sync = new object();
         private static readonly Dictionary<string, DebugPauseSite> Sites = new Dictionary<string, DebugPauseSite>(StringComparer.Ordinal);
@@ -211,8 +211,8 @@ namespace UnityCli
                     new Dictionary<string, object> { { "sessionId", breakpoint.SessionId }, { "path", path + ".sessionId" } },
                     new[]
                     {
-                        "Run tools run debug.session.list to read the loaded session definitions.",
-                        "Run tools run debug.session.create to establish an owner, or omit sessionId to own the pause site without a session resource."
+                        "Run tools run debug.session-list to read the loaded session definitions.",
+                        "Run tools run debug.session-create to establish an owner, or omit sessionId to own the pause site without a session resource."
                     });
             }
             if (!string.Equals(info.Session == null ? string.Empty : info.Session.State, UnityCliDebugSessionStates.Open, StringComparison.Ordinal))
@@ -227,8 +227,8 @@ namespace UnityCli
                     },
                     new[]
                     {
-                        "Run tools run debug.session.info to read the current state and cleanup detail.",
-                        "Run tools run debug.session.create to start a new session for this investigation."
+                        "Run tools run debug.session-info to read the current state and cleanup detail.",
+                        "Run tools run debug.session-create to start a new session for this investigation."
                     });
             var owner = new DebugPauseOwner();
             var reservation = DebugSessionHost.ReserveResource(
@@ -257,8 +257,8 @@ namespace UnityCli
                     },
                     new[]
                     {
-                        "Run tools run debug.session.info to read the active resources of this session.",
-                        "Run tools run debug.session.stop for a session you no longer need, then install the pause breakpoint again."
+                        "Run tools run debug.session-info to read the active resources of this session.",
+                        "Run tools run debug.session-stop for a session you no longer need, then install the pause breakpoint again."
                     });
             owner.ResourceId = reservation.Resource.ResourceId;
             breakpoint.ResourceId = owner.ResourceId;
@@ -503,7 +503,7 @@ namespace UnityCli
                     "E_DEBUG_PAUSE_OPERATION_FAILED",
                     "The on-site operation failed on the paused thread: " + exception.GetType().Name + ".",
                     new Dictionary<string, object> { { "pauseId", site.PauseId }, { "kind", operation.Kind }, { "message", exception.Message ?? string.Empty } },
-                    new[] { "Run tools run debug.pause.inspect to read the paused state before submitting another operation." }));
+                    new[] { "Run tools run debug.pause-inspect to read the paused state before submitting another operation." }));
             }
             finally
             {
@@ -786,7 +786,7 @@ namespace UnityCli
                         "E_CONTINUATION_STALE",
                         "The pause list continuation does not match the current Editor session or filter scope.",
                         null,
-                        new[] { "Start a new debug.pause.list read without a cursor." });
+                        new[] { "Start a new debug.pause-list read without a cursor." });
             }
             var limit = request == null || request.Limit == null
                 ? DebugLimits.PauseListDefaultLimit
@@ -1248,7 +1248,7 @@ namespace UnityCli
                 "E_SCHEMA_INVALID",
                 "Field " + path + " is invalid: expected " + expected + ".",
                 new Dictionary<string, object> { { "path", "$." + path }, { "expected", expected }, { "actual", actual ?? "missing" } },
-                new[] { "Run tools describe debug.hook.install to read the breakpoint contract, then submit the corrected input." });
+                new[] { "Run tools describe debug.hook-install to read the breakpoint contract, then submit the corrected input." });
         }
     }
 }

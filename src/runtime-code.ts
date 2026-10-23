@@ -76,14 +76,14 @@ export async function executeRuntimeCode(request: RuntimeCodeRequest, runtime: R
         timeoutMs,
         args: parsedArgs,
       },
-      plannedEffects: [{ type: "debug.code.execute", sideEffects: "user-code-not-executed" }],
+      plannedEffects: [{ type: "debug.code-execute", sideEffects: "user-code-not-executed" }],
     };
   }
 
   requireRuntimeCodeDeadline(absoluteDeadlineMs);
   // 代码源读取与引用校验都已通过，真正的 Runtime Code 执行是本 Tool 的首个业务 effect。
   await runtime.commitEffect?.();
-  const result = await executeBridgePayload(requestId, "debug.code.execute", payload, {
+  const result = await executeBridgePayload(requestId, "debug.code-execute", payload, {
     instance: request.instance ?? "",
     "timeout-ms": String(timeoutMs),
     __destructiveConfirmed: true,

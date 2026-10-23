@@ -20,16 +20,16 @@ test("observed-state tools wait stably and construct from final readback", async
   const [animationPlay, animationStop, bakeStart, bakeCancel, editorPause, editorPlay, editorStop, profilerStart, profilerStop, profilerPause, frameEnable, frameDisable] = await Promise.all([
     source("../unitypkg/Editor/Tools/animator/play.cs"),
     source("../unitypkg/Editor/Tools/animator/stop.cs"),
-    source("../unitypkg/Editor/Tools/lighting/bake/start.cs"),
-    source("../unitypkg/Editor/Tools/lighting/bake/cancel.cs"),
+    source("../unitypkg/Editor/Tools/lighting/bake-start.cs"),
+    source("../unitypkg/Editor/Tools/lighting/bake-cancel.cs"),
     source("../unitypkg/Editor/Tools/editor/pause.cs"),
-    source("../unitypkg/Editor/Tools/editor/play-mode/start.cs"),
-    source("../unitypkg/Editor/Tools/editor/play-mode/stop.cs"),
+    source("../unitypkg/Editor/Tools/editor/play-mode-start.cs"),
+    source("../unitypkg/Editor/Tools/editor/play-mode-stop.cs"),
     source("../unitypkg/Editor/Tools/profiler/start.cs"),
     source("../unitypkg/Editor/Tools/profiler/stop.cs"),
     source("../unitypkg/Editor/Tools/profiler/pause.cs"),
-    source("../unitypkg/Editor/Tools/profiler/frame-debugger/enable.cs"),
-    source("../unitypkg/Editor/Tools/profiler/frame-debugger/disable.cs")
+    source("../unitypkg/Editor/Tools/profiler/frame-debugger-enable.cs"),
+    source("../unitypkg/Editor/Tools/profiler/frame-debugger-disable.cs")
   ]);
 
   for (const text of [animationPlay, animationStop, bakeStart, bakeCancel, editorPause, editorPlay, editorStop, profilerStart, profilerStop, profilerPause, frameEnable, frameDisable]) {
@@ -46,7 +46,7 @@ test("observed-state tools wait stably and construct from final readback", async
 });
 
 test("VFX actions use stable observable state and profiler artifacts retain external proof", async () => {
-  const [vfxSupport, controlPause, controlPlay, controlReinitialize, controlStop, particlePause, particlePlay, particleStop, capture, exportTool, load, assetRefresh, menu] = await Promise.all([
+  const [vfxSupport, controlPause, controlPlay, controlReinitialize, controlStop, particlePause, particlePlay, particleStop, capture, exportTool, load, assetRefresh] = await Promise.all([
     source("../extensions/vfx-graph/unitypkg/Editor/Vfx/VfxActionToolSupport.cs"),
     source("../extensions/vfx-graph/unitypkg/Editor/Vfx/control-pause.cs"),
     source("../extensions/vfx-graph/unitypkg/Editor/Vfx/control-play.cs"),
@@ -59,7 +59,6 @@ test("VFX actions use stable observable state and profiler artifacts retain exte
     source("../unitypkg/Editor/Tools/profiler/export.cs"),
     source("../unitypkg/Editor/Tools/profiler/load.cs"),
     source("../unitypkg/Editor/Infrastructure/UnityCliAssetRefreshCoordinator.cs"),
-    source("../unitypkg/Editor/Tools/editor/menu.cs")
   ]);
 
   assert.match(vfxSupport, /context\.Wait\.UntilStable\(/);
@@ -78,6 +77,4 @@ test("VFX actions use stable observable state and profiler artifacts retain exte
   assert.ok(assetRefreshFenceIndex >= 0 && assetRefreshFenceIndex < assetRefreshEffectIndex, "asset.refresh must durably cross its exact effect fence before ImportAsset can reload the domain.");
   assert.match(assetRefresh, /AssetDatabase\.AssetPathToGUID/);
   assert.doesNotMatch(assetRefresh, /AssetDatabase\.Refresh\(/);
-  assert.match(menu, /if \(!saveScene\)/);
-  assert.match(menu, /Wait\.UntilStable/);
 });

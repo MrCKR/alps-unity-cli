@@ -17,11 +17,11 @@ const EXPECTED_CINEMACHINE_TOOLS = [
   "cinemachine.body",
   "cinemachine.aim",
   "cinemachine.noise",
-  "cinemachine.brain.ensure",
-  "cinemachine.brain.status",
-  "cinemachine.extension.list",
-  "cinemachine.extension.add",
-  "cinemachine.extension.remove"
+  "cinemachine.brain-ensure",
+  "cinemachine.brain-status",
+  "cinemachine.extension-list",
+  "cinemachine.extension-add",
+  "cinemachine.extension-remove"
 ] as const;
 
 test("Cinemachine extension manifest exposes the expected single-action tools", () => {

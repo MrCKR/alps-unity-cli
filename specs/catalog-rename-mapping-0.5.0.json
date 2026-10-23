@@ -6,2052 +6,2462 @@
     {
       "old": "animation.clip",
       "new": "animation-clip.read",
-      "group": "animation"
+      "group": "animation",
+      "final": "animation-clip.read"
     },
     {
       "old": "animation.clip.create",
       "new": "animation-clip.create",
-      "group": "animation"
+      "group": "animation",
+      "final": "animation-clip.create"
     },
     {
       "old": "animation.clip.modify",
       "new": "animation-clip.update",
-      "group": "animation"
+      "group": "animation",
+      "final": "animation-clip.update"
     },
     {
       "old": "animation.play",
       "new": "animator.play",
-      "group": "animation"
+      "group": "animation",
+      "final": "animator.play"
     },
     {
       "old": "animation.state",
       "new": "animator.get-state",
-      "group": "animation"
+      "group": "animation",
+      "final": "animator.get-state"
     },
     {
       "old": "animation.stop",
       "new": "animator.stop",
-      "group": "animation"
+      "group": "animation",
+      "final": "animator.stop"
     },
     {
       "old": "animation.animator.crossfade",
       "new": "animator.crossfade",
-      "group": "animation"
+      "group": "animation",
+      "final": "animator.crossfade"
     },
     {
       "old": "animation.animator.get-info",
       "new": "animator.get-info",
-      "group": "animation"
+      "group": "animation",
+      "final": "animator.get-info"
     },
     {
       "old": "animation.animator.get-parameter",
       "new": "animator.get-parameter",
-      "group": "animation"
+      "group": "animation",
+      "final": "animator.get-parameter"
     },
     {
       "old": "animation.animator.set-enabled",
       "new": "animator.set-enabled",
-      "group": "animation"
+      "group": "animation",
+      "final": "animator.set-enabled"
     },
     {
       "old": "animation.animator.set-parameter",
       "new": "animator.set-parameter",
-      "group": "animation"
+      "group": "animation",
+      "final": "animator.set-parameter"
     },
     {
       "old": "animation.animator.set-speed",
       "new": "animator.set-speed",
-      "group": "animation"
+      "group": "animation",
+      "final": "animator.set-speed"
     },
     {
       "old": "asset.create",
       "new": "asset.create",
-      "group": "asset"
+      "group": "asset",
+      "final": "asset.create"
     },
     {
       "old": "asset.delete",
       "new": "asset.delete",
-      "group": "asset"
+      "group": "asset",
+      "final": "asset.delete"
     },
     {
       "old": "asset.duplicate",
       "new": "asset.duplicate",
-      "group": "asset"
+      "group": "asset",
+      "final": "asset.duplicate"
     },
     {
       "old": "asset.get-components",
       "new": "asset.get-components",
-      "group": "asset"
+      "group": "asset",
+      "final": "asset.get-components"
     },
     {
       "old": "asset.get-data",
       "new": "asset.get-data",
-      "group": "asset"
+      "group": "asset",
+      "final": "asset.get-data"
     },
     {
       "old": "asset.import",
       "new": "asset.import",
-      "group": "asset"
+      "group": "asset",
+      "final": "asset.import"
     },
     {
       "old": "asset.import-settings",
       "new": "asset.import-settings",
-      "group": "asset"
+      "group": "asset",
+      "final": "asset.import-settings"
     },
     {
       "old": "asset.import-settings.set",
       "new": "asset.import-settings.set",
-      "group": "asset"
+      "group": "asset",
+      "final": "asset.import-settings-set"
     },
     {
       "old": "asset.info",
       "new": "asset.info",
-      "group": "asset"
+      "group": "asset",
+      "final": "asset.info"
     },
     {
       "old": "asset.modify",
       "new": "asset.write-text",
-      "group": "asset"
+      "group": "asset",
+      "final": "asset.write-text"
     },
     {
       "old": "asset.move",
       "new": "asset.move",
-      "group": "asset"
+      "group": "asset",
+      "final": "asset.move"
     },
     {
       "old": "asset.preview",
       "new": "asset.preview",
-      "group": "asset"
+      "group": "asset",
+      "final": "asset.preview"
     },
     {
       "old": "asset.refresh",
       "new": "asset.refresh",
-      "group": "asset"
+      "group": "asset",
+      "final": "asset.refresh"
     },
     {
       "old": "asset.refresh.status",
       "new": "asset.refresh.status",
-      "group": "asset"
+      "group": "asset",
+      "final": "asset.refresh-status"
     },
     {
       "old": "asset.rename",
       "new": "asset.rename",
-      "group": "asset"
+      "group": "asset",
+      "final": "asset.rename"
     },
     {
       "old": "asset.search",
       "new": "asset.search",
-      "group": "asset"
+      "group": "asset",
+      "final": "asset.search"
     },
     {
       "old": "asset.search-built-in",
       "new": "asset.search-built-in",
-      "group": "asset"
+      "group": "asset",
+      "final": "asset.search-built-in"
     },
     {
       "old": "build.platform.get",
       "new": "build.platform.get",
-      "group": "build"
+      "group": "build",
+      "final": "build.platform-get"
     },
     {
       "old": "build.platform.set",
       "new": "build.platform.set",
-      "group": "build"
+      "group": "build",
+      "final": "build.platform-set"
     },
     {
       "old": "build.player.status",
       "new": "build.player.status",
-      "group": "build"
+      "group": "build",
+      "final": "build.player-status"
     },
     {
       "old": "build.profile.create",
       "new": "build.profile.create",
-      "group": "build"
+      "group": "build",
+      "final": "build.profile-create"
     },
     {
       "old": "build.profile.list",
       "new": "build.profile.list",
-      "group": "build"
+      "group": "build",
+      "final": "build.profile-list"
     },
     {
       "old": "build.profile.modify",
       "new": "build.profile.modify",
-      "group": "build"
+      "group": "build",
+      "final": "build.profile-modify"
     },
     {
       "old": "build.profile.switch",
       "new": "build.profile.switch",
-      "group": "build"
+      "group": "build",
+      "final": "build.profile-switch"
     },
     {
       "old": "build.run",
       "new": "build.run",
-      "group": "build"
+      "group": "build",
+      "final": "build.run"
     },
     {
       "old": "build.scene.add",
       "new": "build.scene.add",
-      "group": "build"
+      "group": "build",
+      "final": "build.scene-add"
     },
     {
       "old": "build.scene.disable",
       "new": "build.scene.disable",
-      "group": "build"
+      "group": "build",
+      "final": "build.scene-disable"
     },
     {
       "old": "build.scene.enable",
       "new": "build.scene.enable",
-      "group": "build"
+      "group": "build",
+      "final": "build.scene-enable"
     },
     {
       "old": "build.scene.list",
       "new": "build.scene.list",
-      "group": "build"
+      "group": "build",
+      "final": "build.scene-list"
     },
     {
       "old": "build.scene.remove",
       "new": "build.scene.remove",
-      "group": "build"
+      "group": "build",
+      "final": "build.scene-remove"
     },
     {
       "old": "build.settings.get",
       "new": "build.settings.get",
-      "group": "build"
+      "group": "build",
+      "final": "build.settings-get"
     },
     {
       "old": "build.settings.set",
       "new": "build.settings.set",
-      "group": "build"
+      "group": "build",
+      "final": "build.settings-set"
     },
     {
       "old": "camera.create",
       "new": "camera.create",
-      "group": "camera"
+      "group": "camera",
+      "final": "camera.create"
     },
     {
       "old": "camera.info",
       "new": "camera.info",
-      "group": "camera"
+      "group": "camera",
+      "final": "camera.info"
     },
     {
       "old": "camera.lens",
       "new": "camera.lens",
-      "group": "camera"
+      "group": "camera",
+      "final": "camera.lens"
     },
     {
       "old": "camera.list",
       "new": "camera.list",
-      "group": "camera"
+      "group": "camera",
+      "final": "camera.list"
     },
     {
       "old": "camera.multiview",
       "new": "camera.multiview",
-      "group": "camera"
+      "group": "camera",
+      "final": "camera.multiview"
     },
     {
       "old": "camera.screenshot",
       "new": "screenshot.from-camera",
-      "group": "camera"
+      "group": "camera",
+      "final": "screenshot.from-camera"
     },
     {
       "old": "camera.target",
       "new": "camera.target",
-      "group": "camera"
+      "group": "camera",
+      "final": "camera.target"
     },
     {
       "old": "cinemachine.aim",
       "new": "cinemachine.aim",
-      "group": "cinemachine"
+      "group": "cinemachine",
+      "final": "cinemachine.aim"
     },
     {
       "old": "cinemachine.blend",
       "new": "cinemachine.blend",
-      "group": "cinemachine"
+      "group": "cinemachine",
+      "final": "cinemachine.blend"
     },
     {
       "old": "cinemachine.body",
       "new": "cinemachine.body",
-      "group": "cinemachine"
+      "group": "cinemachine",
+      "final": "cinemachine.body"
     },
     {
       "old": "cinemachine.brain.ensure",
       "new": "cinemachine.brain.ensure",
-      "group": "cinemachine"
+      "group": "cinemachine",
+      "final": "cinemachine.brain-ensure"
     },
     {
       "old": "cinemachine.brain.status",
       "new": "cinemachine.brain.status",
-      "group": "cinemachine"
+      "group": "cinemachine",
+      "final": "cinemachine.brain-status"
     },
     {
       "old": "cinemachine.create",
       "new": "cinemachine.create",
-      "group": "cinemachine"
+      "group": "cinemachine",
+      "final": "cinemachine.create"
     },
     {
       "old": "cinemachine.extension.add",
       "new": "cinemachine.extension.add",
-      "group": "cinemachine"
+      "group": "cinemachine",
+      "final": "cinemachine.extension-add"
     },
     {
       "old": "cinemachine.extension.list",
       "new": "cinemachine.extension.list",
-      "group": "cinemachine"
+      "group": "cinemachine",
+      "final": "cinemachine.extension-list"
     },
     {
       "old": "cinemachine.extension.remove",
       "new": "cinemachine.extension.remove",
-      "group": "cinemachine"
+      "group": "cinemachine",
+      "final": "cinemachine.extension-remove"
     },
     {
       "old": "cinemachine.lens",
       "new": "cinemachine.lens",
-      "group": "cinemachine"
+      "group": "cinemachine",
+      "final": "cinemachine.lens"
     },
     {
       "old": "cinemachine.noise",
       "new": "cinemachine.noise",
-      "group": "cinemachine"
+      "group": "cinemachine",
+      "final": "cinemachine.noise"
     },
     {
       "old": "cinemachine.ping",
       "new": "cinemachine.ping",
-      "group": "cinemachine"
+      "group": "cinemachine",
+      "final": "cinemachine.ping"
     },
     {
       "old": "cinemachine.priority",
       "new": "cinemachine.priority",
-      "group": "cinemachine"
+      "group": "cinemachine",
+      "final": "cinemachine.priority"
     },
     {
       "old": "cinemachine.target",
       "new": "cinemachine.target",
-      "group": "cinemachine"
+      "group": "cinemachine",
+      "final": "cinemachine.target"
     },
     {
       "old": "code.exec",
       "new": "code.execute",
-      "group": "code"
+      "group": "code",
+      "final": "debug.code-execute"
     },
     {
       "old": "component.add",
       "new": "component.add",
-      "group": "component"
+      "group": "component",
+      "final": "component.add"
     },
     {
       "old": "component.get",
       "new": "component.get",
-      "group": "component"
+      "group": "component",
+      "final": "component.get"
     },
     {
       "old": "component.list-types",
       "new": "component.list-types",
-      "group": "component"
+      "group": "component",
+      "final": "component.list-types"
     },
     {
       "old": "component.modify",
       "new": "component.modify",
-      "group": "component"
+      "group": "component",
+      "final": "component.modify"
     },
     {
       "old": "component.remove",
       "new": "component.remove",
-      "group": "component"
+      "group": "component",
+      "final": "component.remove"
     },
     {
       "old": "component.set",
       "new": "component.set",
-      "group": "component"
+      "group": "component",
+      "final": "component.set"
     },
     {
       "old": "console.clear",
       "new": "console.clear",
-      "group": "console"
+      "group": "console",
+      "final": "debug.console-clear"
     },
     {
       "old": "console.get",
       "new": "console.read",
-      "group": "console"
+      "group": "console",
+      "final": "debug.console-read"
     },
     {
       "old": "controller.add-blend-tree-child",
       "new": "animator-controller.add-blend-tree-child",
-      "group": "controller"
+      "group": "controller",
+      "final": "animator-controller.add-blend-tree-child"
     },
     {
       "old": "controller.add-layer",
       "new": "animator-controller.add-layer",
-      "group": "controller"
+      "group": "controller",
+      "final": "animator-controller.add-layer"
     },
     {
       "old": "controller.add-parameter",
       "new": "animator-controller.add-parameter",
-      "group": "controller"
+      "group": "controller",
+      "final": "animator-controller.add-parameter"
     },
     {
       "old": "controller.add-state",
       "new": "animator-controller.add-state",
-      "group": "controller"
+      "group": "controller",
+      "final": "animator-controller.add-state"
     },
     {
       "old": "controller.add-transition",
       "new": "animator-controller.add-transition",
-      "group": "controller"
+      "group": "controller",
+      "final": "animator-controller.add-transition"
     },
     {
       "old": "controller.assign",
       "new": "animator-controller.assign",
-      "group": "controller"
+      "group": "controller",
+      "final": "animator-controller.assign"
     },
     {
       "old": "controller.create",
       "new": "animator-controller.create",
-      "group": "controller"
+      "group": "controller",
+      "final": "animator-controller.create"
     },
     {
       "old": "controller.create-blend-tree-1d",
       "new": "animator-controller.create-blend-tree-1d",
-      "group": "controller"
+      "group": "controller",
+      "final": "animator-controller.create-blend-tree-1d"
     },
     {
       "old": "controller.create-blend-tree-2d",
       "new": "animator-controller.create-blend-tree-2d",
-      "group": "controller"
+      "group": "controller",
+      "final": "animator-controller.create-blend-tree-2d"
     },
     {
       "old": "controller.get-info",
       "new": "animator-controller.get-info",
-      "group": "controller"
+      "group": "controller",
+      "final": "animator-controller.get-info"
     },
     {
       "old": "controller.remove-layer",
       "new": "animator-controller.remove-layer",
-      "group": "controller"
+      "group": "controller",
+      "final": "animator-controller.remove-layer"
     },
     {
       "old": "controller.set-layer-weight",
       "new": "animator-controller.set-layer-weight",
-      "group": "controller"
+      "group": "controller",
+      "final": "animator-controller.set-layer-weight"
     },
     {
       "old": "docs.get",
       "new": "docs.get",
-      "group": "docs"
+      "group": "docs",
+      "final": "docs.get"
     },
     {
       "old": "docs.search",
       "new": "docs.search",
-      "group": "docs"
+      "group": "docs",
+      "final": "docs.search"
     },
     {
       "old": "editor.active-tool",
       "new": "editor.active-tool",
-      "group": "editor"
+      "group": "editor",
+      "final": "editor.active-tool"
     },
     {
       "old": "editor.active-tool.set",
       "new": "editor.active-tool.set",
-      "group": "editor"
+      "group": "editor",
+      "final": "editor.active-tool-set"
     },
     {
       "old": "editor.autotick.set",
       "new": "editor.autotick.set",
-      "group": "editor"
+      "group": "editor",
+      "final": "editor.autotick-set"
     },
     {
       "old": "editor.compile",
       "new": "editor.compile",
-      "group": "editor"
+      "group": "editor",
+      "final": "editor.compile"
     },
     {
       "old": "editor.dialog.click",
       "new": "editor.dialog.click",
-      "group": "editor"
+      "group": "editor",
+      "final": "editor.dialog-click"
     },
     {
       "old": "editor.dialogs",
       "new": "editor.dialogs",
-      "group": "editor"
+      "group": "editor",
+      "final": "editor.dialogs"
     },
     {
       "old": "editor.focus",
       "new": "editor.focus",
-      "group": "editor"
+      "group": "editor",
+      "final": "editor.focus"
     },
     {
       "old": "editor.menu",
       "new": "editor.menu",
-      "group": "editor"
+      "group": "editor",
+      "final": "editor.menu-execute"
     },
     {
       "old": "editor.menu-items",
       "new": "editor.menu-items",
-      "group": "editor"
+      "group": "editor",
+      "final": "editor.menu-list"
     },
     {
       "old": "editor.pause",
       "new": "editor.pause",
-      "group": "editor"
+      "group": "editor",
+      "final": "editor.pause"
     },
     {
       "old": "editor.play",
       "new": "editor.play-mode.start",
-      "group": "editor"
+      "group": "editor",
+      "final": "editor.play-mode-start"
     },
     {
       "old": "editor.play-mode.status",
       "new": "editor.play-mode.status",
-      "group": "editor"
+      "group": "editor",
+      "final": "editor.play-mode-status"
     },
     {
       "old": "editor.redo",
       "new": "editor.redo",
-      "group": "editor"
+      "group": "editor",
+      "final": "editor.redo"
     },
     {
       "old": "editor.refresh",
       "new": "editor.refresh",
-      "group": "editor"
+      "group": "editor",
+      "final": "editor.refresh"
     },
     {
       "old": "editor.resolution",
       "new": "editor.resolution",
-      "group": "editor"
+      "group": "editor",
+      "final": "editor.resolution"
     },
     {
       "old": "editor.search",
       "new": "editor.search",
-      "group": "editor"
+      "group": "editor",
+      "final": "editor.search"
     },
     {
       "old": "editor.selection",
       "new": "editor.selection",
-      "group": "editor"
+      "group": "editor",
+      "final": "editor.selection"
     },
     {
       "old": "editor.selection.set",
       "new": "editor.selection.set",
-      "group": "editor"
+      "group": "editor",
+      "final": "editor.selection-set"
     },
     {
       "old": "editor.state",
       "new": "editor.state",
-      "group": "editor"
+      "group": "editor",
+      "final": "editor.state"
     },
     {
       "old": "editor.stop",
       "new": "editor.play-mode.stop",
-      "group": "editor"
+      "group": "editor",
+      "final": "editor.play-mode-stop"
     },
     {
       "old": "editor.tool-states",
       "new": "editor.tool-states",
-      "group": "editor"
+      "group": "editor",
+      "final": "editor.tool-states"
     },
     {
       "old": "editor.undo",
       "new": "editor.undo",
-      "group": "editor"
+      "group": "editor",
+      "final": "editor.undo"
     },
     {
       "old": "editor.windows",
       "new": "editor.windows",
-      "group": "editor"
+      "group": "editor",
+      "final": "editor.windows"
     },
     {
       "old": "go.create",
       "new": "game-object.create",
-      "group": "go"
+      "group": "go",
+      "final": "game-object.create"
     },
     {
       "old": "go.delete",
       "new": "game-object.delete",
-      "group": "go"
+      "group": "go",
+      "final": "game-object.delete"
     },
     {
       "old": "go.duplicate",
       "new": "game-object.duplicate",
-      "group": "go"
+      "group": "go",
+      "final": "game-object.duplicate"
     },
     {
       "old": "go.find",
       "new": "game-object.find",
-      "group": "go"
+      "group": "go",
+      "final": "game-object.find"
     },
     {
       "old": "go.look-at",
       "new": "game-object.look-at",
-      "group": "go"
+      "group": "go",
+      "final": "game-object.look-at"
     },
     {
       "old": "go.modify",
       "new": "game-object.modify",
-      "group": "go"
+      "group": "go",
+      "final": "game-object.modify"
     },
     {
       "old": "go.move-relative",
       "new": "game-object.move-relative",
-      "group": "go"
+      "group": "go",
+      "final": "game-object.move-relative"
     },
     {
       "old": "go.set-parent",
       "new": "game-object.set-parent",
-      "group": "go"
+      "group": "go",
+      "final": "game-object.set-parent"
     },
     {
       "old": "graphics.bake-cancel",
       "new": "lighting.bake.cancel",
-      "group": "graphics"
+      "group": "graphics",
+      "final": "lighting.bake-cancel"
     },
     {
       "old": "graphics.bake-clear",
       "new": "lighting.bake.clear",
-      "group": "graphics"
+      "group": "graphics",
+      "final": "lighting.bake-clear"
     },
     {
       "old": "graphics.bake-reflection-probe",
       "new": "lighting.bake.reflection-probe",
-      "group": "graphics"
+      "group": "graphics",
+      "final": "lighting.bake-reflection-probe"
     },
     {
       "old": "graphics.bake-settings",
       "new": "lighting.bake.settings",
-      "group": "graphics"
+      "group": "graphics",
+      "final": "lighting.bake-settings"
     },
     {
       "old": "graphics.bake-start",
       "new": "lighting.bake.start",
-      "group": "graphics"
+      "group": "graphics",
+      "final": "lighting.bake-start"
     },
     {
       "old": "graphics.bake-status",
       "new": "lighting.bake.status",
-      "group": "graphics"
+      "group": "graphics",
+      "final": "lighting.bake-status"
     },
     {
       "old": "graphics.light-probe-group",
       "new": "lighting.light-probe-group",
-      "group": "graphics"
+      "group": "graphics",
+      "final": "lighting.light-probe-group"
     },
     {
       "old": "graphics.pipeline-info",
       "new": "rendering.pipeline.info",
-      "group": "graphics"
+      "group": "graphics",
+      "final": "rendering.pipeline-info"
     },
     {
       "old": "graphics.pipeline-settings",
       "new": "rendering.pipeline.settings",
-      "group": "graphics"
+      "group": "graphics",
+      "final": "rendering.pipeline-settings"
     },
     {
       "old": "graphics.quality",
       "new": "rendering.quality",
-      "group": "graphics"
+      "group": "graphics",
+      "final": "rendering.quality"
     },
     {
       "old": "graphics.reflection-probe",
       "new": "lighting.reflection-probe",
-      "group": "graphics"
+      "group": "graphics",
+      "final": "lighting.reflection-probe"
     },
     {
       "old": "graphics.scene-debug",
       "new": "rendering.scene-debug",
-      "group": "graphics"
+      "group": "graphics",
+      "final": "rendering.scene-debug"
     },
     {
       "old": "graphics.skybox-get",
       "new": "lighting.skybox.get",
-      "group": "graphics"
+      "group": "graphics",
+      "final": "lighting.skybox-get"
     },
     {
       "old": "graphics.skybox-set-ambient",
       "new": "lighting.skybox.set-ambient",
-      "group": "graphics"
+      "group": "graphics",
+      "final": "lighting.skybox-set-ambient"
     },
     {
       "old": "graphics.skybox-set-fog",
       "new": "lighting.skybox.set-fog",
-      "group": "graphics"
+      "group": "graphics",
+      "final": "lighting.skybox-set-fog"
     },
     {
       "old": "graphics.skybox-set-material",
       "new": "lighting.skybox.set-material",
-      "group": "graphics"
+      "group": "graphics",
+      "final": "lighting.skybox-set-material"
     },
     {
       "old": "graphics.skybox-set-properties",
       "new": "lighting.skybox.set-properties",
-      "group": "graphics"
+      "group": "graphics",
+      "final": "lighting.skybox-set-properties"
     },
     {
       "old": "graphics.skybox-set-reflection",
       "new": "lighting.skybox.set-reflection",
-      "group": "graphics"
+      "group": "graphics",
+      "final": "lighting.skybox-set-reflection"
     },
     {
       "old": "graphics.skybox-set-sun",
       "new": "lighting.skybox.set-sun",
-      "group": "graphics"
+      "group": "graphics",
+      "final": "lighting.skybox-set-sun"
     },
     {
       "old": "graphics.stats",
       "new": "rendering.stats",
-      "group": "graphics"
+      "group": "graphics",
+      "final": "rendering.stats"
     },
     {
       "old": "graphics.volume",
       "new": "volume.list",
-      "group": "graphics"
+      "group": "graphics",
+      "final": "volume.list"
     },
     {
       "old": "hdrp.settings.get",
       "new": "hdrp.settings.get",
-      "group": "hdrp"
+      "group": "hdrp",
+      "final": "hdrp.settings-get"
     },
     {
       "old": "hdrp.settings.set",
       "new": "hdrp.settings.set",
-      "group": "hdrp"
+      "group": "hdrp",
+      "final": "hdrp.settings-set"
     },
     {
       "old": "hdrp.volume.add-effect",
       "new": "hdrp.volume.add-effect",
-      "group": "hdrp"
+      "group": "hdrp",
+      "final": "hdrp.volume-add-effect"
     },
     {
       "old": "hdrp.volume.create",
       "new": "hdrp.volume.create",
-      "group": "hdrp"
+      "group": "hdrp",
+      "final": "hdrp.volume-create"
     },
     {
       "old": "hdrp.volume.info",
       "new": "hdrp.volume.info",
-      "group": "hdrp"
+      "group": "hdrp",
+      "final": "hdrp.volume-info"
     },
     {
       "old": "hdrp.volume.list",
       "new": "hdrp.volume.list",
-      "group": "hdrp"
+      "group": "hdrp",
+      "final": "hdrp.volume-list"
     },
     {
       "old": "hdrp.volume.set",
       "new": "hdrp.volume.set",
-      "group": "hdrp"
+      "group": "hdrp",
+      "final": "hdrp.volume-set"
     },
     {
       "old": "material.assign",
       "new": "material.assign",
-      "group": "material"
+      "group": "material",
+      "final": "material.assign"
     },
     {
       "old": "material.create",
       "new": "material.create",
-      "group": "material"
+      "group": "material",
+      "final": "material.create"
     },
     {
       "old": "material.info",
       "new": "material.info",
-      "group": "material"
+      "group": "material",
+      "final": "material.info"
     },
     {
       "old": "material.set",
       "new": "material.set",
-      "group": "material"
+      "group": "material",
+      "final": "material.set"
     },
     {
       "old": "material.set-renderer-color",
       "new": "material.set-renderer-color",
-      "group": "material"
+      "group": "material",
+      "final": "material.set-renderer-color"
     },
     {
       "old": "navmesh.bake",
       "new": "navmesh.bake",
-      "group": "navmesh"
+      "group": "navmesh",
+      "final": "navmesh.bake"
     },
     {
       "old": "navmesh.bake-cancel",
       "new": "navmesh.bake-cancel",
-      "group": "navmesh"
+      "group": "navmesh",
+      "final": "navmesh.bake-cancel"
     },
     {
       "old": "navmesh.bake-clear",
       "new": "navmesh.bake-clear",
-      "group": "navmesh"
+      "group": "navmesh",
+      "final": "navmesh.bake-clear"
     },
     {
       "old": "navmesh.bake-status",
       "new": "navmesh.bake-status",
-      "group": "navmesh"
+      "group": "navmesh",
+      "final": "navmesh.bake-status"
     },
     {
       "old": "navmesh.settings",
       "new": "navmesh.settings",
-      "group": "navmesh"
+      "group": "navmesh",
+      "final": "navmesh.settings"
     },
     {
       "old": "navmesh.settings.set",
       "new": "navmesh.settings.set",
-      "group": "navmesh"
+      "group": "navmesh",
+      "final": "navmesh.settings-set"
     },
     {
       "old": "navmesh.surface.bake",
       "new": "navmesh.surface.bake",
-      "group": "navmesh"
+      "group": "navmesh",
+      "final": "navmesh.surface-bake"
     },
     {
       "old": "object.get-data",
       "new": "serialized-object.read",
-      "group": "object"
+      "group": "object",
+      "final": "serialized-object.read"
     },
     {
       "old": "object.modify",
       "new": "serialized-object.patch",
-      "group": "object"
+      "group": "object",
+      "final": "serialized-object.patch"
     },
     {
       "old": "occlusion.bake",
       "new": "occlusion.bake",
-      "group": "occlusion"
+      "group": "occlusion",
+      "final": "occlusion.bake"
     },
     {
       "old": "occlusion.bake-cancel",
       "new": "occlusion.bake-cancel",
-      "group": "occlusion"
+      "group": "occlusion",
+      "final": "occlusion.bake-cancel"
     },
     {
       "old": "occlusion.bake-clear",
       "new": "occlusion.bake-clear",
-      "group": "occlusion"
+      "group": "occlusion",
+      "final": "occlusion.bake-clear"
     },
     {
       "old": "occlusion.bake-status",
       "new": "occlusion.bake-status",
-      "group": "occlusion"
+      "group": "occlusion",
+      "final": "occlusion.bake-status"
     },
     {
       "old": "package.bridge-remove",
       "new": "package.bridge-remove",
-      "group": "package"
+      "group": "package",
+      "final": "package.bridge-remove"
     },
     {
       "old": "package.deploy",
       "new": "package.deploy",
-      "group": "package"
+      "group": "package",
+      "final": "package.deploy"
     },
     {
       "old": "package.embed",
       "new": "package.embed",
-      "group": "package"
+      "group": "package",
+      "final": "package.embed"
     },
     {
       "old": "package.install",
       "new": "package.install",
-      "group": "package"
+      "group": "package",
+      "final": "package.install"
     },
     {
       "old": "package.install.status",
       "new": "package.install.status",
-      "group": "package"
+      "group": "package",
+      "final": "package.install-status"
     },
     {
       "old": "package.registry.clear",
       "new": "package.registry.clear",
-      "group": "package"
+      "group": "package",
+      "final": "package.registry-clear"
     },
     {
       "old": "package.registry.set",
       "new": "package.registry.set",
-      "group": "package"
+      "group": "package",
+      "final": "package.registry-set"
     },
     {
       "old": "package.remove",
       "new": "package.remove",
-      "group": "package"
+      "group": "package",
+      "final": "package.remove"
     },
     {
       "old": "package.remove.status",
       "new": "package.remove.status",
-      "group": "package"
+      "group": "package",
+      "final": "package.remove-status"
     },
     {
       "old": "package.resolve",
       "new": "package.resolve",
-      "group": "package"
+      "group": "package",
+      "final": "package.resolve"
     },
     {
       "old": "package.restore",
       "new": "package.restore",
-      "group": "package"
+      "group": "package",
+      "final": "package.restore"
     },
     {
       "old": "package.scoped-registry.add",
       "new": "package.scoped-registry.add",
-      "group": "package"
+      "group": "package",
+      "final": "package.scoped-registry-add"
     },
     {
       "old": "package.scoped-registry.remove",
       "new": "package.scoped-registry.remove",
-      "group": "package"
+      "group": "package",
+      "final": "package.scoped-registry-remove"
     },
     {
       "old": "physics.assign-material",
       "new": "physics.assign-material",
-      "group": "physics"
+      "group": "physics",
+      "final": "physics.assign-material"
     },
     {
       "old": "physics.collision-matrix",
       "new": "physics.collision-matrix",
-      "group": "physics"
+      "group": "physics",
+      "final": "physics.collision-matrix"
     },
     {
       "old": "physics.force",
       "new": "physics.force",
-      "group": "physics"
+      "group": "physics",
+      "final": "physics.force"
     },
     {
       "old": "physics.joint.add",
       "new": "physics.joint.add",
-      "group": "physics"
+      "group": "physics",
+      "final": "physics.joint-add"
     },
     {
       "old": "physics.joint.remove",
       "new": "physics.joint.remove",
-      "group": "physics"
+      "group": "physics",
+      "final": "physics.joint-remove"
     },
     {
       "old": "physics.linecast",
       "new": "physics.linecast",
-      "group": "physics"
+      "group": "physics",
+      "final": "physics.linecast"
     },
     {
       "old": "physics.material",
       "new": "physics.material",
-      "group": "physics"
+      "group": "physics",
+      "final": "physics.material"
     },
     {
       "old": "physics.overlap",
       "new": "physics.overlap",
-      "group": "physics"
+      "group": "physics",
+      "final": "physics.overlap"
     },
     {
       "old": "physics.raycast",
       "new": "physics.raycast",
-      "group": "physics"
+      "group": "physics",
+      "final": "physics.raycast"
     },
     {
       "old": "physics.rigidbody",
       "new": "physics.rigidbody",
-      "group": "physics"
+      "group": "physics",
+      "final": "physics.rigidbody"
     },
     {
       "old": "physics.settings",
       "new": "physics.settings",
-      "group": "physics"
+      "group": "physics",
+      "final": "physics.settings"
     },
     {
       "old": "physics.shapecast",
       "new": "physics.shapecast",
-      "group": "physics"
+      "group": "physics",
+      "final": "physics.shapecast"
     },
     {
       "old": "physics.simulation",
       "new": "physics.simulation",
-      "group": "physics"
+      "group": "physics",
+      "final": "physics.simulation"
     },
     {
       "old": "physics.validate",
       "new": "physics.validate",
-      "group": "physics"
+      "group": "physics",
+      "final": "physics.validate"
     },
     {
       "old": "prefab.create",
       "new": "prefab.create",
-      "group": "prefab"
+      "group": "prefab",
+      "final": "prefab.create"
     },
     {
       "old": "prefab.hierarchy",
       "new": "prefab.hierarchy",
-      "group": "prefab"
+      "group": "prefab",
+      "final": "prefab.hierarchy"
     },
     {
       "old": "prefab.info",
       "new": "prefab.info",
-      "group": "prefab"
+      "group": "prefab",
+      "final": "prefab.info"
     },
     {
       "old": "prefab.instantiate",
       "new": "prefab.instantiate",
-      "group": "prefab"
+      "group": "prefab",
+      "final": "prefab.instantiate"
     },
     {
       "old": "prefab.modify",
       "new": "prefab.modify",
-      "group": "prefab"
+      "group": "prefab",
+      "final": "prefab.modify"
     },
     {
       "old": "prefab.overrides.apply",
       "new": "prefab.overrides.apply",
-      "group": "prefab"
+      "group": "prefab",
+      "final": "prefab.overrides-apply"
     },
     {
       "old": "prefab.overrides.revert",
       "new": "prefab.overrides.revert",
-      "group": "prefab"
+      "group": "prefab",
+      "final": "prefab.overrides-revert"
     },
     {
       "old": "prefab.stage",
       "new": "prefab.stage",
-      "group": "prefab"
+      "group": "prefab",
+      "final": "prefab.stage"
     },
     {
       "old": "prefab.stage-close",
       "new": "prefab.stage-close",
-      "group": "prefab"
+      "group": "prefab",
+      "final": "prefab.stage-close"
     },
     {
       "old": "prefab.stage-open",
       "new": "prefab.stage-open",
-      "group": "prefab"
+      "group": "prefab",
+      "final": "prefab.stage-open"
     },
     {
       "old": "prefab.stage-save",
       "new": "prefab.stage-save",
-      "group": "prefab"
+      "group": "prefab",
+      "final": "prefab.stage-save"
     },
     {
       "old": "prefab.unpack",
       "new": "prefab.unpack",
-      "group": "prefab"
+      "group": "prefab",
+      "final": "prefab.unpack"
     },
     {
       "old": "prefab.variant.create",
       "new": "prefab.variant.create",
-      "group": "prefab"
+      "group": "prefab",
+      "final": "prefab.variant-create"
     },
     {
       "old": "probuilder.append-vertices-to-edge",
       "new": "probuilder.append-vertices-to-edge",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.append-vertices-to-edge"
     },
     {
       "old": "probuilder.auto-smooth",
       "new": "probuilder.auto-smooth",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.auto-smooth"
     },
     {
       "old": "probuilder.bevel-edges",
       "new": "probuilder.bevel-edges",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.bevel-edges"
     },
     {
       "old": "probuilder.bridge-edges",
       "new": "probuilder.bridge-edges",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.bridge-edges"
     },
     {
       "old": "probuilder.center-pivot",
       "new": "probuilder.center-pivot",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.center-pivot"
     },
     {
       "old": "probuilder.combine-meshes",
       "new": "probuilder.combine-meshes",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.combine-meshes"
     },
     {
       "old": "probuilder.connect-elements",
       "new": "probuilder.connect-elements",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.connect-elements"
     },
     {
       "old": "probuilder.convert-to-probuilder",
       "new": "probuilder.convert-to-probuilder",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.convert-to-probuilder"
     },
     {
       "old": "probuilder.create-poly-shape",
       "new": "probuilder.create-poly-shape",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.create-poly-shape"
     },
     {
       "old": "probuilder.create-polygon",
       "new": "probuilder.create-polygon",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.create-polygon"
     },
     {
       "old": "probuilder.create-shape",
       "new": "probuilder.create-shape",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.create-shape"
     },
     {
       "old": "probuilder.delete-faces",
       "new": "probuilder.delete-faces",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.delete-faces"
     },
     {
       "old": "probuilder.detach-faces",
       "new": "probuilder.detach-faces",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.detach-faces"
     },
     {
       "old": "probuilder.duplicate-and-flip",
       "new": "probuilder.duplicate-and-flip",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.duplicate-and-flip"
     },
     {
       "old": "probuilder.extrude-edges",
       "new": "probuilder.extrude-edges",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.extrude-edges"
     },
     {
       "old": "probuilder.extrude-faces",
       "new": "probuilder.extrude-faces",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.extrude-faces"
     },
     {
       "old": "probuilder.flip-normals",
       "new": "probuilder.flip-normals",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.flip-normals"
     },
     {
       "old": "probuilder.freeze-transform",
       "new": "probuilder.freeze-transform",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.freeze-transform"
     },
     {
       "old": "probuilder.insert-vertex",
       "new": "probuilder.insert-vertex",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.insert-vertex"
     },
     {
       "old": "probuilder.merge-faces",
       "new": "probuilder.merge-faces",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.merge-faces"
     },
     {
       "old": "probuilder.merge-objects",
       "new": "probuilder.merge-objects",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.merge-objects"
     },
     {
       "old": "probuilder.merge-vertices",
       "new": "probuilder.merge-vertices",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.merge-vertices"
     },
     {
       "old": "probuilder.mesh-info",
       "new": "probuilder.mesh-info",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.mesh-info"
     },
     {
       "old": "probuilder.move-vertices",
       "new": "probuilder.move-vertices",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.move-vertices"
     },
     {
       "old": "probuilder.ping",
       "new": "probuilder.ping",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.ping"
     },
     {
       "old": "probuilder.repair-mesh",
       "new": "probuilder.repair-mesh",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.repair-mesh"
     },
     {
       "old": "probuilder.scene",
       "new": "probuilder.scene",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.scene"
     },
     {
       "old": "probuilder.select-faces",
       "new": "probuilder.select-faces",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.select-faces"
     },
     {
       "old": "probuilder.set-face-color",
       "new": "probuilder.set-face-color",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.set-face-color"
     },
     {
       "old": "probuilder.set-face-material",
       "new": "probuilder.set-face-material",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.set-face-material"
     },
     {
       "old": "probuilder.set-face-uvs",
       "new": "probuilder.set-face-uvs",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.set-face-uvs"
     },
     {
       "old": "probuilder.set-pivot",
       "new": "probuilder.set-pivot",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.set-pivot"
     },
     {
       "old": "probuilder.set-smoothing",
       "new": "probuilder.set-smoothing",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.set-smoothing"
     },
     {
       "old": "probuilder.split-vertices",
       "new": "probuilder.split-vertices",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.split-vertices"
     },
     {
       "old": "probuilder.subdivide",
       "new": "probuilder.subdivide",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.subdivide"
     },
     {
       "old": "probuilder.validate-mesh",
       "new": "probuilder.validate-mesh",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.validate-mesh"
     },
     {
       "old": "probuilder.weld-vertices",
       "new": "probuilder.weld-vertices",
-      "group": "probuilder"
+      "group": "probuilder",
+      "final": "probuilder.weld-vertices"
     },
     {
       "old": "profiler.areas",
       "new": "profiler.areas",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.areas"
     },
     {
       "old": "profiler.capture",
       "new": "profiler.capture",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.capture"
     },
     {
       "old": "profiler.clear",
       "new": "profiler.clear",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.clear"
     },
     {
       "old": "profiler.counter",
       "new": "profiler.counter",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.counter"
     },
     {
       "old": "profiler.deep",
       "new": "profiler.deep",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.deep"
     },
     {
       "old": "profiler.export",
       "new": "profiler.export",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.export"
     },
     {
       "old": "profiler.frame",
       "new": "profiler.frame",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.frame"
     },
     {
       "old": "profiler.frame-debugger.disable",
       "new": "profiler.frame-debugger.disable",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.frame-debugger-disable"
     },
     {
       "old": "profiler.frame-debugger.enable",
       "new": "profiler.frame-debugger.enable",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.frame-debugger-enable"
     },
     {
       "old": "profiler.frame-debugger.events",
       "new": "profiler.frame-debugger.events",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.frame-debugger-events"
     },
     {
       "old": "profiler.hierarchy",
       "new": "profiler.hierarchy",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.hierarchy"
     },
     {
       "old": "profiler.load",
       "new": "profiler.load",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.load"
     },
     {
       "old": "profiler.memory",
       "new": "profiler.memory",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.memory"
     },
     {
       "old": "profiler.memory-snapshot.compare",
       "new": "profiler.memory-snapshot.compare",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.memory-snapshot-compare"
     },
     {
       "old": "profiler.memory-snapshot.list",
       "new": "profiler.memory-snapshot.list",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.memory-snapshot-list"
     },
     {
       "old": "profiler.memory-snapshot.take",
       "new": "profiler.memory-snapshot.take",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.memory-snapshot-take"
     },
     {
       "old": "profiler.module-enable",
       "new": "profiler.module-enable",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.module-enable"
     },
     {
       "old": "profiler.modules",
       "new": "profiler.modules",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.modules"
     },
     {
       "old": "profiler.object-memory",
       "new": "profiler.object-memory",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.object-memory"
     },
     {
       "old": "profiler.pause",
       "new": "profiler.pause",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.pause"
     },
     {
       "old": "profiler.rendering-stats",
       "new": "profiler.rendering-stats",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.rendering-stats"
     },
     {
       "old": "profiler.script-stats",
       "new": "profiler.script-stats",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.script-stats"
     },
     {
       "old": "profiler.start",
       "new": "profiler.start",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.start"
     },
     {
       "old": "profiler.status",
       "new": "profiler.status",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.status"
     },
     {
       "old": "profiler.stop",
       "new": "profiler.stop",
-      "group": "profiler"
+      "group": "profiler",
+      "final": "profiler.stop"
     },
     {
       "old": "project-tool.describe",
       "new": "catalog.editor.describe",
-      "group": "project-tool"
+      "group": "project-tool",
+      "final": "catalog.editor.describe"
     },
     {
       "old": "project-tool.groups",
       "new": "catalog.editor.groups",
-      "group": "project-tool"
+      "group": "project-tool",
+      "final": "catalog.editor.groups"
     },
     {
       "old": "project-tool.health",
       "new": "catalog.editor.health",
-      "group": "project-tool"
+      "group": "project-tool",
+      "final": "catalog.editor.health"
     },
     {
       "old": "project-tool.list",
       "new": "catalog.editor.list",
-      "group": "project-tool"
+      "group": "project-tool",
+      "final": "catalog.editor.list"
     },
     {
       "old": "project-tool.run",
       "new": "catalog.editor.run",
-      "group": "project-tool"
+      "group": "project-tool",
+      "final": "catalog.editor.run"
     },
     {
       "old": "project-tool.summary",
       "new": "catalog.editor.summary",
-      "group": "project-tool"
+      "group": "project-tool",
+      "final": "catalog.editor.summary"
     },
     {
       "old": "project.audio-settings",
       "new": "project-settings.audio-settings",
-      "group": "project"
+      "group": "project",
+      "final": "project-settings.audio-settings"
     },
     {
       "old": "project.audio-settings.set",
       "new": "project-settings.audio-settings.set",
-      "group": "project"
+      "group": "project",
+      "final": "project-settings.audio-settings-set"
     },
     {
       "old": "project.info",
       "new": "project-settings.info",
-      "group": "project"
+      "group": "project",
+      "final": "project-settings.info"
     },
     {
       "old": "project.input-settings",
       "new": "project-settings.input-settings",
-      "group": "project"
+      "group": "project",
+      "final": "project-settings.input-settings"
     },
     {
       "old": "project.input-settings.set",
       "new": "project-settings.input-settings.set",
-      "group": "project"
+      "group": "project",
+      "final": "project-settings.input-settings-set"
     },
     {
       "old": "project.layer.add",
       "new": "project-settings.layer.add",
-      "group": "project"
+      "group": "project",
+      "final": "project-settings.layer-add"
     },
     {
       "old": "project.layer.remove",
       "new": "project-settings.layer.remove",
-      "group": "project"
+      "group": "project",
+      "final": "project-settings.layer-remove"
     },
     {
       "old": "project.layers",
       "new": "project-settings.layers",
-      "group": "project"
+      "group": "project",
+      "final": "project-settings.layers"
     },
     {
       "old": "project.player-settings",
       "new": "project-settings.player-settings",
-      "group": "project"
+      "group": "project",
+      "final": "project-settings.player-settings"
     },
     {
       "old": "project.player-settings.set",
       "new": "project-settings.player-settings.set",
-      "group": "project"
+      "group": "project",
+      "final": "project-settings.player-settings-set"
     },
     {
       "old": "project.tag.add",
       "new": "project-settings.tag.add",
-      "group": "project"
+      "group": "project",
+      "final": "project-settings.tag-add"
     },
     {
       "old": "project.tag.remove",
       "new": "project-settings.tag.remove",
-      "group": "project"
+      "group": "project",
+      "final": "project-settings.tag-remove"
     },
     {
       "old": "project.tags",
       "new": "project-settings.tags",
-      "group": "project"
+      "group": "project",
+      "final": "project-settings.tags"
     },
     {
       "old": "project.time-settings",
       "new": "project-settings.time-settings",
-      "group": "project"
+      "group": "project",
+      "final": "project-settings.time-settings"
     },
     {
       "old": "project.time-settings.set",
       "new": "project-settings.time-settings.set",
-      "group": "project"
+      "group": "project",
+      "final": "project-settings.time-settings-set"
     },
     {
       "old": "reflect.member",
       "new": "type-inspection.get-member",
-      "group": "reflect"
+      "group": "reflect",
+      "final": "type-inspection.get-member"
     },
     {
       "old": "reflect.search",
       "new": "type-inspection.search",
-      "group": "reflect"
+      "group": "reflect",
+      "final": "type-inspection.search"
     },
     {
       "old": "reflect.type",
       "new": "type-inspection.get-type",
-      "group": "reflect"
+      "group": "reflect",
+      "final": "type-inspection.get-type"
     },
     {
       "old": "reflection.method.call",
       "new": "runtime-reflection.method.invoke",
-      "group": "reflection"
+      "group": "reflection",
+      "final": "debug.method-invoke"
     },
     {
       "old": "reflection.method.find",
       "new": "runtime-reflection.method.find",
-      "group": "reflection"
+      "group": "reflection",
+      "final": "debug.method-find"
     },
     {
       "old": "runtime-tool.describe",
       "new": "catalog.player.describe",
-      "group": "runtime-tool"
+      "group": "runtime-tool",
+      "final": "catalog.player.describe"
     },
     {
       "old": "runtime-tool.groups",
       "new": "catalog.player.groups",
-      "group": "runtime-tool"
+      "group": "runtime-tool",
+      "final": "catalog.player.groups"
     },
     {
       "old": "runtime-tool.list",
       "new": "catalog.player.list",
-      "group": "runtime-tool"
+      "group": "runtime-tool",
+      "final": "catalog.player.list"
     },
     {
       "old": "runtime-tool.run",
       "new": "catalog.player.run",
-      "group": "runtime-tool"
+      "group": "runtime-tool",
+      "final": "catalog.player.run"
     },
     {
       "old": "runtime-tool.summary",
       "new": "catalog.player.summary",
-      "group": "runtime-tool"
+      "group": "runtime-tool",
+      "final": "catalog.player.summary"
     },
     {
       "old": "runtime.console",
       "new": "player-runtime.console",
-      "group": "runtime"
+      "group": "runtime",
+      "final": "player-runtime.console"
     },
     {
       "old": "runtime.input.key",
       "new": "player-runtime.input.key",
-      "group": "runtime"
+      "group": "runtime",
+      "final": "player-runtime.input-key"
     },
     {
       "old": "runtime.input.pointer",
       "new": "player-runtime.input.pointer",
-      "group": "runtime"
+      "group": "runtime",
+      "final": "player-runtime.input-pointer"
     },
     {
       "old": "runtime.log",
       "new": "player-runtime.log",
-      "group": "runtime"
+      "group": "runtime",
+      "final": "player-runtime.log"
     },
     {
       "old": "runtime.state",
       "new": "player-runtime.state",
-      "group": "runtime"
+      "group": "runtime",
+      "final": "player-runtime.state"
     },
     {
       "old": "runtime.target-framerate.set",
       "new": "player-runtime.target-framerate.set",
-      "group": "runtime"
+      "group": "runtime",
+      "final": "player-runtime.target-framerate-set"
     },
     {
       "old": "runtime.time-scale.set",
       "new": "player-runtime.time-scale.set",
-      "group": "runtime"
+      "group": "runtime",
+      "final": "player-runtime.time-scale-set"
     },
     {
       "old": "runtime.ui.capture-element",
       "new": "player-runtime.ui.capture-element",
-      "group": "runtime"
+      "group": "runtime",
+      "final": "player-runtime.ui-capture-element"
     },
     {
       "old": "scene.active",
       "new": "scene.active",
-      "group": "scene"
+      "group": "scene",
+      "final": "scene.active"
     },
     {
       "old": "scene.create",
       "new": "scene.create",
-      "group": "scene"
+      "group": "scene",
+      "final": "scene.create"
     },
     {
       "old": "scene.gameobject",
       "new": "scene.gameobject",
-      "group": "scene"
+      "group": "scene",
+      "final": "scene.gameobject"
     },
     {
       "old": "scene.gameobject.component",
       "new": "scene.gameobject.component",
-      "group": "scene"
+      "group": "scene",
+      "final": "scene.gameobject-component"
     },
     {
       "old": "scene.gameobject.components",
       "new": "scene.gameobject.components",
-      "group": "scene"
+      "group": "scene",
+      "final": "scene.gameobject-components"
     },
     {
       "old": "scene.hierarchy",
       "new": "scene.hierarchy",
-      "group": "scene"
+      "group": "scene",
+      "final": "scene.hierarchy"
     },
     {
       "old": "scene.list-opened",
       "new": "scene.list-opened",
-      "group": "scene"
+      "group": "scene",
+      "final": "scene.list-opened"
     },
     {
       "old": "scene.load",
       "new": "scene.load",
-      "group": "scene"
+      "group": "scene",
+      "final": "scene.load"
     },
     {
       "old": "scene.move-object",
       "new": "game-object.move-to-scene",
-      "group": "scene"
+      "group": "scene",
+      "final": "game-object.move-to-scene"
     },
     {
       "old": "scene.save",
       "new": "scene.save",
-      "group": "scene"
+      "group": "scene",
+      "final": "scene.save"
     },
     {
       "old": "scene.set-active",
       "new": "scene.set-active",
-      "group": "scene"
+      "group": "scene",
+      "final": "scene.set-active"
     },
     {
       "old": "scene.unload",
       "new": "scene.unload",
-      "group": "scene"
+      "group": "scene",
+      "final": "scene.unload"
     },
     {
       "old": "scene.validate",
       "new": "scene.validate",
-      "group": "scene"
+      "group": "scene",
+      "final": "scene.validate"
     },
     {
       "old": "scene.view-frame",
       "new": "scene.view-frame",
-      "group": "scene"
+      "group": "scene",
+      "final": "scene.view-frame"
     },
     {
       "old": "screenshot.editor-element",
       "new": "screenshot.editor-element",
-      "group": "screenshot"
+      "group": "screenshot",
+      "final": "screenshot.editor-element"
     },
     {
       "old": "screenshot.game-view",
       "new": "screenshot.game-view",
-      "group": "screenshot"
+      "group": "screenshot",
+      "final": "screenshot.game-view"
     },
     {
       "old": "screenshot.isolated-object",
       "new": "screenshot.isolated-object",
-      "group": "screenshot"
+      "group": "screenshot",
+      "final": "screenshot.isolated-object"
     },
     {
       "old": "screenshot.orbit",
       "new": "screenshot.orbit",
-      "group": "screenshot"
+      "group": "screenshot",
+      "final": "screenshot.orbit"
     },
     {
       "old": "screenshot.scene-view",
       "new": "screenshot.scene-view",
-      "group": "screenshot"
+      "group": "screenshot",
+      "final": "screenshot.scene-view"
     },
     {
       "old": "screenshot.screen",
       "new": "screenshot.screen",
-      "group": "screenshot"
+      "group": "screenshot",
+      "final": "screenshot.screen"
     },
     {
       "old": "screenshot.surround",
       "new": "screenshot.surround",
-      "group": "screenshot"
+      "group": "screenshot",
+      "final": "screenshot.surround"
     },
     {
       "old": "scriptable-object.create",
       "new": "scriptable-object.create",
-      "group": "scriptable-object"
+      "group": "scriptable-object",
+      "final": "scriptable-object.create"
     },
     {
       "old": "scriptable-object.info",
       "new": "scriptable-object.info",
-      "group": "scriptable-object"
+      "group": "scriptable-object",
+      "final": "scriptable-object.info"
     },
     {
       "old": "scriptable-object.list-types",
       "new": "scriptable-object.list-types",
-      "group": "scriptable-object"
+      "group": "scriptable-object",
+      "final": "scriptable-object.list-types"
     },
     {
       "old": "scriptable-object.modify",
       "new": "scriptable-object.modify",
-      "group": "scriptable-object"
+      "group": "scriptable-object",
+      "final": "scriptable-object.modify"
     },
     {
       "old": "shader.create",
       "new": "shader.create",
-      "group": "shader"
+      "group": "shader",
+      "final": "shader.create"
     },
     {
       "old": "shader.delete",
       "new": "shader.delete",
-      "group": "shader"
+      "group": "shader",
+      "final": "shader.delete"
     },
     {
       "old": "shader.get-data",
       "new": "shader.get-data",
-      "group": "shader"
+      "group": "shader",
+      "final": "shader.get-data"
     },
     {
       "old": "shader.info",
       "new": "shader.info",
-      "group": "shader"
+      "group": "shader",
+      "final": "shader.info"
     },
     {
       "old": "shader.list",
       "new": "shader.list",
-      "group": "shader"
+      "group": "shader",
+      "final": "shader.list"
     },
     {
       "old": "shader.read",
       "new": "shader.read",
-      "group": "shader"
+      "group": "shader",
+      "final": "shader.read"
     },
     {
       "old": "shader.update",
       "new": "shader.update",
-      "group": "shader"
+      "group": "shader",
+      "final": "shader.update"
     },
     {
       "old": "test.cancel",
       "new": "test.cancel",
-      "group": "test"
+      "group": "test",
+      "final": "test.cancel"
     },
     {
       "old": "test.run",
       "new": "test.run",
-      "group": "test"
+      "group": "test",
+      "final": "test.run"
     },
     {
       "old": "test.run.status",
       "new": "test.run.status",
-      "group": "test"
+      "group": "test",
+      "final": "test.run-status"
     },
     {
       "old": "texture.create",
       "new": "texture.create",
-      "group": "texture"
+      "group": "texture",
+      "final": "texture.create"
     },
     {
       "old": "texture.delete",
       "new": "texture.delete",
-      "group": "texture"
+      "group": "texture",
+      "final": "texture.delete"
     },
     {
       "old": "texture.generate",
       "new": "texture.generate",
-      "group": "texture"
+      "group": "texture",
+      "final": "texture.generate"
     },
     {
       "old": "texture.import-settings",
       "new": "texture.import-settings",
-      "group": "texture"
+      "group": "texture",
+      "final": "texture.import-settings"
     },
     {
       "old": "texture.info",
       "new": "texture.info",
-      "group": "texture"
+      "group": "texture",
+      "final": "texture.info"
     },
     {
       "old": "texture.modify",
       "new": "texture.modify",
-      "group": "texture"
+      "group": "texture",
+      "final": "texture.modify"
     },
     {
       "old": "texture.sprite",
       "new": "texture.sprite",
-      "group": "texture"
+      "group": "texture",
+      "final": "texture.sprite"
     },
     {
       "old": "timeline.clip.add",
       "new": "timeline.clip.add",
-      "group": "timeline"
+      "group": "timeline",
+      "final": "timeline.clip-add"
     },
     {
       "old": "timeline.create",
       "new": "timeline.create",
-      "group": "timeline"
+      "group": "timeline",
+      "final": "timeline.create"
     },
     {
       "old": "timeline.info",
       "new": "timeline.info",
-      "group": "timeline"
+      "group": "timeline",
+      "final": "timeline.info"
     },
     {
       "old": "timeline.track.add",
       "new": "timeline.track.add",
-      "group": "timeline"
+      "group": "timeline",
+      "final": "timeline.track-add"
     },
     {
       "old": "reflection.type.schema",
       "new": "runtime-reflection.type.schema",
-      "group": "reflection"
+      "group": "reflection",
+      "final": "debug.type-schema"
     },
     {
       "old": "ui.attach-document",
       "new": "ui.attach-document",
-      "group": "ui"
+      "group": "ui",
+      "final": "ui.attach-document"
     },
     {
       "old": "ui.button.create",
       "new": "ui.button.create",
-      "group": "ui"
+      "group": "ui",
+      "final": "ui.button-create"
     },
     {
       "old": "ui.canvas.create",
       "new": "ui.canvas.create",
-      "group": "ui"
+      "group": "ui",
+      "final": "ui.canvas-create"
     },
     {
       "old": "ui.create-panel-settings",
       "new": "ui.create-panel-settings",
-      "group": "ui"
+      "group": "ui",
+      "final": "ui.create-panel-settings"
     },
     {
       "old": "ui.detach-document",
       "new": "ui.detach-document",
-      "group": "ui"
+      "group": "ui",
+      "final": "ui.detach-document"
     },
     {
       "old": "ui.document.create",
       "new": "ui.document.create",
-      "group": "ui"
+      "group": "ui",
+      "final": "ui.document-create"
     },
     {
       "old": "ui.document.delete",
       "new": "ui.document.delete",
-      "group": "ui"
+      "group": "ui",
+      "final": "ui.document-delete"
     },
     {
       "old": "ui.document.info",
       "new": "ui.document.info",
-      "group": "ui"
+      "group": "ui",
+      "final": "ui.document-info"
     },
     {
       "old": "ui.document.update",
       "new": "ui.document.update",
-      "group": "ui"
+      "group": "ui",
+      "final": "ui.document-update"
     },
     {
       "old": "ui.get-visual-tree",
       "new": "ui.get-visual-tree",
-      "group": "ui"
+      "group": "ui",
+      "final": "ui.get-visual-tree"
     },
     {
       "old": "ui.hierarchy",
       "new": "ui.hierarchy",
-      "group": "ui"
+      "group": "ui",
+      "final": "ui.hierarchy"
     },
     {
       "old": "ui.image.create",
       "new": "ui.image.create",
-      "group": "ui"
+      "group": "ui",
+      "final": "ui.image-create"
     },
     {
       "old": "ui.link-stylesheet",
       "new": "ui.link-stylesheet",
-      "group": "ui"
+      "group": "ui",
+      "final": "ui.link-stylesheet"
     },
     {
       "old": "ui.list-documents",
       "new": "ui.list-documents",
-      "group": "ui"
+      "group": "ui",
+      "final": "ui.list-documents"
     },
     {
       "old": "ui.modify-visual-element",
       "new": "ui.modify-visual-element",
-      "group": "ui"
+      "group": "ui",
+      "final": "ui.modify-visual-element"
     },
     {
       "old": "ui.render-preview",
       "new": "ui.render-preview",
-      "group": "ui"
+      "group": "ui",
+      "final": "ui.render-preview"
     },
     {
       "old": "ui.text.create",
       "new": "ui.text.create",
-      "group": "ui"
+      "group": "ui",
+      "final": "ui.text-create"
     },
     {
       "old": "ui.update-panel-settings",
       "new": "ui.update-panel-settings",
-      "group": "ui"
+      "group": "ui",
+      "final": "ui.update-panel-settings"
     },
     {
       "old": "urp.feature.add",
       "new": "urp.feature.add",
-      "group": "urp"
+      "group": "urp",
+      "final": "urp.feature-add"
     },
     {
       "old": "urp.feature.configure",
       "new": "urp.feature.configure",
-      "group": "urp"
+      "group": "urp",
+      "final": "urp.feature-configure"
     },
     {
       "old": "urp.feature.list",
       "new": "urp.feature.list",
-      "group": "urp"
+      "group": "urp",
+      "final": "urp.feature-list"
     },
     {
       "old": "urp.feature.remove",
       "new": "urp.feature.remove",
-      "group": "urp"
+      "group": "urp",
+      "final": "urp.feature-remove"
     },
     {
       "old": "urp.feature.toggle",
       "new": "urp.feature.toggle",
-      "group": "urp"
+      "group": "urp",
+      "final": "urp.feature-toggle"
     },
     {
       "old": "urp.settings.get",
       "new": "urp.settings.get",
-      "group": "urp"
+      "group": "urp",
+      "final": "urp.settings-get"
     },
     {
       "old": "urp.settings.set",
       "new": "urp.settings.set",
-      "group": "urp"
+      "group": "urp",
+      "final": "urp.settings-set"
     },
     {
       "old": "urp.volume.add-effect",
       "new": "urp.volume.add-effect",
-      "group": "urp"
+      "group": "urp",
+      "final": "urp.volume-add-effect"
     },
     {
       "old": "urp.volume.create",
       "new": "urp.volume.create",
-      "group": "urp"
+      "group": "urp",
+      "final": "urp.volume-create"
     },
     {
       "old": "urp.volume.info",
       "new": "urp.volume.info",
-      "group": "urp"
+      "group": "urp",
+      "final": "urp.volume-info"
     },
     {
       "old": "urp.volume.list",
       "new": "urp.volume.list",
-      "group": "urp"
+      "group": "urp",
+      "final": "urp.volume-list"
     },
     {
       "old": "urp.volume.set",
       "new": "urp.volume.set",
-      "group": "urp"
+      "group": "urp",
+      "final": "urp.volume-set"
     },
     {
       "old": "vfx.control.pause",
       "new": "vfx.control.pause",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.control-pause"
     },
     {
       "old": "vfx.control.play",
       "new": "vfx.control.play",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.control-play"
     },
     {
       "old": "vfx.control.reinitialize",
       "new": "vfx.control.reinitialize",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.control-reinitialize"
     },
     {
       "old": "vfx.control.set-rate",
       "new": "vfx.control.set-rate",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.control-set-rate"
     },
     {
       "old": "vfx.control.set-seed",
       "new": "vfx.control.set-seed",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.control-set-seed"
     },
     {
       "old": "vfx.control.stop",
       "new": "vfx.control.stop",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.control-stop"
     },
     {
       "old": "vfx.effect.add",
       "new": "vfx.effect.add",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.effect-add"
     },
     {
       "old": "vfx.effect.assign",
       "new": "vfx.effect.assign",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.effect-assign"
     },
     {
       "old": "vfx.effect.info",
       "new": "vfx.effect.info",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.effect-info"
     },
     {
       "old": "vfx.graph.create",
       "new": "vfx.graph.create",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.graph-create"
     },
     {
       "old": "vfx.graph.info",
       "new": "vfx.graph.info",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.graph-info"
     },
     {
       "old": "vfx.line-create",
       "new": "vfx.line-create",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.line-create"
     },
     {
       "old": "vfx.line-positions",
       "new": "vfx.line-positions",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.line-positions"
     },
     {
       "old": "vfx.parameter",
       "new": "vfx.parameter",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.parameter"
     },
     {
       "old": "vfx.particle-create",
       "new": "vfx.particle-create",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.particle-create"
     },
     {
       "old": "vfx.particle-emission",
       "new": "vfx.particle-emission",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.particle-emission"
     },
     {
       "old": "vfx.particle-info",
       "new": "vfx.particle-info",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.particle-info"
     },
     {
       "old": "vfx.particle-main",
       "new": "vfx.particle-main",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.particle-main"
     },
     {
       "old": "vfx.particle-shape",
       "new": "vfx.particle-shape",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.particle-shape"
     },
     {
       "old": "vfx.particle.clear",
       "new": "vfx.particle.clear",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.particle-clear"
     },
     {
       "old": "vfx.particle.pause",
       "new": "vfx.particle.pause",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.particle-pause"
     },
     {
       "old": "vfx.particle.play",
       "new": "vfx.particle.play",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.particle-play"
     },
     {
       "old": "vfx.particle.stop",
       "new": "vfx.particle.stop",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.particle-stop"
     },
     {
       "old": "vfx.template.create",
       "new": "vfx.template.create",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.template-create"
     },
     {
       "old": "vfx.template.list",
       "new": "vfx.template.list",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.template-list"
     },
     {
       "old": "vfx.trail.create",
       "new": "vfx.trail.create",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.trail-create"
     },
     {
       "old": "vfx.trail.set",
       "new": "vfx.trail.set",
-      "group": "vfx"
+      "group": "vfx",
+      "final": "vfx.trail-set"
     }
   ]
 }

@@ -7,7 +7,7 @@ const source = (path: string) => readFile(new URL(path, editor), "utf8");
 
 test("core rendering and lighting requests validate immutable plans before one commit and read back effects", async () => {
   const [quality, scene, pipeline, ambient, fog, reflection, properties, bakeSettings, bakeProbe, material, sun, support] = await Promise.all([
-    source("Tools/rendering/quality.cs"), source("Tools/rendering/scene-debug.cs"), source("Tools/rendering/pipeline/settings.cs"), source("Tools/lighting/skybox/set-ambient.cs"), source("Tools/lighting/skybox/set-fog.cs"), source("Tools/lighting/skybox/set-reflection.cs"), source("Tools/lighting/skybox/set-properties.cs"), source("Tools/lighting/bake/settings.cs"), source("Tools/lighting/bake/reflection-probe.cs"), source("Tools/lighting/skybox/set-material.cs"), source("Tools/lighting/skybox/set-sun.cs"), source("Tools/rendering/GraphicsToolSupport.cs"),
+    source("Tools/rendering/quality.cs"), source("Tools/rendering/scene-debug.cs"), source("Tools/rendering/pipeline-settings.cs"), source("Tools/lighting/skybox-set-ambient.cs"), source("Tools/lighting/skybox-set-fog.cs"), source("Tools/lighting/skybox-set-reflection.cs"), source("Tools/lighting/skybox-set-properties.cs"), source("Tools/lighting/bake-settings.cs"), source("Tools/lighting/bake-reflection-probe.cs"), source("Tools/lighting/skybox-set-material.cs"), source("Tools/lighting/skybox-set-sun.cs"), source("Tools/rendering/GraphicsToolSupport.cs"),
   ]);
   for (const text of [quality, pipeline, ambient, fog, reflection, properties, bakeSettings]) {
     assert.match(text, /ctx\.CommitEffect\(\)/);
@@ -51,7 +51,7 @@ test("core rendering and lighting requests validate immutable plans before one c
 test("retained rendering and lighting mutations commit only writes and read back their owning state", async () => {
   const [quality, pipeline, group, reflection] = await Promise.all([
     source("Tools/rendering/quality.cs"),
-    source("Tools/rendering/pipeline/settings.cs"),
+    source("Tools/rendering/pipeline-settings.cs"),
     source("Tools/lighting/light-probe-group.cs"),
     source("Tools/lighting/reflection-probe.cs"),
   ]);

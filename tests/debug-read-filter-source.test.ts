@@ -12,7 +12,7 @@ async function source(root: URL, path: string): Promise<string> {
   return readFile(new URL(path, root), "utf8");
 }
 
-test("debug.events.read exposes the identity, sequence and thread filters it maps into the store filter", async () => {
+test("debug.events-read exposes the identity, sequence and thread filters it maps into the store filter", async () => {
   const dtos = await source(debugRoot, "DebugEventDtos.cs");
   for (const field of ["FromSequence", "ToSequence", "InvocationId", "ExecutionPoint", "MethodIdentityPrefix", "MainThread"]) {
     assert.match(
@@ -52,7 +52,7 @@ test("every new event filter participates in both matching and the continuation 
   assert.match(filter, /entry\.MainThread != MainThread\.Value/);
 });
 
-test("debug.run.list filters by verdict and detail availability and binds them into its cursor scope", async () => {
+test("debug.run-list filters by verdict and detail availability and binds them into its cursor scope", async () => {
   const dtos = await source(new URL("run/", toolsRoot), "DebugRunDtos.cs");
   assert.match(dtos, /\[UnityCliStringEnum\(UnityCliDebugRunVerdicts\.Passed, UnityCliDebugRunVerdicts\.Failed, UnityCliDebugRunVerdicts\.Indeterminate\)\]/);
   assert.match(dtos, /public string Verdict \{ get; set; \}/);
@@ -67,7 +67,7 @@ test("debug.run.list filters by verdict and detail availability and binds them i
   assert.match(list, /nextOffset = index \+ 1;/, "the cursor must advance over examined windows rather than over returned items");
 });
 
-test("debug.pause.list filters by state, invocation and thread ownership and binds them into its cursor scope", async () => {
+test("debug.pause-list filters by state, invocation and thread ownership and binds them into its cursor scope", async () => {
   const dtos = await source(new URL("pause/", toolsRoot), "DebugPauseDtos.cs");
   assert.match(dtos, /\[UnityCliStringEnum\("paused", "resuming"\)\] public string State \{ get; set; \}/);
   assert.match(dtos, /public long\? InvocationId \{ get; set; \}/);
@@ -82,7 +82,7 @@ test("debug.pause.list filters by state, invocation and thread ownership and bin
   assert.ok(list.includes("UnityCliContinuationToken.Create(scope"), "the pause list cursor must be created from that scope");
 });
 
-test("debug.console.read reports a budget-stopped scan instead of failing with no result", async () => {
+test("debug.console-read reports a budget-stopped scan instead of failing with no result", async () => {
   const support = await source(new URL("Editor/Tools/editor/", unitypkg), "EditorToolSupport.cs");
   const page = support.slice(support.indexOf("internal static ConsoleReadPage ReadConsolePage(\n            string typeFilter"), support.indexOf("internal interface IConsoleSnapshotAdapter"));
   assert.ok(!page.includes("throw new UnityCliRequestBudgetExceededException"), "an exhausted empty scan must not throw");
@@ -91,7 +91,7 @@ test("debug.console.read reports a budget-stopped scan instead of failing with n
   assert.match(support, /public bool ScanExhausted \{ get; set; \}/);
   assert.match(support, /public long ScannedEntries \{ get; set; \}/);
 
-  const tool = await source(new URL("console/", toolsRoot), "read.cs");
+  const tool = await source(toolsRoot, "console-read.cs");
   assert.match(tool, /public bool ScanExhausted \{ get; set; \}/);
   assert.match(tool, /public long ScannedEntries \{ get; set; \}/);
   assert.match(tool, /ScanExhausted = page\.ScanExhausted/);
@@ -121,12 +121,12 @@ test("run list budget counters describe the scope they were read in", async () =
   assert.match(budget, /foreach \(var pair in RunsBySession\)/, "budget counters must aggregate the reported scope instead of staying zero without a session filter");
   assert.match(budget, /used \+= pair\.Value\.Count/, "budget counters must count windows in every reported session");
 
-  const tool = await source(new URL("run/", toolsRoot), "list.cs");
+  const tool = await source(toolsRoot, "run-list.cs");
   assert.ok(tool.includes("describe the requested session, or every session when sessionId is omitted"), "describe must state the counter scope");
 });
 
 test("run list states which field decides a failed window", async () => {
-  const tool = await source(new URL("run/", toolsRoot), "list.cs");
+  const tool = await source(toolsRoot, "run-list.cs");
   assert.ok(tool.includes("A window counts as failed only when its verdict is failed"), "describe must name the failed criterion");
   assert.ok(tool.includes("not the window verdict"), "describe must separate failedCheckCount from the verdict");
 });

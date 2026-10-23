@@ -93,14 +93,14 @@ export async function dispatchTool(
 
   const localMetadata = findToolByName(name);
   const timeoutMetadata = resolvedTool ?? localMetadata;
-  const defaultTimeoutMs = name === "debug.code.execute" ? 60_000 : 30_000;
+  const defaultTimeoutMs = name === "debug.code-execute" ? 60_000 : 30_000;
   const started = invocationContext
     ? { ok: true as const, context: invocationContext }
     : beginToolInvocation(flags, requestId, { timeoutMs: timeoutMetadata?.timeoutMs ?? defaultTimeoutMs }, dispatchStartedAtMs);
   if (!started.ok) return started.result;
   const admissionTimeoutMs = started.context.timeoutMs;
   const admissionAbsoluteDeadlineMs = started.context.admissionAbsoluteDeadlineMs;
-  const parsed = await parseTypedInput(flags, requestId, name === "debug.code.execute" ? 1024 * 1024 : undefined, admissionAbsoluteDeadlineMs);
+  const parsed = await parseTypedInput(flags, requestId, name === "debug.code-execute" ? 1024 * 1024 : undefined, admissionAbsoluteDeadlineMs);
   if (!parsed.ok) return parsed.error;
   const dispatchFlags = withStructuredInput(flags, parsed.input);
   const dispatchResolved = (tool: ToolMetadata, input: Record<string, unknown>): Promise<CliResult> => dispatchResolvedTool(
@@ -654,20 +654,20 @@ function validateKnownLocalTerminal(
       || !validLivePackageResolve(record.resolve)) throw invalidCompletionProof(toolName, completion, "did not prove restored files and terminal PackageInfo resolution");
     return true;
   }
-  if (toolName === "package.registry.set") {
+  if (toolName === "package.registry-set") {
     if (!nonEmptyString(record.manifestPath) || !nonEmptyString(record.registry)) throw invalidCompletionProof(toolName, completion, "did not prove the manifest registry readback");
     return true;
   }
-  if (toolName === "package.registry.clear") {
+  if (toolName === "package.registry-clear") {
     if (!nonEmptyString(record.manifestPath) || record.registryCleared !== true) throw invalidCompletionProof(toolName, completion, "did not prove the cleared manifest registry readback");
     return true;
   }
-  if (toolName === "package.scoped-registry.add") {
+  if (toolName === "package.scoped-registry-add") {
     const registry = objectRecord(record.registry);
     if (!nonEmptyString(record.manifestPath) || !registry || !nonEmptyString(registry.name) || !nonEmptyString(registry.url) || !Array.isArray(registry.scopes) || registry.scopes.some((scope) => !nonEmptyString(scope))) throw invalidCompletionProof(toolName, completion, "did not prove the scoped registry manifest readback");
     return true;
   }
-  if (toolName === "package.scoped-registry.remove") {
+  if (toolName === "package.scoped-registry-remove") {
     if (record.dryRun !== true && (!nonEmptyString(record.manifestPath) || record.registryRemoved !== true)) throw invalidCompletionProof(toolName, completion, "did not prove the removed scoped registry readback");
     return true;
   }
@@ -698,7 +698,7 @@ function validateKnownLocalTerminal(
     if (record.action !== "bridge-remove" || !nonEmptyString(record.bridgePath) || !nonEmptyString(record.installMetadataPath)) throw invalidCompletionProof(toolName, completion, "did not prove the Bridge package removal target");
     return true;
   }
-  if (toolName === "debug.code.execute") {
+  if (toolName === "debug.code-execute") {
     const compile = objectRecord(record.compile);
     const runtime = objectRecord(record.runtime);
     const probeRequested = Object.prototype.hasOwnProperty.call(input ?? {}, "completionProbe");
@@ -752,7 +752,7 @@ function validateKnownLocalTerminal(
     }
     return true;
   }
-  if (toolName === "navmesh.bake" || toolName === "navmesh.surface.bake") {
+  if (toolName === "navmesh.bake" || toolName === "navmesh.surface-bake") {
     if (record.dryRun === true) return true;
     const expectedKind = toolName === "navmesh.bake" ? "legacy" : "surfaces";
     const topology = objectRecord(record.topology);
@@ -835,7 +835,7 @@ function validateKnownLocalTerminal(
     }
     return true;
   }
-  if (toolName === "editor.dialog.click") {
+  if (toolName === "editor.dialog-click") {
     if (record.clicked !== true || !nonEmptyString(record.dialogId) || !nonEmptyString(record.title) || !nonEmptyString(record.button)) {
       throw invalidCompletionProof(toolName, completion, "did not prove a completed dialog click");
     }
@@ -1090,7 +1090,7 @@ export async function enrichTargetFailureWithObservedBlocker(
     if (!title) return result;
     return { ...result, error: { ...result.error, message: `${result.error.message} Modal dialog '${title}' was observed.`, details: { ...(result.error.details && typeof result.error.details === "object" && !Array.isArray(result.error.details) ? result.error.details : {}), blockers }, nextActions: [
       "Run unitycli tools run editor.dialogs to inspect the current modal dialog.",
-      "Run unitycli tools run editor.dialog.click with a current dialogId and exact button label.",
+      "Run unitycli tools run editor.dialog-click with a current dialogId and exact button label.",
     ] } };
   } catch {
     // 未证明的诊断不能替换主错误。
@@ -1302,9 +1302,9 @@ function requireInputDeadline(absoluteDeadlineMs?: number): void {
   if (absoluteDeadlineMs !== undefined && (!Number.isFinite(absoluteDeadlineMs) || Date.now() >= absoluteDeadlineMs)) throw new InputDeadlineExceeded();
 }
 
-/** 统一生成debug.code.execute本地typed input超限错误。 */
+/** 统一生成debug.code-execute本地typed input超限错误。 */
 function inputTooLarge(requestId: string, source: string, maxBytes: number): ParsedInput {
-  return { ok: false, error: failure(requestId, "E_CODE_INPUT_TOO_LARGE", `${source} exceeds the ${maxBytes}-byte debug.code.execute typed-input limit.`, ["Use a smaller JSON input and keep Runtime Code source below its documented local budget."]) };
+  return { ok: false, error: failure(requestId, "E_CODE_INPUT_TOO_LARGE", `${source} exceeds the ${maxBytes}-byte debug.code-execute typed-input limit.`, ["Use a smaller JSON input and keep Runtime Code source below its documented local budget."]) };
 }
 
 function inputDeadlineExceeded(requestId: string): ParsedInput {

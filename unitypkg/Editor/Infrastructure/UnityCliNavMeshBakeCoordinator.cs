@@ -97,7 +97,7 @@ namespace UnityCli
                     ValidateStartShape(args);
                     if (!string.Equals(args.ExpectedEditorSessionId, EditorSessionId(), StringComparison.Ordinal))
                         throw new BridgeCommandException("E_EDITOR_SESSION_REPLACED", "The selected Editor session changed after NavMesh bake preflight.");
-                    NavMeshToolSupport.EnsureEditorReady(args.Kind == "legacy" ? "navmesh.bake" : "navmesh.surface.bake", true);
+                    NavMeshToolSupport.EnsureEditorReady(args.Kind == "legacy" ? "navmesh.bake" : "navmesh.surface-bake", true);
                 }
 
                 private static void ValidateStartShape(StartArgs args)
@@ -489,7 +489,7 @@ namespace UnityCli
                     else
                     {
                         targets = SurfaceApi.PlanTargets();
-                        scenes = NavMeshToolSupport.PrepareSceneFiles(targets.Cast<Dictionary<string, object>>().Select(target => Text(target, "scenePath")), "navmesh.surface.bake");
+                        scenes = NavMeshToolSupport.PrepareSceneFiles(targets.Cast<Dictionary<string, object>>().Select(target => Text(target, "scenePath")), "navmesh.surface-bake");
                     }
                     return new Dictionary<string, object>
                     {
@@ -671,10 +671,10 @@ namespace UnityCli
                     var nativeDispatched = false;
                     try
                     {
-                        NavMeshToolSupport.EnsureEditorReady("navmesh.surface.bake", true);
+                        NavMeshToolSupport.EnsureEditorReady("navmesh.surface-bake", true);
                         if (AnyNativeOperationRunning())
                             throw new BridgeCommandException("E_NAVMESH_BAKE_ACTIVE", "An unowned native NavMesh bake started before Surface dispatch.");
-                        NavMeshToolSupport.ValidateFrozenSceneFiles(SceneFiles(root), "navmesh.surface.bake");
+                        NavMeshToolSupport.ValidateFrozenSceneFiles(SceneFiles(root), "navmesh.surface-bake");
                         SurfaceApi.Start(TargetIds(root));
                         nativeDispatched = true;
                         var observation = SurfaceApi.CaptureObservation(TargetIds(root));
@@ -726,7 +726,7 @@ namespace UnityCli
                             return;
                         }
                         if (DateTimeOffset.UtcNow < Time(root, "verifyNotBefore")) return;
-                        NavMeshToolSupport.ValidateFrozenSceneFiles(SceneFilesFrom(root, "scenesResult"), "navmesh.surface.bake terminal proof");
+                        NavMeshToolSupport.ValidateFrozenSceneFiles(SceneFilesFrom(root, "scenesResult"), "navmesh.surface-bake terminal proof");
                         List<object> observed;
                         if (!SurfaceApi.TryProve(TargetIds(root), Targets(root), false, out observed)
                             || !SameJsonList(RootList(root, "surfacesResult"), observed))
@@ -1836,7 +1836,7 @@ namespace UnityCli
                 return result;
             }
             private static List<string> TargetIds(Dictionary<string, object> root) { return Targets(root).Select(value => Text(value, "globalId")).Where(value => !string.IsNullOrEmpty(value)).ToList(); }
-            private static Dictionary<string, object> PlannedEffect(string kind, long count) { return new Dictionary<string, object> { { "type", kind == "legacy" ? "navmesh.bake" : "navmesh.surface.bake" }, { "target", kind == "legacy" ? "open-scenes" : "all-active-surfaces" }, { "targetCount", count } }; }
+            private static Dictionary<string, object> PlannedEffect(string kind, long count) { return new Dictionary<string, object> { { "type", kind == "legacy" ? "navmesh.bake" : "navmesh.surface-bake" }, { "target", kind == "legacy" ? "open-scenes" : "all-active-surfaces" }, { "targetCount", count } }; }
             private static string PublicPhase(string phase) { return phase == "queued" ? "queued" : phase == "dispatching" ? "starting" : phase == "running" || phase == "verifying" ? "baking" : "unknown"; }
             private static long DurationMs(string start, string finish) { DateTimeOffset a; DateTimeOffset b; return DateTimeOffset.TryParse(start, out a) && DateTimeOffset.TryParse(finish, out b) ? (long)Math.Max(0, (b - a).TotalMilliseconds) : 0L; }
             private static string Text(IDictionary<string, object> value, string key) { object item; return value != null && value.TryGetValue(key, out item) && item != null ? Convert.ToString(item, CultureInfo.InvariantCulture) : string.Empty; }
@@ -2133,7 +2133,7 @@ namespace UnityCli
                 }
                 private static void EnsureAvailable()
                 {
-                    if (!Available) throw new BridgeCommandException("E_PACKAGE_UNAVAILABLE", "navmesh.surface.bake requires com.unity.ai.navigation.", "Install com.unity.ai.navigation, then retry.");
+                    if (!Available) throw new BridgeCommandException("E_PACKAGE_UNAVAILABLE", "navmesh.surface-bake requires com.unity.ai.navigation.", "Install com.unity.ai.navigation, then retry.");
                 }
             }
         }

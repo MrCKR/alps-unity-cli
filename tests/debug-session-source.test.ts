@@ -18,9 +18,9 @@ const TOOLS = ["create", "info", "list", "stop", "remove"];
 
 test("the five debug.session tools exist with the declared descriptor shape", async () => {
   for (const tool of TOOLS) {
-    const text = await source(sessionToolsRoot, `${tool}.cs`);
+    const text = await source(sessionToolsRoot, `../session-${tool}.cs`);
     assert.match(text, /IUnityCliTool<DebugSession\w+Request, DebugSession\w+Result>/, `${tool}.cs must implement the typed Tool interface`);
-    assert.match(text, new RegExp(`Name = "debug\\.session\\.${tool}"`), `${tool}.cs must declare its exact public name`);
+    assert.match(text, new RegExp(`Name = "debug\\.session-${tool}"`), `${tool}.cs must declare its exact public name`);
     assert.match(text, /Group = "debug"/);
     assert.match(text, /DestructiveHint = false/);
     assert.match(text, /Target = "editor"/);
@@ -29,27 +29,27 @@ test("the five debug.session tools exist with the declared descriptor shape", as
     assert.doesNotMatch(text, /DestructiveHint = true|SupportsDryRun = true/);
     assert.doesNotMatch(text, /EditorApplication\.update \+=/, "the debug session domain must not register its own update callback");
   }
-  const info = await source(sessionToolsRoot, "info.cs");
-  const list = await source(sessionToolsRoot, "list.cs");
+  const info = await source(sessionToolsRoot, "../session-info.cs");
+  const list = await source(sessionToolsRoot, "../session-list.cs");
   for (const reader of [info, list]) assert.doesNotMatch(reader, /SideEffects =/);
   for (const writer of ["create", "stop", "remove"]) {
-    const text = await source(sessionToolsRoot, `${writer}.cs`);
+    const text = await source(sessionToolsRoot, `../session-${writer}.cs`);
     assert.match(text, /ctx\.CommitEffect\(\);/, `${writer}.cs must cross the single effect barrier`);
   }
   assert.match(
-    await source(sessionToolsRoot, "create.cs"),
+    await source(sessionToolsRoot, "../session-create.cs"),
     /SideEffects = new\[\] \{ "debug-session", "log-subscription" \}/,
-    "debug.session.create must declare the frozen log-subscription side effect",
+    "debug.session-create must declare the frozen log-subscription side effect",
   );
   for (const writer of ["stop", "remove"]) {
-    const text = await source(sessionToolsRoot, `${writer}.cs`);
+    const text = await source(sessionToolsRoot, `../session-${writer}.cs`);
     assert.match(text, /SideEffects = new\[\] \{ "debug-session" \}/);
   }
   for (const reader of [info, list]) assert.doesNotMatch(reader, /ctx\.CommitEffect\(\)/);
 });
 
-test("debug.session.create declares log capture through the single log subscription owner", async () => {
-  const create = await source(sessionToolsRoot, "create.cs");
+test("debug.session-create declares log capture through the single log subscription owner", async () => {
+  const create = await source(sessionToolsRoot, "../session-create.cs");
   assert.match(create, /LogCapture = new DebugLogCaptureSpec/, "create must document the log capture input");
   const dtos = await source(sessionToolsRoot, "DebugSessionDtos.cs");
   assert.match(dtos, /public sealed class DebugLogCaptureSpec/);
@@ -78,7 +78,7 @@ test("the session domain declares every budget in the single debug limit owner",
   }
   assert.match(limits, /internal static string SessionSummary\(\)/);
   for (const tool of TOOLS) {
-    const text = await source(sessionToolsRoot, `${tool}.cs`);
+    const text = await source(sessionToolsRoot, `../session-${tool}.cs`);
     assert.doesNotMatch(text, /MaxSessions = 16|MaxActiveResourcesPerSession = 4|MaxSessionStateBytes =/, `${tool}.cs must not restate a session limit`);
   }
 });
@@ -93,7 +93,7 @@ test("the debug domain keeps exactly one session store file", async () => {
   const shared = await source(sharedRoot, "UnityCliDebugSessions.cs");
   assert.doesNotMatch(`${store}${host}${shared}`, /method-hooks|MethodHookStore/, "the session domain must not own or migrate the live hook store");
   for (const tool of TOOLS) {
-    const text = await source(sessionToolsRoot, `${tool}.cs`);
+    const text = await source(sessionToolsRoot, `../session-${tool}.cs`);
     assert.doesNotMatch(text, /File\.|Directory\./, `${tool}.cs must not perform file IO itself`);
   }
 });
@@ -179,15 +179,15 @@ test("the new public error codes are registered once", async () => {
 test("every session tool is covered by the completion contract", async () => {
   const contract = JSON.parse(await readFile(join(repoRoot, "contracts", "tool-completion-contract.json"), "utf8"));
   for (const tool of TOOLS) {
-    const entry = contract.tools.find((item: { toolName: string }) => item.toolName === `debug.session.${tool}`);
-    assert.ok(entry, `debug.session.${tool} must appear in the completion contract`);
-    assert.equal(entry.source, `unitypkg/Editor/Tools/debug/session/${tool}.cs`);
+    const entry = contract.tools.find((item: { toolName: string }) => item.toolName === `debug.session-${tool}`);
+    assert.ok(entry, `debug.session-${tool} must appear in the completion contract`);
+    assert.equal(entry.source, `unitypkg/Editor/Tools/debug/session-${tool}.cs`);
     assert.equal(entry.descriptorOwner, "built-in");
     assert.equal(entry.deliveryMode, "direct-terminal");
   }
 });
 
-test("debug.session.list binds its state filter into the continuation scope and the tools state the slot semantics", async () => {
+test("debug.session-list binds its state filter into the continuation scope and the tools state the slot semantics", async () => {
   const dtos = await source(sessionToolsRoot, "DebugSessionDtos.cs");
   assert.match(
     dtos,
@@ -198,7 +198,7 @@ test("debug.session.list binds its state filter into the continuation scope and 
   assert.match(host, /var stateFilter = request == null \? null : request\.State;/, "list must read the state filter before paging");
   assert.match(
     host,
-    /editorSessionId \+ "\\0debug\.session\.list\\0" \+ \(stateFilter \?\? string\.Empty\)/,
+    /editorSessionId \+ "\\0debug\.session-list\\0" \+ \(stateFilter \?\? string\.Empty\)/,
     "the filter must be part of the continuation scope so a cursor cannot be reused across filters",
   );
   assert.match(
@@ -207,17 +207,17 @@ test("debug.session.list binds its state filter into the continuation scope and 
     "the session limit rejection must point at the reclaimable filter",
   );
   assert.match(
-    await source(sessionToolsRoot, "create.cs"),
-    /holds one session slot from this moment until debug\.session\.remove deletes it/,
+    await source(sessionToolsRoot, "../session-create.cs"),
+    /holds one session slot from this moment until debug\.session-remove deletes it/,
     "create must state that the slot is held until remove",
   );
   assert.match(
-    await source(sessionToolsRoot, "list.cs"),
+    await source(sessionToolsRoot, "../session-list.cs"),
     /state stopped is the filter that finds reclaimable definitions/,
     "list must state which filter finds reclaimable definitions",
   );
   assert.match(
-    await source(sessionToolsRoot, "remove.cs"),
+    await source(sessionToolsRoot, "../session-remove.cs"),
     /This is the only action that releases the session definition slot/,
     "remove must state that it is the only action that releases the slot",
   );

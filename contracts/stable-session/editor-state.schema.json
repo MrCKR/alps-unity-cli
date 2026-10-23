@@ -102,8 +102,8 @@
             "timeoutKind": { "enum": ["bounded", "unbounded"] },
             "remainingMs": { "type": "number", "minimum": 0 },
             "pausedForMs": { "type": "number", "minimum": 0 },
-            "resumeTool": { "const": "debug.pause.resume" },
-            "infoTool": { "const": "debug.pause.list" },
+            "resumeTool": { "const": "debug.pause-resume" },
+            "infoTool": { "const": "debug.pause-list" },
             "requiresUserAction": { "const": false },
             "source": { "const": "unity-debug-pause" },
             "confidence": { "const": "exact" }

@@ -23,7 +23,7 @@ namespace UnityCli
 
         private static void RequireInstallShape(DebugProgramInstallRequest request)
         {
-            if (request == null) throw SchemaInvalid("body", "a debug.program.install request body", "missing");
+            if (request == null) throw SchemaInvalid("body", "a debug.program-install request body", "missing");
             RequireSession(request.SessionId);
             RequireEntryType(request.EntryType);
             RequireSourceXorFile(request.Source, request.File);
@@ -32,7 +32,7 @@ namespace UnityCli
 
         private static void RequireReplaceShape(DebugProgramReplaceRequest request)
         {
-            if (request == null) throw SchemaInvalid("body", "a debug.program.replace request body", "missing");
+            if (request == null) throw SchemaInvalid("body", "a debug.program-replace request body", "missing");
             RequireProgramId(request.ProgramId);
             if (request.ExpectedRevision < 1L)
                 throw SchemaInvalid("expectedRevision", "the current revision of the target program", request.ExpectedRevision.ToString(CultureInfo.InvariantCulture));
@@ -42,7 +42,7 @@ namespace UnityCli
 
         private static void RequireRunShape(DebugProgramRunRequest request)
         {
-            if (request == null) throw SchemaInvalid("body", "a debug.program.run request body", "missing");
+            if (request == null) throw SchemaInvalid("body", "a debug.program-run request body", "missing");
             RequireProgramId(request.ProgramId);
             if (string.IsNullOrEmpty(request.Entry)) throw SchemaInvalid("entry", "the name of an installed entry", "missing");
             if (string.IsNullOrEmpty(request.ExecutionSite)) throw SchemaInvalid("executionSite", "one of the declared execution sites", "missing");
@@ -50,25 +50,25 @@ namespace UnityCli
 
         private static void RequireWaitShape(DebugProgramWaitRequest request)
         {
-            if (request == null) throw SchemaInvalid("body", "a debug.program.wait request body", "missing");
+            if (request == null) throw SchemaInvalid("body", "a debug.program-wait request body", "missing");
             RequireRunId(request.ProgramRunId);
         }
 
         private static void RequireInfoShape(DebugProgramInfoRequest request)
         {
-            if (request == null) throw SchemaInvalid("body", "a debug.program.info request body", "missing");
+            if (request == null) throw SchemaInvalid("body", "a debug.program-info request body", "missing");
             RequireProgramId(request.ProgramId);
         }
 
         private static void RequireStopShape(DebugProgramStopRequest request)
         {
-            if (request == null) throw SchemaInvalid("body", "a debug.program.stop request body", "missing");
+            if (request == null) throw SchemaInvalid("body", "a debug.program-stop request body", "missing");
             RequireRunId(request.ProgramRunId);
         }
 
         private static void RequireRemoveShape(DebugProgramRemoveRequest request)
         {
-            if (request == null) throw SchemaInvalid("body", "a debug.program.remove request body", "missing");
+            if (request == null) throw SchemaInvalid("body", "a debug.program-remove request body", "missing");
             RequireProgramId(request.ProgramId);
         }
 
@@ -91,8 +91,8 @@ namespace UnityCli
                     new Dictionary<string, object> { { "path", "$.sessionId" }, { "expected", "the id of an open debug session" } },
                     new[]
                     {
-                        "Run tools run debug.session.create to establish the owner of this investigation.",
-                        "Run tools run debug.session.list to read the currently open sessions."
+                        "Run tools run debug.session-create to establish the owner of this investigation.",
+                        "Run tools run debug.session-list to read the currently open sessions."
                     });
         }
 
@@ -209,7 +209,7 @@ namespace UnityCli
                 new[]
                 {
                     "Add a prefix or postfix binding of this program on the same target so the exact target is bound.",
-                    "Run tools run debug.hook.install on that target to bind it as a Hook execution point.",
+                    "Run tools run debug.hook-install on that target to bind it as a Hook execution point.",
                     "Omit bindings[].target for the signal binding to deliver the signal to the central editor-tick phase instead."
                 });
         }
@@ -230,8 +230,8 @@ namespace UnityCli
                     new Dictionary<string, object> { { "sessionId", sessionId ?? string.Empty }, { "sessionError", exception.Code } },
                     new[]
                     {
-                        "Run tools run debug.session.list to read the loaded session definitions.",
-                        "Run tools run debug.session.create to establish a new owner, then install the program again."
+                        "Run tools run debug.session-list to read the loaded session definitions.",
+                        "Run tools run debug.session-create to establish a new owner, then install the program again."
                     });
             }
             var state = info.Session == null ? string.Empty : info.Session.State;
@@ -247,8 +247,8 @@ namespace UnityCli
                 },
                 new[]
                 {
-                    "Run tools run debug.session.info to read the current state and cleanup detail.",
-                    "Run tools run debug.session.create to start a new session for this investigation."
+                    "Run tools run debug.session-info to read the current state and cleanup detail.",
+                    "Run tools run debug.session-create to start a new session for this investigation."
                 });
         }
 
@@ -528,7 +528,7 @@ namespace UnityCli
                         exception.Code,
                         "A program binding could not be prepared: " + exception.Message,
                         new Dictionary<string, object> { { "programId", plan.ProgramId }, { "bindingId", bindingPlan.Binding.BindingId } },
-                        new[] { "Resolve the exact target with tools run debug.method.find, or remove this binding from the program." });
+                        new[] { "Resolve the exact target with tools run debug.method-find, or remove this binding from the program." });
                 }
                 bindingPlan.HookPlan = hookPlan;
                 bindingPlan.Binding.TargetKey = MethodHookTargetKey.From(hookPlan.Resolved.Method).Text;
@@ -597,7 +597,7 @@ namespace UnityCli
                 "E_DEBUG_PROGRAM_ENTRY_MISSING",
                 "The resolved entry is unavailable in this domain.",
                 new Dictionary<string, object> { { "programId", definition.ProgramId }, { "entry", entry } },
-                new[] { "Run tools run debug.program.replace to republish the program in the current domain." });
+                new[] { "Run tools run debug.program-replace to republish the program in the current domain." });
         }
 
         // ------------------------------------------------------------------
@@ -632,7 +632,7 @@ namespace UnityCli
                         "E_DEBUG_PROGRAM_BINDING_NOT_PREPARED",
                         "A declared binding has no prepared mount plan, so it cannot be activated.",
                         new Dictionary<string, object> { { "programId", definition.ProgramId }, { "bindingId", binding.BindingId } },
-                        new[] { "Run tools run debug.program.replace with the same bindings so they can be prepared and mounted together." });
+                        new[] { "Run tools run debug.program-replace with the same bindings so they can be prepared and mounted together." });
                 var result = MethodHookHost.ApplyInstall(prepared.HookPlan, prepared.Prepared);
                 session.RecordBindingAttachment(definition.ProgramId, binding.BindingId, result.HookId, binding.TargetKey, true);
                 attached++;
@@ -1004,7 +1004,7 @@ namespace UnityCli
                 new[]
                 {
                     "Send a smaller state payload.",
-                    "Run tools run debug.program.info to read the current revision state size."
+                    "Run tools run debug.program-info to read the current revision state size."
                 });
         }
 
@@ -1017,7 +1017,7 @@ namespace UnityCli
                 new[]
                 {
                     "Split the program into a smaller source file, or reduce generated code inside it.",
-                    "Run tools run debug.program.list to read the current program budget usage."
+                    "Run tools run debug.program-list to read the current program budget usage."
                 });
         }
 
@@ -1050,7 +1050,7 @@ namespace UnityCli
                 "E_DEBUG_PROGRAM_NOT_FOUND",
                 "No loaded program definition has that programId in the current domain.",
                 new Dictionary<string, object> { { "programId", programId ?? string.Empty } },
-                new[] { "Run tools run debug.program.list to read the currently loaded program definitions." });
+                new[] { "Run tools run debug.program-list to read the currently loaded program definitions." });
         }
 
         private static BridgeCommandException MissingRun(string programRunId)
@@ -1059,7 +1059,7 @@ namespace UnityCli
                 "E_DEBUG_PROGRAM_RUN_NOT_FOUND",
                 "No loaded program run has that programRunId.",
                 new Dictionary<string, object> { { "programRunId", programRunId ?? string.Empty } },
-                new[] { "Run tools run debug.program.info on the program to read its active runs." });
+                new[] { "Run tools run debug.program-info on the program to read its active runs." });
         }
 
         private static BridgeCommandException EntryMissing(UnityCliDebugProgramDefinition definition, string entry)
@@ -1073,7 +1073,7 @@ namespace UnityCli
                     { "entry", entry ?? string.Empty },
                     { "declaredEntries", definition.Entries.Select(candidate => candidate.Name).ToList() }
                 },
-                new[] { "Run tools run debug.program.info to read the declared entry names, then submit the run again." });
+                new[] { "Run tools run debug.program-info to read the declared entry names, then submit the run again." });
         }
 
         private static BridgeCommandException SiteInvalid(string executionSite, UnityCliDebugProgramDefinition definition)
@@ -1097,7 +1097,7 @@ namespace UnityCli
                     "E_DEBUG_PROGRAM_LABEL_CONFLICT",
                     "The label is already used by another program definition of the same session.",
                     new Dictionary<string, object> { { "label", label ?? string.Empty }, { "sessionId", sessionId ?? string.Empty } },
-                    new[] { "Choose a label that no current program definition of this session uses.", "Run tools run debug.program.list to read the current labels." });
+                    new[] { "Choose a label that no current program definition of this session uses.", "Run tools run debug.program-list to read the current labels." });
             if (string.Equals(failure, UnityCliDebugProgramFailures.SourceTooLarge, StringComparison.Ordinal))
                 return new BridgeCommandException(
                     "E_DEBUG_LIMIT_EXCEEDED",
@@ -1110,8 +1110,8 @@ namespace UnityCli
                 new Dictionary<string, object> { { "limit", failure }, { "budget", budget == null ? new Dictionary<string, object>() : budget.ToData() } },
                 new[]
                 {
-                    "Run tools run debug.program.remove for a stopped program you no longer need, then retry this install.",
-                    "Run tools run debug.program.list to read the current program budget usage."
+                    "Run tools run debug.program-remove for a stopped program you no longer need, then retry this install.",
+                    "Run tools run debug.program-list to read the current program budget usage."
                 });
         }
 
@@ -1127,13 +1127,13 @@ namespace UnityCli
                         { "expectedRevision", expectedRevision },
                         { "currentRevision", definition.Revision }
                     },
-                    new[] { "Run tools run debug.program.info to read the current revision, then submit the replacement with that expectedRevision." });
+                    new[] { "Run tools run debug.program-info to read the current revision, then submit the replacement with that expectedRevision." });
             if (string.Equals(failure, UnityCliDebugProgramFailures.StateEpochConflict, StringComparison.Ordinal))
                 return new BridgeCommandException(
                     "E_DEBUG_PROGRAM_STATE_CONFLICT",
                     "The revision state epoch changed while the candidate was prepared, so the previous configuration was kept.",
                     new Dictionary<string, object> { { "programId", definition.ProgramId }, { "currentStateEpoch", definition.StateEpoch } },
-                    new[] { "Run tools run debug.program.info to read the current state epoch, then submit the replacement again." });
+                    new[] { "Run tools run debug.program-info to read the current state epoch, then submit the replacement again." });
             if (string.Equals(failure, UnityCliDebugProgramFailures.SourceTooLarge, StringComparison.Ordinal))
                 return new BridgeCommandException(
                     "E_DEBUG_LIMIT_EXCEEDED",
@@ -1145,12 +1145,12 @@ namespace UnityCli
                     "E_DEBUG_PROGRAM_WRONG_STATE",
                     "A stopped program cannot accept a replacement.",
                     new Dictionary<string, object> { { "programId", definition.ProgramId }, { "state", state ?? definition.State } },
-                    new[] { "Install a new program for this investigation, then run it.", "Run tools run debug.program.remove to delete this stopped definition." });
+                    new[] { "Install a new program for this investigation, then run it.", "Run tools run debug.program-remove to delete this stopped definition." });
             return new BridgeCommandException(
                 "E_DEBUG_PROGRAM_NOT_FOUND",
                 "The program to replace is not loaded in the current domain.",
                 new Dictionary<string, object> { { "programId", definition == null ? string.Empty : definition.ProgramId } },
-                new[] { "Run tools run debug.program.list to read the currently loaded program definitions." });
+                new[] { "Run tools run debug.program-list to read the currently loaded program definitions." });
         }
 
         private static BridgeCommandException RunRejection(string failure, UnityCliDebugProgramDefinition definition, string state, string executionSite, UnityCliDebugProgramBudget budget)
@@ -1162,8 +1162,8 @@ namespace UnityCli
                     new Dictionary<string, object> { { "programId", definition.ProgramId }, { "state", state ?? definition.State } },
                     new[]
                     {
-                        "Run tools run debug.program.wait for the active run, or tools run debug.program.stop to close it.",
-                        "Run tools run debug.program.info to read the active run of this program."
+                        "Run tools run debug.program-wait for the active run, or tools run debug.program-stop to close it.",
+                        "Run tools run debug.program-info to read the active run of this program."
                     });
             if (string.Equals(failure, UnityCliDebugProgramFailures.RunLimitExceeded, StringComparison.Ordinal))
                 return new BridgeCommandException(
@@ -1172,20 +1172,20 @@ namespace UnityCli
                     new Dictionary<string, object> { { "limit", "active-runs" }, { "budget", budget == null ? new Dictionary<string, object>() : budget.ToData() } },
                     new[]
                     {
-                        "Run tools run debug.program.stop for a run you no longer need, then submit this run again.",
-                        "Run tools run debug.program.list to read the current active run usage."
+                        "Run tools run debug.program-stop for a run you no longer need, then submit this run again.",
+                        "Run tools run debug.program-list to read the current active run usage."
                     });
             if (string.Equals(failure, UnityCliDebugProgramFailures.WrongState, StringComparison.Ordinal))
                 return new BridgeCommandException(
                     "E_DEBUG_PROGRAM_WRONG_STATE",
                     "A stopped program cannot accept a new run.",
                     new Dictionary<string, object> { { "programId", definition.ProgramId }, { "state", state ?? definition.State }, { "executionSite", executionSite ?? string.Empty } },
-                    new[] { "Run tools run debug.program.replace to republish the program, or install a new program for this investigation." });
+                    new[] { "Run tools run debug.program-replace to republish the program, or install a new program for this investigation." });
             return new BridgeCommandException(
                 "E_DEBUG_PROGRAM_ENTRY_MISSING",
                 "The declared entry or execution site cannot be activated.",
                 new Dictionary<string, object> { { "programId", definition == null ? string.Empty : definition.ProgramId }, { "failure", failure }, { "executionSite", executionSite ?? string.Empty } },
-                new[] { "Run tools run debug.program.info to read the declared entries and their categories." });
+                new[] { "Run tools run debug.program-info to read the declared entries and their categories." });
         }
 
         private static BridgeCommandException RemoveRejection(string failure, UnityCliDebugProgramDefinition definition, string state, int activeRuns, int attachedBindings, UnityCliDebugProgramBudget budget)
@@ -1206,8 +1206,8 @@ namespace UnityCli
                 detail,
                 new[]
                 {
-                    "Run tools run debug.program.stop for the active run of this program.",
-                    "Run tools run debug.program.wait to observe the run until it reaches a terminal state, then remove the program."
+                    "Run tools run debug.program-stop for the active run of this program.",
+                    "Run tools run debug.program-wait to observe the run until it reaches a terminal state, then remove the program."
                 });
         }
     }

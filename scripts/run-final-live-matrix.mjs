@@ -13,7 +13,7 @@ export const PLAYMODE_UNAVAILABLE_CODE_OVERRIDES = new Map([
 ]);
 export const PLAYMODE_RESOLVE_BLOCKED_TOOLS = new Set([
   "package.deploy", "package.embed", "package.install", "package.remove", "package.resolve", "package.restore",
-  "package.scoped-registry.add", "package.scoped-registry.remove"
+  "package.scoped-registry-add", "package.scoped-registry-remove"
 ]);
 // Dev Matrix 的 project Tool 是固定 fixture inventory；公开 descriptor 不暴露内部 source。
 const REQUIRED_PROJECT_TOOL_NAMES = Object.freeze([
@@ -22,17 +22,17 @@ const REQUIRED_PROJECT_TOOL_NAMES = Object.freeze([
 const REQUIRED_PROJECT_TOOL_NAME_SET = new Set(REQUIRED_PROJECT_TOOL_NAMES);
 const REMOVED_PUBLIC_TOOL_NAMES = Object.freeze(["build.status", "build.cancel"]);
 /** These Tools require values returned by a fresh read Tool observation, not descriptor placeholders. */
-export const EXTERNAL_STATE_DEPENDENT_TOOL_NAMES = Object.freeze(["editor.dialog.click"]);
+export const EXTERNAL_STATE_DEPENDENT_TOOL_NAMES = Object.freeze(["editor.dialog-click"]);
 export const DEPENDENT_STATUS_ROOT_TOOLS = Object.freeze({
-  "asset.refresh.status": "asset.refresh",
-  "build.player.status": "build.run",
-  "editor.play-mode.status": "editor.play-mode.start",
-  "package.install.status": "package.install",
-  "package.remove.status": "package.remove",
-  "test.run.status": "test.run"
+  "asset.refresh-status": "asset.refresh",
+  "build.player-status": "build.run",
+  "editor.play-mode-status": "editor.play-mode-start",
+  "package.install-status": "package.install",
+  "package.remove-status": "package.remove",
+  "test.run-status": "test.run"
 });
 export const DEPENDENT_STATUS_ROOT_INPUTS = Object.freeze({
-  "asset.refresh.status": Object.freeze({ path: "Assets/UnityCLIValidation/Matrix.prefab", forceUpdate: true })
+  "asset.refresh-status": Object.freeze({ path: "Assets/UnityCLIValidation/Matrix.prefab", forceUpdate: true })
 });
 const DIRECT_READ_RETRY_CODES = Object.freeze(["E_READ_GENERATION_CHANGED"]);
 const DIRECT_READ_MAX_ATTEMPTS = 3;
@@ -319,7 +319,7 @@ class Matrix {
   /** 会话设置与全局 PlayMode transition 不能跨 runner 进程复用。 */
   invalidateSessionControls() {
     for (const id of [...this.prior.keys()]) {
-      const globalTransition = ["tool.editor.play-mode.start.transition", "playmode.ready", "tool.editor.play-mode.stop.transition", "playmode.exit-ready"].includes(id);
+      const globalTransition = ["tool.editor.play-mode-start.transition", "playmode.ready", "tool.editor.play-mode-stop.transition", "playmode.exit-ready"].includes(id);
       const processLocalFixture = [
         "control.setup.", "control.reset.", "control.final-reset.", "control.pipeline-final-restore.",
         "control.playmode-fast.", "control.playmode-restore.", "control.playmode-initial-restore.",
@@ -330,7 +330,7 @@ class Matrix {
   }
   /** PlayMode coverage 入口再次清除 transition，确保当前进程真实进入并退出。 */
   invalidateFailedPlayModeControls() {
-    for (const id of ["tool.editor.play-mode.start.transition", "playmode.ready", "tool.editor.play-mode.stop.transition", "playmode.exit-ready"]) this.prior.delete(id);
+    for (const id of ["tool.editor.play-mode-start.transition", "playmode.ready", "tool.editor.play-mode-stop.transition", "playmode.exit-ready"]) this.prior.delete(id);
   }
   argv(base, project = this.o.project) { return publicMatrixArgv(base, project, this.o.project, this.o.target); }
   /** 复用证据必须同时绑定 build、project 与 target，避免跨环境跳过 case。 */
@@ -596,9 +596,9 @@ export function selectExactExternalSceneReloadDialog(dialogs) {
 }
 
 export const FROZEN_DIRECT_TOOL_NAMES = Object.freeze([
-  "animator.crossfade", "debug.code.execute", "editor.undo", "editor.redo", "physics.simulation", "navmesh.surface.bake",
-  "prefab.overrides.apply", "prefab.overrides.revert", "prefab.variant.create", "debug.method.invoke", "scene.view-frame",
-  "timeline.clip.add", "timeline.create", "timeline.info", "timeline.track.add",
+  "animator.crossfade", "debug.code-execute", "editor.undo", "editor.redo", "physics.simulation", "navmesh.surface-bake",
+  "prefab.overrides-apply", "prefab.overrides-revert", "prefab.variant-create", "debug.method-invoke", "scene.view-frame",
+  "timeline.clip-add", "timeline.create", "timeline.info", "timeline.track-add",
   "probuilder.append-vertices-to-edge", "probuilder.auto-smooth", "probuilder.bevel-edges", "probuilder.bridge-edges", "probuilder.connect-elements",
   "probuilder.create-shape", "probuilder.duplicate-and-flip", "probuilder.extrude-edges", "probuilder.extrude-faces", "probuilder.flip-normals",
   "probuilder.insert-vertex", "probuilder.merge-objects", "probuilder.merge-vertices", "probuilder.subdivide", "probuilder.weld-vertices"
@@ -675,16 +675,16 @@ export const DIRECT_LIVE_CASES = Object.freeze({
     ],
     cleanup: [deleteTargetStep("delete-target")]
   },
-  "debug.code.execute": {
+  "debug.code-execute": {
     setup: [step("create-target", "game-object.create", { name: "${target}", x: 0, y: 0, z: 0 }, { capture: { targetId: "/data/gameObject/id" } })],
     before: [readStep("target", "scene.gameobject", { target: "${target}", includeComponents: false }, { capture: { beforeX: "/data/gameObject/transform/position/x", beforeTargetId: "/data/gameObject/id" } })],
     preflight: [
-      step("dry-run", "debug.code.execute", {
+      step("dry-run", "debug.code-execute", {
         code: "var go = GameObject.Find(\"${target}\"); go.transform.position = new Vector3(1f, go.transform.position.y, go.transform.position.z); return null;",
         completionProbe: completionProbe("${target}", "x", 0, 1)
       }, { flags: ["--dry-run"], expect: { equals: { "/data/dryRun": true } } })
     ],
-    invocation: step("invoke", "debug.code.execute", {
+    invocation: step("invoke", "debug.code-execute", {
       code: "var go = GameObject.Find(\"${target}\"); go.transform.position = new Vector3(1f, go.transform.position.y, go.transform.position.z); return null;",
       completionProbe: completionProbe("${target}", "x", 0, 1)
     }, { expect: { equals: { "/data/completion/assertions/0/value": 1 } }, capture: { completionX: "/data/completion/assertions/0/value" } }),
@@ -734,7 +734,7 @@ export const DIRECT_LIVE_CASES = Object.freeze({
       step("restore-settings", "physics.settings", { autoSimulation: { $var: "priorAutoSimulation" }, simulationMode2D: { $var: "priorSimulationMode2D" }, gravity: { $var: "priorGravity" } }, { when: ["priorAutoSimulation", "priorSimulationMode2D", "priorGravity"] })
     ]
   },
-  "navmesh.surface.bake": {
+  "navmesh.surface-bake": {
     setup: [
       step("create-surface", "game-object.create", { name: "${target}", x: 0, y: 0, z: 0 }),
       step("add-surface", "component.add", { target: "${target}", component: "Unity.AI.Navigation.NavMeshSurface", properties: {} }),
@@ -742,13 +742,13 @@ export const DIRECT_LIVE_CASES = Object.freeze({
       step("save-prerequisites", "scene.save", {})
     ],
     before: [
-      step("dry-plan", "navmesh.surface.bake", {}, {
+      step("dry-plan", "navmesh.surface-bake", {}, {
         flags: ["--dry-run"],
         expect: { equals: { "/data/dryRun": true, "/data/kind": "surfaces", "/data/targetCount": 1, "/data/plannedEffects/0/targetCount": 1 }, exists: ["/data/scenes/0/path", "/data/targets/0/globalId"] },
         capture: { plannedScenePath: "/data/scenes/0/path", plannedSurfaceGlobalId: "/data/targets/0/globalId" }
       })
     ],
-    invocation: step("invoke", "navmesh.surface.bake", {}, {
+    invocation: step("invoke", "navmesh.surface-bake", {}, {
       expect: { equals: { "/data/kind": "surfaces", "/data/status": "completed", "/data/surfaces/0/name": "${target}", "/data/surfaces/0/sceneDirty": false }, exists: ["/data/operationId", "/data/scenes/0/path", "/data/surfaces/0/globalId", "/data/surfaces/0/dataPath", "/data/surfaces/0/dataGuid", "/data/surfaces/0/dataHash"] },
       capture: { operationId: "/data/operationId", invocationScenePath: "/data/scenes/0/path", surfaceGlobalId: "/data/surfaces/0/globalId", dataPath: "/data/surfaces/0/dataPath", dataGuid: "/data/surfaces/0/dataGuid" }
     }),
@@ -769,20 +769,20 @@ export const DIRECT_LIVE_CASES = Object.freeze({
       step("save-cleanup", "scene.save", {})
     ]
   },
-  "prefab.overrides.apply": {
+  "prefab.overrides-apply": {
     setup: [
       step("copy-base", "asset.duplicate", { source: "Assets/UnityCLIValidation/Matrix.prefab", destination: "${prefabPath}" }),
       step("instantiate", "prefab.instantiate", { path: "${prefabPath}", name: "${target}", x: 0, y: 0, z: 0 }),
       step("add-child-override", "game-object.create", { name: "${targetA}", parent: "${target}", x: 1, y: 2, z: 3 })
     ],
     before: [
-      step("dry-plan", "prefab.overrides.apply", { instance: "${target}" }, {
+      step("dry-plan", "prefab.overrides-apply", { instance: "${target}" }, {
         flags: ["--dry-run"],
         expect: { equals: { "/data/action": "apply", "/data/dryRun": true, "/data/changed": true, "/data/before/hasOverrides": true, "/data/after/hasOverrides": true, "/data/source/path": "${prefabPath}" } },
         capture: { beforeSourceGuid: "/data/source/guid", beforeSourceHash: "/data/sourceHashBefore" }
       })
     ],
-    invocation: step("invoke", "prefab.overrides.apply", { instance: "${target}" }, {
+    invocation: step("invoke", "prefab.overrides-apply", { instance: "${target}" }, {
       expect: { equals: { "/data/action": "apply", "/data/dryRun": false, "/data/changed": true, "/data/before/hasOverrides": true, "/data/after/hasOverrides": false, "/data/source/path": "${prefabPath}" } },
       capture: { appliedSourceGuid: "/data/source/guid", appliedSourceHashBefore: "/data/sourceHashBefore", appliedSourceHashAfter: "/data/sourceHashAfter" }
     }),
@@ -803,20 +803,20 @@ export const DIRECT_LIVE_CASES = Object.freeze({
       step("reload-scene", "scene.load", { path: "Assets/UnityCLIValidation/MatrixScene.unity" })
     ]
   },
-  "prefab.overrides.revert": {
+  "prefab.overrides-revert": {
     setup: [
       step("copy-base", "asset.duplicate", { source: "Assets/UnityCLIValidation/Matrix.prefab", destination: "${prefabPath}" }),
       step("instantiate", "prefab.instantiate", { path: "${prefabPath}", name: "${target}", x: 0, y: 0, z: 0 }),
       step("add-child-override", "game-object.create", { name: "${targetA}", parent: "${target}", x: 1, y: 2, z: 3 })
     ],
     before: [
-      step("dry-plan", "prefab.overrides.revert", { instance: "${target}" }, {
+      step("dry-plan", "prefab.overrides-revert", { instance: "${target}" }, {
         flags: ["--dry-run"],
         expect: { equals: { "/data/action": "revert", "/data/dryRun": true, "/data/changed": true, "/data/before/hasOverrides": true, "/data/after/hasOverrides": true, "/data/source/path": "${prefabPath}" } },
         capture: { beforeSourceGuid: "/data/source/guid", beforeSourceHash: "/data/sourceHashBefore" }
       })
     ],
-    invocation: step("invoke", "prefab.overrides.revert", { instance: "${target}" }, {
+    invocation: step("invoke", "prefab.overrides-revert", { instance: "${target}" }, {
       expect: { equals: { "/data/action": "revert", "/data/dryRun": false, "/data/changed": true, "/data/before/hasOverrides": true, "/data/after/hasOverrides": false, "/data/source/path": "${prefabPath}" } },
       capture: { revertedSourceGuid: "/data/source/guid", revertedSourceHashBefore: "/data/sourceHashBefore", revertedSourceHashAfter: "/data/sourceHashAfter" }
     }),
@@ -835,14 +835,14 @@ export const DIRECT_LIVE_CASES = Object.freeze({
       step("reload-scene", "scene.load", { path: "Assets/UnityCLIValidation/MatrixScene.unity" })
     ]
   },
-  "prefab.variant.create": {
+  "prefab.variant-create": {
     before: [
       readStep("variant-absent", "asset.info", { path: "${variantPath}" }, { expectedErrorCode: "E_ASSET_NOT_FOUND" })
     ],
     preflight: [
-      step("dry-plan", "prefab.variant.create", { base: "Assets/UnityCLIValidation/Matrix.prefab", path: "${variantPath}" }, { flags: ["--dry-run"], expect: { equals: { "/data/dryRun": true, "/data/created": false, "/data/base/path": "Assets/UnityCLIValidation/Matrix.prefab", "/data/variant/path": "${variantPath}" } } })
+      step("dry-plan", "prefab.variant-create", { base: "Assets/UnityCLIValidation/Matrix.prefab", path: "${variantPath}" }, { flags: ["--dry-run"], expect: { equals: { "/data/dryRun": true, "/data/created": false, "/data/base/path": "Assets/UnityCLIValidation/Matrix.prefab", "/data/variant/path": "${variantPath}" } } })
     ],
-    invocation: step("invoke", "prefab.variant.create", { base: "Assets/UnityCLIValidation/Matrix.prefab", path: "${variantPath}" }, {
+    invocation: step("invoke", "prefab.variant-create", { base: "Assets/UnityCLIValidation/Matrix.prefab", path: "${variantPath}" }, {
       expect: { equals: { "/data/dryRun": false, "/data/created": true, "/data/base/path": "Assets/UnityCLIValidation/Matrix.prefab", "/data/variant/path": "${variantPath}", "/data/variant/isVariant": true } },
       capture: { createdVariantGuid: "/data/variant/guid", createdBaseGuid: "/data/base/guid" }
     }),
@@ -875,7 +875,7 @@ export const DIRECT_LIVE_CASES = Object.freeze({
   "timeline.info": {
     setup: [
       step("create-timeline", "timeline.create", { path: "${timelinePath}", frameRate: 24, overwrite: false }),
-      step("add-track", "timeline.track.add", { timeline: "${timelinePath}", trackType: "Activation", name: "${target}" })
+      step("add-track", "timeline.track-add", { timeline: "${timelinePath}", trackType: "Activation", name: "${target}" })
     ],
     before: [
       readStep("asset-before", "asset.info", { path: "${timelinePath}" }, { expect: { equals: { "/data/asset/exists": true, "/data/asset/path": "${timelinePath}" } }, capture: { beforeTimelineGuid: "/data/asset/guid" } })
@@ -893,15 +893,15 @@ export const DIRECT_LIVE_CASES = Object.freeze({
     ],
     cleanup: [deleteAssetStep("delete-timeline", "${timelinePath}")]
   },
-  "timeline.track.add": {
+  "timeline.track-add": {
     setup: [step("create-timeline", "timeline.create", { path: "${timelinePath}", frameRate: 24, overwrite: false })],
     before: [
       readStep("before-info", "timeline.info", { timeline: "${timelinePath}", pageSize: 10, maxDepth: 2, maxClipsPerTrack: 10 }, { expect: { equals: { "/data/timeline/trackCount": 0, "/data/pageInfo/total": 0 } }, capture: { beforeTimelineGuid: "/data/timeline/guid" } })
     ],
     preflight: [
-      step("dry-plan", "timeline.track.add", { timeline: "${timelinePath}", trackType: "Activation", name: "${target}" }, { flags: ["--dry-run"], expect: { equals: { "/data/dryRun": true, "/data/added": false, "/data/track/name": "${target}", "/data/track/trackType": "Activation" } } })
+      step("dry-plan", "timeline.track-add", { timeline: "${timelinePath}", trackType: "Activation", name: "${target}" }, { flags: ["--dry-run"], expect: { equals: { "/data/dryRun": true, "/data/added": false, "/data/track/name": "${target}", "/data/track/trackType": "Activation" } } })
     ],
-    invocation: step("invoke", "timeline.track.add", { timeline: "${timelinePath}", trackType: "Activation", name: "${target}" }, {
+    invocation: step("invoke", "timeline.track-add", { timeline: "${timelinePath}", trackType: "Activation", name: "${target}" }, {
       expect: { equals: { "/data/dryRun": false, "/data/added": true, "/data/track/name": "${target}", "/data/track/trackType": "Activation", "/data/timeline/trackCount": 1 } },
       capture: { addedTimelineGuid: "/data/timeline/guid", addedTrackLocalId: "/data/track/identity/localId" }
     }),
@@ -915,18 +915,18 @@ export const DIRECT_LIVE_CASES = Object.freeze({
     ],
     cleanup: [deleteAssetStep("delete-timeline", "${timelinePath}")]
   },
-  "timeline.clip.add": {
+  "timeline.clip-add": {
     setup: [
       step("create-timeline", "timeline.create", { path: "${timelinePath}", frameRate: 24, overwrite: false }),
-      step("add-track", "timeline.track.add", { timeline: "${timelinePath}", trackType: "Activation", name: "${target}" }, { capture: { trackLocalId: "/data/track/identity/localId" } })
+      step("add-track", "timeline.track-add", { timeline: "${timelinePath}", trackType: "Activation", name: "${target}" }, { capture: { trackLocalId: "/data/track/identity/localId" } })
     ],
     before: [
       readStep("before-info", "timeline.info", { timeline: "${timelinePath}", pageSize: 10, maxDepth: 2, maxClipsPerTrack: 10 }, { expect: { equals: { "/data/timeline/trackCount": 1, "/data/tracks/0/clipCount": 0 } }, capture: { beforeTimelineGuid: "/data/timeline/guid", beforeTrackLocalId: "/data/tracks/0/identity/localId" } })
     ],
     preflight: [
-      step("dry-plan", "timeline.clip.add", { timeline: "${timelinePath}", trackLocalId: { $var: "trackLocalId" }, start: 0, duration: 2.5 }, { flags: ["--dry-run"], expect: { equals: { "/data/dryRun": true, "/data/added": false, "/data/clip/start": 0, "/data/clip/duration": 2.5 } } })
+      step("dry-plan", "timeline.clip-add", { timeline: "${timelinePath}", trackLocalId: { $var: "trackLocalId" }, start: 0, duration: 2.5 }, { flags: ["--dry-run"], expect: { equals: { "/data/dryRun": true, "/data/added": false, "/data/clip/start": 0, "/data/clip/duration": 2.5 } } })
     ],
-    invocation: step("invoke", "timeline.clip.add", { timeline: "${timelinePath}", trackLocalId: { $var: "trackLocalId" }, start: 0, duration: 2.5 }, {
+    invocation: step("invoke", "timeline.clip-add", { timeline: "${timelinePath}", trackLocalId: { $var: "trackLocalId" }, start: 0, duration: 2.5 }, {
       expect: { equals: { "/data/dryRun": false, "/data/added": true, "/data/clip/start": 0, "/data/clip/duration": 2.5, "/data/clip/track/name": "${target}", "/data/timeline/trackCount": 1 } },
       capture: { addedTimelineGuid: "/data/timeline/guid", addedTrackLocalId: "/data/clip/track/identity/localId", addedClipDuration: "/data/clip/duration" }
     }),
@@ -942,15 +942,15 @@ export const DIRECT_LIVE_CASES = Object.freeze({
     ],
     cleanup: [deleteAssetStep("delete-timeline", "${timelinePath}")]
   },
-  "debug.method.invoke": {
+  "debug.method-invoke": {
     setup: [step("create-target", "game-object.create", { name: "${target}", x: 0, y: 0, z: 0 })],
     before: [readStep("target", "scene.gameobject", { target: "${target}", includeComponents: false }, { capture: { beforeX: "/data/gameObject/transform/position/x", beforeTargetId: "/data/gameObject/id" } })],
     preflight: [
-      step("dry-run", "debug.method.invoke", {
+      step("dry-run", "debug.method-invoke", {
         typeName: "UnityEngine.Transform", methodName: "Translate", parameterTypes: ["UnityEngine.Vector3", "UnityEngine.Space"], args: [{ x: 1, y: 0, z: 0 }, "World"], instanceRef: { path: "${target}" }, completionProbe: completionProbe("${target}", "x", 0, 1)
       }, { flags: ["--dry-run"], expect: { equals: { "/data/typeName": "UnityEngine.Transform", "/data/methodName": "Translate" } } })
     ],
-    invocation: step("invoke", "debug.method.invoke", {
+    invocation: step("invoke", "debug.method-invoke", {
       typeName: "UnityEngine.Transform", methodName: "Translate", parameterTypes: ["UnityEngine.Vector3", "UnityEngine.Space"], args: [{ x: 1, y: 0, z: 0 }, "World"], instanceRef: { path: "${target}" }, completionProbe: completionProbe("${target}", "x", 0, 1)
     }, { expect: { equals: { "/data/completion/assertions/0/value": 1 } }, capture: { completionX: "/data/completion/assertions/0/value" } }),
     after: [readStep("target", "scene.gameobject", { target: "${target}", includeComponents: false }, { capture: { afterX: "/data/gameObject/transform/position/x", afterTargetId: "/data/gameObject/id" } })],
@@ -1136,21 +1136,21 @@ export function routeCapabilityFixtureInput(input, name, options) {
   if (["type-inspection.get-member", "type-inspection.search", "type-inspection.get-type"].includes(name) && typeof options?.reflect_cache_dir === "string")
     return { ...input, reflectDir: options.reflect_cache_dir };
   if ([
-    "package.registry.clear", "package.registry.set",
-    "package.scoped-registry.add", "package.scoped-registry.remove"
+    "package.registry-clear", "package.registry-set",
+    "package.scoped-registry-add", "package.scoped-registry-remove"
   ].includes(name) && typeof options?.project === "string" && !Object.hasOwn(input, "project")) return { ...input, project: options.project };
   return input;
 }
 
-/** editor.play-mode.start cleanup失败必须终止coverage；status接管的超时root也必须恢复到EditMode。 */
+/** editor.play-mode-start cleanup失败必须终止coverage；status接管的超时root也必须恢复到EditMode。 */
 async function cleanupEditorPlay(m, caseId, name, phase, record) {
   const deferred = isDeferredStatusRootTimeout(name, phase, record.envelope, record.exitCode, record.recoveryStatusTool);
-  if (name !== "editor.play-mode.start" || phase !== "editor" || (record.envelope?.ok !== true && !deferred)) return null;
-  const descriptor = await getDescriptor(m, "tool", "editor.play-mode.stop");
+  if (name !== "editor.play-mode-start" || phase !== "editor" || (record.envelope?.ok !== true && !deferred)) return null;
+  const descriptor = await getDescriptor(m, "tool", "editor.play-mode-stop");
   let input = {};
-  try { input = parsePublicExample(descriptor?.examples?.[0], "tool", "editor.play-mode.stop").input; } catch { }
-  const stopArgv = argvFor("tool", "editor.play-mode.stop", input);
-  const stopRecord = await m.call(`${caseId}.cleanup.stop`, stopArgv, (e, r) => r.exitCode === 0 ? assertSuccess(e, descriptor?.resultSchema ?? {}) : "editor.play-mode.stop cleanup failed.", { cleanup: { sourceCase: caseId, session: "edit-mode" } });
+  try { input = parsePublicExample(descriptor?.examples?.[0], "tool", "editor.play-mode-stop").input; } catch { }
+  const stopArgv = argvFor("tool", "editor.play-mode-stop", input);
+  const stopRecord = await m.call(`${caseId}.cleanup.stop`, stopArgv, (e, r) => r.exitCode === 0 ? assertSuccess(e, descriptor?.resultSchema ?? {}) : "editor.play-mode-stop cleanup failed.", { cleanup: { sourceCase: caseId, session: "edit-mode" } });
   const readyRecord = await m.call(`${caseId}.cleanup.ready`, ["tools", "run", "editor.state", "--input", "{}", "--timeout-ms", "10000"], (e, r) => {
     return r.exitCode === 0 && isReadyEditorState(e, false) ? null : "Editor did not return to ready Edit Mode after cleanup.";
   }, { cleanup: { sourceCase: caseId, session: "edit-mode-ready" }, retryAssertion: true });
@@ -1183,13 +1183,13 @@ export function ownedMemorySnapshotCleanupTarget(project, snapshotResult) {
   if (!relativeTarget || relativeTarget.startsWith(`..${sep}`) || relativeTarget === ".." || isAbsolute(relativeTarget) || extname(target).toLowerCase() !== ".snap")
     throw new Error(`Memory snapshot cleanup path is outside the exact project snapshot root: ${snapshotResult.path}`);
   const ownsTarget = Array.isArray(snapshotResult.plannedEffects)
-    && snapshotResult.plannedEffects.some((effect) => effect?.type === "profiler.memory-snapshot.take" && resolve(effect.path ?? "") === target);
+    && snapshotResult.plannedEffects.some((effect) => effect?.type === "profiler.memory-snapshot-take" && resolve(effect.path ?? "") === target);
   if (!ownsTarget) throw new Error("Memory snapshot cleanup has no matching terminal planned effect.");
   return { root, target };
 }
 
 async function cleanupOwnedMemorySnapshotCase(m, caseId, name, record, flags, project) {
-  if (name !== "profiler.memory-snapshot.take" || record.assertion?.status !== "PASS" || record.envelope?.ok !== true || flags.includes("--dry-run")) return null;
+  if (name !== "profiler.memory-snapshot-take" || record.assertion?.status !== "PASS" || record.envelope?.ok !== true || flags.includes("--dry-run")) return null;
   try {
     const owned = ownedMemorySnapshotCleanupTarget(project, record.envelope.data);
     await assertNoSymbolicAncestor(owned.target, owned.root, "Memory snapshot cleanup target");
@@ -1207,7 +1207,7 @@ function slashPath(value) { return value.replaceAll("\\", "/"); }
 /** 将active scene限定到项目Assets下对应的Unity lighting目录。 */
 export function sceneBakeArtifactDirectory(project, scenePath) {
   if (typeof project !== "string" || project.length === 0 || typeof scenePath !== "string" || !/^Assets\/.+\.unity$/i.test(scenePath))
-    throw new Error("lighting.bake.start cleanup requires an active Assets/*.unity scene.");
+    throw new Error("lighting.bake-start cleanup requires an active Assets/*.unity scene.");
   const projectRoot = resolve(project);
   const sceneAbsolute = resolve(projectRoot, ...scenePath.replaceAll("\\", "/").split("/"));
   const relativeScene = relative(projectRoot, sceneAbsolute);
@@ -1703,15 +1703,15 @@ export function ownedSceneBakeCleanupPlan(beforeFiles, afterFiles) {
 async function prepareOwnedBakeStartSnapshot(m, caseId, project) {
   const state = await m.call(`${caseId}.baseline.lighting.bake.start`, ["tools", "run", "editor.state", "--input", "{}", "--timeout-ms", "10000"], (e, r) => {
     const path = e?.data?.state?.activeScene?.value?.path;
-    return r.exitCode === 0 && isReadyEditorState(e, false) && typeof path === "string" && path.length > 0 ? null : "lighting.bake.start baseline scene is not a ready saved Assets scene.";
-  }, { baseline: { sourceCase: caseId, capability: "lighting.bake.start", artifactState: true } }, project);
+    return r.exitCode === 0 && isReadyEditorState(e, false) && typeof path === "string" && path.length > 0 ? null : "lighting.bake-start baseline scene is not a ready saved Assets scene.";
+  }, { baseline: { sourceCase: caseId, capability: "lighting.bake-start", artifactState: true } }, project);
   stopAfterTerminalFailure(state);
   const scenePath = state.envelope.data.state.activeScene.value.path;
   const evidenceRoot = resolve(m.o.evidence_dir);
   const backupRoot = resolve(evidenceRoot, "owned-bake-snapshots", caseId);
   try { return await persistSceneBakeSnapshot(await readSceneBakeState(project, scenePath), backupRoot, evidenceRoot, caseId); }
   catch (error) {
-    const failure = await m.failed(`${caseId}.baseline.lighting.bake.start.snapshot`, `Unable to freeze scene bake artifacts before effect: ${String(error?.message ?? error)}`, { baseline: { sourceCase: caseId, capability: "lighting.bake.start", artifactState: true } });
+    const failure = await m.failed(`${caseId}.baseline.lighting.bake.start.snapshot`, `Unable to freeze scene bake artifacts before effect: ${String(error?.message ?? error)}`, { baseline: { sourceCase: caseId, capability: "lighting.bake-start", artifactState: true } });
     return stopAfterTerminalFailure(failure);
   }
 }
@@ -1731,13 +1731,13 @@ async function recoverPendingOwnedBakeStartSnapshot(m, caseId, project) {
     const prior = m.prior.get(caseId);
     const knownTerminal = prior?.assertion?.status === "PASS" && prior?.envelope?.ok === true && prior?.exitCode === 0;
     if (!knownTerminal) {
-      const failure = await m.failed(`${caseId}.recovery.lighting.bake.start.terminal-unproven`, "A prepared lighting.bake.start snapshot has no proven terminal success; inspect the scene before deciding whether to retry.", { recovery: { sourceCase: caseId, artifactState: true, terminalUnproven: true } });
+      const failure = await m.failed(`${caseId}.recovery.lighting.bake.start.terminal-unproven`, "A prepared lighting.bake-start snapshot has no proven terminal success; inspect the scene before deciding whether to retry.", { recovery: { sourceCase: caseId, artifactState: true, terminalUnproven: true } });
       return stopAfterTerminalFailure(failure);
     }
     await writeSceneBakeSnapshotStatus(snapshot, "effect-terminal", prior.envelope.requestId ?? null);
   }
   const recoveryCaseId = `${caseId}.recovery.${m.runToken}`;
-  const recovered = await cleanupOwnedBakeStartCase(m, recoveryCaseId, "lighting.bake.start", {
+  const recovered = await cleanupOwnedBakeStartCase(m, recoveryCaseId, "lighting.bake-start", {
     assertion: { status: "PASS" }, envelope: { ok: true, requestId: snapshot.terminalRequestId }, exitCode: 0
   }, [], project, snapshot);
   if (recovered) stopAfterTerminalFailure(recovered);
@@ -1762,26 +1762,26 @@ async function recoverAllPendingOwnedBakeSnapshots(m) {
 
 /** 成功bake-start必须等待只读收敛，再精确恢复effect前文件闭包。 */
 async function cleanupOwnedBakeStartCase(m, caseId, name, record, flags, project, snapshot) {
-  if (name !== "lighting.bake.start" || record.envelope?.ok !== true || record.exitCode !== 0 || flags.includes("--dry-run")) return null;
-  if (!snapshot || snapshot.status !== "effect-terminal") return m.failed(`${caseId}.cleanup.lighting.bake.start.snapshot`, "lighting.bake.start terminal PASS has no effect-before terminal snapshot.", { cleanup: { sourceCase: caseId, artifactState: true } });
-  const statusDescriptor = await getDescriptor(m, "tool", "lighting.bake.status");
-  if (!statusDescriptor) return m.failed(`${caseId}.cleanup.lighting.bake.status.descriptor`, "lighting.bake.status descriptor is unavailable before cleanup.", { cleanup: { sourceCase: caseId, artifactState: true } });
+  if (name !== "lighting.bake-start" || record.envelope?.ok !== true || record.exitCode !== 0 || flags.includes("--dry-run")) return null;
+  if (!snapshot || snapshot.status !== "effect-terminal") return m.failed(`${caseId}.cleanup.lighting.bake.start.snapshot`, "lighting.bake-start terminal PASS has no effect-before terminal snapshot.", { cleanup: { sourceCase: caseId, artifactState: true } });
+  const statusDescriptor = await getDescriptor(m, "tool", "lighting.bake-status");
+  if (!statusDescriptor) return m.failed(`${caseId}.cleanup.lighting.bake.status.descriptor`, "lighting.bake-status descriptor is unavailable before cleanup.", { cleanup: { sourceCase: caseId, artifactState: true } });
   const deadline = Date.now() + Math.min(m.o.timeoutMs, 120000);
   let terminal = null;
   for (let attempt = 1; Date.now() < deadline; attempt += 1) {
     const statusTimeoutMs = Math.max(1000, Math.min(10000, deadline - Date.now()));
-    const status = await m.call(`${caseId}.cleanup.lighting.bake.status.${attempt}`, argvFor("tool", "lighting.bake.status", {}, ["--timeout-ms", String(statusTimeoutMs)]), (e, r) => {
-      const issue = r.exitCode === 0 ? assertPositiveSuccess(e, statusDescriptor?.resultSchema ?? {}) : `lighting.bake.status cleanup read exited ${r.exitCode}.`;
-      return issue ?? (typeof e?.data?.baking === "boolean" ? null : "lighting.bake.status did not return a boolean baking state.");
-    }, { cleanup: { sourceCase: caseId, capability: "lighting.bake.status", artifactState: true, attempt } }, project);
+    const status = await m.call(`${caseId}.cleanup.lighting.bake.status.${attempt}`, argvFor("tool", "lighting.bake-status", {}, ["--timeout-ms", String(statusTimeoutMs)]), (e, r) => {
+      const issue = r.exitCode === 0 ? assertPositiveSuccess(e, statusDescriptor?.resultSchema ?? {}) : `lighting.bake-status cleanup read exited ${r.exitCode}.`;
+      return issue ?? (typeof e?.data?.baking === "boolean" ? null : "lighting.bake-status did not return a boolean baking state.");
+    }, { cleanup: { sourceCase: caseId, capability: "lighting.bake-status", artifactState: true, attempt } }, project);
     stopAfterTerminalFailure(status);
     if (status.envelope.data.baking === false) { terminal = status; break; }
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 500));
   }
-  if (!terminal) return m.failed(`${caseId}.cleanup.lighting.bake.status.timeout`, "lighting.bake.start did not converge before the cleanup deadline.", { cleanup: { sourceCase: caseId, artifactState: true } });
+  if (!terminal) return m.failed(`${caseId}.cleanup.lighting.bake.status.timeout`, "lighting.bake-start did not converge before the cleanup deadline.", { cleanup: { sourceCase: caseId, artifactState: true } });
 
   const ready = await m.call(`${caseId}.cleanup.lighting.bake.start.ready`, ["tools", "run", "editor.state", "--input", "{}", "--timeout-ms", "10000"], (e, r) => {
-    return r.exitCode === 0 && isReadyEditorState(e, false) ? null : "Editor did not become ready after lighting.bake.start completed.";
+    return r.exitCode === 0 && isReadyEditorState(e, false) ? null : "Editor did not become ready after lighting.bake-start completed.";
   }, { cleanup: { sourceCase: caseId, artifactState: true }, retryAssertion: true }, project);
   stopAfterTerminalFailure(ready);
 
@@ -1823,7 +1823,7 @@ async function cleanupOwnedBakeStartCase(m, caseId, name, record, flags, project
   }
 
   for (const path of plan.refreshAssets) {
-    const refreshed = await m.call(`${caseId}.cleanup.asset.refresh.${createHash("sha256").update(path).digest("hex").slice(0, 12)}`, argvFor("tool", "asset.refresh", { path, forceUpdate: true }), (e, r) => {
+    const refreshed = await m.call(`${caseId}.cleanup.asset.refresh-${createHash("sha256").update(path).digest("hex").slice(0, 12)}`, argvFor("tool", "asset.refresh", { path, forceUpdate: true }), (e, r) => {
       const issue = r.exitCode === 0 ? assertPositiveSuccess(e, refreshDescriptor?.resultSchema ?? {}) : `asset.refresh cleanup exited ${r.exitCode}.`;
       return issue ?? (e?.data?.path === path && e?.data?.refreshed === true ? null : `asset.refresh did not prove ${path} reimported.`);
     }, { cleanup: { sourceCase: caseId, capability: "asset.refresh", path, artifactState: true } }, project);
@@ -1841,7 +1841,7 @@ async function cleanupOwnedBakeStartCase(m, caseId, name, record, flags, project
     const actual = final.files.map((file) => `${file.path}\0${file.sha256}`).sort();
     if (expected.length !== actual.length || expected.some((value, index) => value !== actual[index])) throw new Error("Final scene bake artifact path/digest closure differs from the effect-before snapshot.");
     const proof = await m.call(`${caseId}.cleanup.lighting.bake.start.proof`, ["tools", "run", "editor.state", "--input", "{}"], (e, r) => r.exitCode === 0 && isReadyEditorState(e, false) ? null : "Final bake cleanup proof is not ready Edit Mode.", {
-      cleanup: { sourceCase: caseId, capability: "lighting.bake.start", artifactState: true, baselineFileCount: expected.length, finalFileCount: actual.length, restored: plan }
+      cleanup: { sourceCase: caseId, capability: "lighting.bake-start", artifactState: true, baselineFileCount: expected.length, finalFileCount: actual.length, restored: plan }
     }, project);
     stopAfterTerminalFailure(proof);
     await writeSceneBakeSnapshotStatus(snapshot, "clean", snapshot.terminalRequestId);
@@ -1887,8 +1887,8 @@ async function cleanupOwnedPackageCase(m, caseId, name, record, flags, project) 
   const cleanups = {
     "package.deploy": { name: "package.restore", input: { packageName: "com.acme.tool" } },
     "package.install": { name: "package.remove", input: { name: "com.unity.textmeshpro" } },
-    "package.registry.set": { name: "package.registry.clear", input: { project: m.o.project } },
-    "package.scoped-registry.add": { name: "package.scoped-registry.remove", input: { name: "Acme", project: m.o.project } },
+    "package.registry-set": { name: "package.registry-clear", input: { project: m.o.project } },
+    "package.scoped-registry-add": { name: "package.scoped-registry-remove", input: { name: "Acme", project: m.o.project } },
   };
   const cleanup = cleanups[name];
   if (!cleanup) return null;
@@ -1929,7 +1929,7 @@ async function setCasePlayMode(m, caseId, playing) {
   if (current.assertion?.status !== "PASS") return false;
   if (current.envelope.data.state.playMode.value === (playing ? "play" : "edit")) return true;
 
-  const name = playing ? "editor.play-mode.start" : "editor.play-mode.stop";
+  const name = playing ? "editor.play-mode-start" : "editor.play-mode-stop";
   const descriptor = await getDescriptor(m, "tool", name);
   let example;
   try { example = parsePublicExample(descriptor?.examples?.[0], "tool", name); }
@@ -1945,7 +1945,7 @@ async function setCasePlayMode(m, caseId, playing) {
 /** 返回能力专属夹具；只承载与公共 reset 冲突的前置状态。 */
 export function capabilityFixtureId(name) {
   if (["cinemachine.aim", "cinemachine.body"].includes(name)) return "cinemachine_pipeline";
-  if (name === "cinemachine.extension.add") return "cinemachine_extension_absent";
+  if (name === "cinemachine.extension-add") return "cinemachine_extension_absent";
   if (name === "scene.create") return "scene_create_absent";
   if (name === "game-object.move-to-scene") return "scene_gameplay_open";
   if (name === "scene.set-active") return "scene_main_open";
@@ -1955,11 +1955,11 @@ export function capabilityFixtureId(name) {
   if (["prefab.stage-close", "prefab.stage-save"].includes(name)) return "prefab_stage_open";
   if (name === "profiler.load") return "profiler_capture_baseline";
   if (name === "profiler.hierarchy") return "profiler_hierarchy_capture";
-  if (name === "profiler.frame-debugger.disable") return "profiler_frame_debugger_enabled";
-  if (name === "profiler.memory-snapshot.compare") return "profiler_snapshots";
+  if (name === "profiler.frame-debugger-disable") return "profiler_frame_debugger_enabled";
+  if (name === "profiler.memory-snapshot-compare") return "profiler_snapshots";
   if (name === "package.remove") return "package_remove";
   if (name === "package.restore") return "package_restore";
-  if (name === "package.scoped-registry.remove") return "package_scoped_registry";
+  if (name === "package.scoped-registry-remove") return "package_scoped_registry";
   if ([
     "probuilder.center-pivot", "probuilder.combine-meshes", "probuilder.convert-to-probuilder", "probuilder.create-polygon",
     "probuilder.delete-faces", "probuilder.detach-faces", "probuilder.freeze-transform", "probuilder.merge-faces",
@@ -1968,14 +1968,14 @@ export function capabilityFixtureId(name) {
     "probuilder.set-smoothing", "probuilder.split-vertices", "probuilder.validate-mesh"
   ].includes(name)) return "probuilder_generic";
   if (name === "ui.create-panel-settings") return "ui_panel_settings_absent";
-  if (name === "ui.document.create") return "ui_document_absent";
+  if (name === "ui.document-create") return "ui_document_absent";
   if (name === "ui.detach-document") return "ui_detach_target";
   if (name === "ui.modify-visual-element") return "ui_visual_element";
   if (name === "scriptable-object.create") return "scriptable_object_create_absent";
   if (name.startsWith("scriptable-object.")) return "scriptable_object";
   if (["vfx.line-create", "vfx.line-positions"].includes(name)) return "vfx_line_target";
   if (name === "vfx.parameter") return "vfx_parameter";
-  if (name === "vfx.template.create") return "vfx_template";
+  if (name === "vfx.template-create") return "vfx_template";
   return null;
 }
 
@@ -1987,9 +1987,9 @@ async function prepareCapabilityFixture(m, caseId, name, project) {
   return Boolean(fixture && await runFixtureSequence(m, `case-${fixtureId}.${caseId}`, fixture, project, fixtureId));
 }
 
-// 依赖运行中会话的前置状态必须在 editor.play-mode.start ready 之后建立。
+// 依赖运行中会话的前置状态必须在 editor.play-mode-start ready 之后建立。
 async function preparePlayCapabilityFixture(m, caseId, name, project) {
-  const fixtureId = name === "profiler.frame-debugger.enable" ? "profiler_play_paused" : null;
+  const fixtureId = name === "profiler.frame-debugger-enable" ? "profiler_play_paused" : null;
   if (!fixtureId) return true;
   const fixture = m.o.fixture[fixtureId];
   return Boolean(fixture && await runFixtureSequence(m, `case-${fixtureId}.${caseId}`, fixture, project, fixtureId));
@@ -2290,7 +2290,7 @@ async function runDirectLiveCase(m, name, descriptor, phase, project) {
 
 async function invoke(m, kind, name, id, d, input, flags, positive, phase, project = m.o.project, expectedErrorCode = null) {
   const caseId = matrixCaseId(kind, name, id, phase);
-  const ownsBakeArtifacts = kind === "tool" && positive && name === "lighting.bake.start" && !flags.includes("--dry-run");
+  const ownsBakeArtifacts = kind === "tool" && positive && name === "lighting.bake-start" && !flags.includes("--dry-run");
   if (ownsBakeArtifacts) await recoverPendingOwnedBakeStartSnapshot(m, caseId, project);
   if (!await prepareCaseBaseline(m, caseId, name, positive, phase, project)) {
     const baselineFailure = await m.failed(caseId, "Case baseline setup failed.", { capability: { kind, name }, phase });
@@ -2587,14 +2587,14 @@ async function coverToolsWithPipelineFixtures(m, phase, excluded = new Set()) {
 }
 async function playMode(m) {
   m.invalidateFailedPlayModeControls();
-  const play = m.discovered.tools.find((n) => n === "editor.play-mode.start"); const stop = m.discovered.tools.find((n) => n === "editor.play-mode.stop"); if (!play || !stop) return blockTerminal(m, "playmode.transition", "Public editor.play-mode.start/editor.play-mode.stop capabilities are not discoverable.");
+  const play = m.discovered.tools.find((n) => n === "editor.play-mode-start"); const stop = m.discovered.tools.find((n) => n === "editor.play-mode-stop"); if (!play || !stop) return blockTerminal(m, "playmode.transition", "Public editor.play-mode-start/editor.play-mode-stop capabilities are not discoverable.");
   const pd = await getDescriptor(m, "tool", play), sd = await getDescriptor(m, "tool", stop); let p, s; try { p = parsePublicExample(pd.examples?.[0], "tool", play); s = parsePublicExample(sd.examples?.[0], "tool", stop); } catch (e) { return blockTerminal(m, "playmode.transition", `Transition example invalid: ${e.message}`); }
   await invoke(m, "tool", play, "transition", pd, p.input, p.flags, true, "transition");
-  const playReady = await m.call("playmode.ready", ["tools", "run", "editor.state", "--input", "{}", "--timeout-ms", "10000"], (e) => isReadyEditorState(e, true) ? null : "Editor state did not report ready Play Mode after editor.play-mode.start.", { retryAssertion: true });
+  const playReady = await m.call("playmode.ready", ["tools", "run", "editor.state", "--input", "{}", "--timeout-ms", "10000"], (e) => isReadyEditorState(e, true) ? null : "Editor state did not report ready Play Mode after editor.play-mode-start.", { retryAssertion: true });
   stopAfterTerminalFailure(playReady);
   await coverToolsWithPipelineFixtures(m, "play", new Set([play, stop]));
   await invoke(m, "tool", stop, "transition", sd, s.input, s.flags, true, "transition");
-  const exitReady = await m.call("playmode.exit-ready", ["tools", "run", "editor.state", "--input", "{}", "--timeout-ms", "10000"], (e) => isReadyEditorState(e, false) ? null : "Editor state did not report ready Edit Mode after editor.play-mode.stop.", { retryAssertion: true });
+  const exitReady = await m.call("playmode.exit-ready", ["tools", "run", "editor.state", "--input", "{}", "--timeout-ms", "10000"], (e) => isReadyEditorState(e, false) ? null : "Editor state did not report ready Edit Mode after editor.play-mode-stop.", { retryAssertion: true });
   stopAfterTerminalFailure(exitReady);
 }
 const FIXTURE_ASSERTIONS = {
@@ -2987,7 +2987,7 @@ async function recoverFinalMatrixState(m) {
   if (dialogSelection.outcome === "none") {
     reconciliation.externalSceneReload = "N/A";
   } else if (dialogSelection.outcome === "reload") {
-    const reloadRecord = await m.call("control.source-restore.external-scene-reload", ["tools", "run", "editor.dialog.click", "--input", JSON.stringify({ dialogId: dialogSelection.dialog.dialogId, button: EXTERNAL_SCENE_RELOAD_DIALOG.button })], (e, r) => r.exitCode === 0 ? assertPositiveSuccess(e) : `editor.dialog.click reconciliation exited ${r.exitCode}.`, { cleanup: { projectSnapshot: true, reconcile: "external-scene-reload" } });
+    const reloadRecord = await m.call("control.source-restore.external-scene-reload", ["tools", "run", "editor.dialog-click", "--input", JSON.stringify({ dialogId: dialogSelection.dialog.dialogId, button: EXTERNAL_SCENE_RELOAD_DIALOG.button })], (e, r) => r.exitCode === 0 ? assertPositiveSuccess(e) : `editor.dialog-click reconciliation exited ${r.exitCode}.`, { cleanup: { projectSnapshot: true, reconcile: "external-scene-reload" } });
     reconciliation.externalSceneReload = reloadRecord.assertion?.status === "PASS" ? "PASS" : "FAIL";
     reconciliationPassed = reconciliationPassed && reloadRecord.assertion?.status === "PASS";
   } else {

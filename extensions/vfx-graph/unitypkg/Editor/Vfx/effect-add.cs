@@ -11,7 +11,7 @@ namespace UnityCli
 
         public ToolDescriptor Describe() => new()
         {
-            Name = "vfx.effect.add", Summary = "Add a VisualEffect component.",
+            Name = "vfx.effect-add", Summary = "Add a VisualEffect component.",
             Description = "Ensure one VisualEffect component exists on the target and optionally assign an initial existing VFX Graph. Repeated calls are idempotent.",
             Group = "vfx",RequiresPackages = new[] { "com.unity.visualeffectgraph" },
             SideEffects = new[] { "scene-modify", "component-add", "component-reference-edit" },
@@ -25,16 +25,16 @@ namespace UnityCli
 
         public System.Threading.Tasks.ValueTask<VfxEffectActionResult> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            VfxToolSupport.EnsureEditorReady("vfx.effect.add");
+            VfxToolSupport.EnsureEditorReady("vfx.effect-add");
             var effectType = VfxToolSupport.RequireVisualEffectType();
             if (!string.IsNullOrWhiteSpace(request.Graph)) VfxActionToolSupport.PrepareGraphAssignment(effectType);
-            var gameObject = GameObjectToolSupport.ResolveUniqueTarget(request.Target, "vfx.effect.add requires target.");
+            var gameObject = GameObjectToolSupport.ResolveUniqueTarget(request.Target, "vfx.effect-add requires target.");
             var effect = gameObject.GetComponent(effectType);
             if (!string.IsNullOrWhiteSpace(request.Graph) && AssetDatabase.LoadAssetAtPath(VfxToolSupport.RequireVfxGraphPath(request.Graph), VfxToolSupport.RequireVfxAssetType()) == null) throw new UnityCliBridge.BridgeCommandException("E_VFX_GRAPH_NOT_FOUND", "VFX Graph asset not found: " + request.Graph, "Pass an existing Assets/*.vfx path.");
             var gameObjectId = gameObject.GetInstanceID();
             ctx.CommitEffect();
             var observedObject = VfxToolSupport.FindGameObjectByTarget(gameObjectId.ToString(System.Globalization.CultureInfo.InvariantCulture));
-            if (observedObject == null) throw new UnityCliBridge.BridgeCommandException("E_VFX_OBSERVED_TARGET_MISSING", "vfx.effect.add target disappeared after commit.", "Retry after checking the target still exists.");
+            if (observedObject == null) throw new UnityCliBridge.BridgeCommandException("E_VFX_OBSERVED_TARGET_MISSING", "vfx.effect-add target disappeared after commit.", "Retry after checking the target still exists.");
             effect = observedObject.GetComponent(effectType);
             var added = effect == null;
             if (added) effect = observedObject.AddComponent(effectType);
@@ -47,7 +47,7 @@ namespace UnityCli
             {
                 Action = added ? "added" : "already-present",
                 Effect = VfxToolSupport.BuildEffectInfo(effect),
-                PlannedEffects = new List<VfxPlannedEffect> { new VfxPlannedEffect { Type = "vfx.effect.add", Target = GameObjectToolSupport.HierarchyPath(gameObject), Graph = request.Graph } }
+                PlannedEffects = new List<VfxPlannedEffect> { new VfxPlannedEffect { Type = "vfx.effect-add", Target = GameObjectToolSupport.HierarchyPath(gameObject), Graph = request.Graph } }
             });
         }
     }

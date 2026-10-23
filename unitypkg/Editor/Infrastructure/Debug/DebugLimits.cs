@@ -110,22 +110,22 @@ namespace UnityCli
         /// </summary>
         internal const int MaxStoredProjectionItemsPerLevel = 64;
 
-        /// <summary>debug.events.read 等待新事件的上限（毫秒）；到期返回当前尾部而不是失败。</summary>
+        /// <summary>debug.events-read 等待新事件的上限（毫秒）；到期返回当前尾部而不是失败。</summary>
         internal const int EventsMaxWaitMs = 30000;
 
         // ---- 公开分页与快照 ----
 
-        /// <summary>debug.hook.list 默认页大小。</summary>
+        /// <summary>debug.hook-list 默认页大小。</summary>
         internal const int ListDefaultLimit = 32;
 
-        /// <summary>debug.hook.list 允许的最大页大小。</summary>
+        /// <summary>debug.hook-list 允许的最大页大小。</summary>
         internal const int ListMaxLimit = 128;
 
-        /// <summary>debug.events.read 默认页大小。</summary>
+        /// <summary>debug.events-read 默认页大小。</summary>
         internal const int EventsDefaultLimit = 50;
 
         /// <summary>
-        /// debug.events.read 允许的最大页大小。
+        /// debug.events-read 允许的最大页大小。
         /// 由框架冻结的绝对 getter 预算、单页需要的有预算序列化次数与事件条目的可序列化 member 数推导：
         /// 页上限必须让 EventPageGetters(EventsMaxLimit) 仍落在 AbsoluteMaxGetters 内，否则满页读取会在发布失败。
         /// </summary>
@@ -143,10 +143,10 @@ namespace UnityCli
         /// </summary>
         internal const int EventItemMembers = 30;
 
-        /// <summary>debug.hook.list 单个条目的可序列化 member 数量。</summary>
+        /// <summary>debug.hook-list 单个条目的可序列化 member 数量。</summary>
         internal const int ListItemMembers = 12;
 
-        /// <summary>debug.hook.info 单个回调源码分页的字节上限。</summary>
+        /// <summary>debug.hook-info 单个回调源码分页的字节上限。</summary>
         internal const int MaxInfoSourcePageBytes = 32 * 1024;
 
         /// <summary>定义快照文件允许的最大字节数。</summary>
@@ -181,10 +181,10 @@ namespace UnityCli
         /// </summary>
         internal const long MaxSessionStoreBytes = 8L * 1024 * 1024;
 
-        /// <summary>debug.session.list 默认页大小。</summary>
+        /// <summary>debug.session-list 默认页大小。</summary>
         internal const int SessionListDefaultLimit = 50;
 
-        /// <summary>debug.session.list 允许的最大页大小；定义总数上限低于该值，因此任何保留定义都能在一页内读完。</summary>
+        /// <summary>debug.session-list 允许的最大页大小；定义总数上限低于该值，因此任何保留定义都能在一页内读完。</summary>
         internal const int SessionListMaxLimit = 200;
 
         // ---- program 定义、运行与调度 ----
@@ -198,7 +198,7 @@ namespace UnityCli
         /// <summary>整个 Unity 进程同时允许的活动 program 运行数量。</summary>
         internal const int MaxActiveProgramRunsGlobal = 16;
 
-        // ---- async flow（debug.code.executeAsync）----
+        // ---- async flow（debug.code-flow-run）----
 
         /// <summary>单个 session 同时允许的活动流数量。</summary>
         internal const int MaxFlowsPerSession = 4;
@@ -236,7 +236,7 @@ namespace UnityCli
         /// <summary>单条日志在匹配前截断到的字节上限，避免一条巨大日志占满采样环。</summary>
         internal const int MaxFlowLogMessageBytes = 512;
 
-        /// <summary>单个 program 编译单元的源码字节上限（与 code.execute、pause evaluate 共用一个数值）。</summary>
+        /// <summary>单个 program 编译单元的源码字节上限（与 debug.code-execute、pause evaluate 共用一个数值）。</summary>
         internal const int MaxProgramSourceBytes = 256 * 1024;
 
         /// <summary>单个 program 允许声明的命名 entry 数量。</summary>
@@ -263,13 +263,13 @@ namespace UnityCli
         /// <summary>一次投递在未到达目标执行点前的有效时长（毫秒）；过期即标记 expired，永不补执行。</summary>
         internal const double ProgramSignalTimeoutMs = 1000d;
 
-        /// <summary>debug.program.wait 允许的有界等待上限（毫秒）。</summary>
+        /// <summary>debug.program-wait 允许的有界等待上限（毫秒）。</summary>
         internal const int ProgramWaitMaxMs = 30000;
 
-        /// <summary>debug.program.list 默认页大小。</summary>
+        /// <summary>debug.program-list 默认页大小。</summary>
         internal const int ProgramListDefaultLimit = 32;
 
-        /// <summary>debug.program.list 允许的最大页大小。</summary>
+        /// <summary>debug.program-list 允许的最大页大小。</summary>
         internal const int ProgramListMaxLimit = 64;
 
         // ---- 证据窗口 run ----
@@ -316,13 +316,13 @@ namespace UnityCli
         /// </summary>
         internal const long MaxRunDetailBytesPerWindow = (long)MaxRunRequiredChecks * MaxRunEvidencePerCheck * MaxRunEvidenceRecordBytes;
 
-        /// <summary>debug.run.wait 允许的有界等待上限（毫秒）。</summary>
+        /// <summary>debug.run-wait 允许的有界等待上限（毫秒）。</summary>
         internal const int RunWaitMaxMs = 30000;
 
-        /// <summary>debug.run.list 默认页大小。</summary>
+        /// <summary>debug.run-list 默认页大小。</summary>
         internal const int RunListDefaultLimit = 8;
 
-        /// <summary>debug.run.list 允许的最大页大小；摘要总数上限低于该值，因此任何保留窗口都能在一页内读完。</summary>
+        /// <summary>debug.run-list 允许的最大页大小；摘要总数上限低于该值，因此任何保留窗口都能在一页内读完。</summary>
         internal const int RunListMaxLimit = 16;
 
         // ---- 证据窗口比较 run.compare ----
@@ -427,10 +427,10 @@ namespace UnityCli
 
         // ---- 线程观察读取 ----
 
-        /// <summary>debug.thread.list 默认页大小。</summary>
+        /// <summary>debug.thread-list 默认页大小。</summary>
         internal const int ThreadListDefaultLimit = 50;
 
-        /// <summary>debug.thread.list 允许的最大页大小；观察线程记录总数上限低于该值，因此任何一次观察都能在一页内读完。</summary>
+        /// <summary>debug.thread-list 允许的最大页大小；观察线程记录总数上限低于该值，因此任何一次观察都能在一页内读完。</summary>
         internal const int ThreadListMaxLimit = 200;
 
         // ---- 值读取与写入 ----
@@ -446,7 +446,7 @@ namespace UnityCli
 
         /// <summary>
         /// 命名的项目逻辑时钟条数上限；读取时按名字去重覆盖。
-        /// 该上限不是任意值：每次 debug.value.read 都会把当前注册表随结果一起返回，而框架会在同一请求内
+        /// 该上限不是任意值：每次 debug.value-read 都会把当前注册表随结果一起返回，而框架会在同一请求内
         /// 有预算地序列化该结果 ValueReadSerializations 次，因此条数上限必须让最坏形态的读取仍落在默认请求预算内。
         /// 推导方式与 EventsMaxLimit 相同：默认预算的四分之三减去固定 member 与余量，再按一次序列化的时钟 member 数除。
         /// </summary>
@@ -478,25 +478,25 @@ namespace UnityCli
         /// <summary>单次 pauseTimeout 允许的 durationMs 上界。</summary>
         internal const long MaxPauseDurationMs = 3600000L;
 
-        /// <summary>debug.pause.list 默认页大小。</summary>
+        /// <summary>debug.pause-list 默认页大小。</summary>
         internal const int PauseListDefaultLimit = 32;
 
-        /// <summary>debug.pause.list 允许的最大页大小；同时存在的活动现场总数低于该值，因此一页即可读完。</summary>
+        /// <summary>debug.pause-list 允许的最大页大小；同时存在的活动现场总数低于该值，因此一页即可读完。</summary>
         internal const int PauseListMaxLimit = 64;
 
-        /// <summary>debug.pause.wait 允许的有界等待上限（毫秒）。</summary>
+        /// <summary>debug.pause-wait 允许的有界等待上限（毫秒）。</summary>
         internal const int PauseWaitMaxMs = 30000;
 
         /// <summary>单次现场操作在暂停线程上的执行上限（毫秒）；到期只报告 pending，不抢占用户同步代码。</summary>
         internal const int PauseOperationTimeoutMs = 10000;
 
-        /// <summary>debug.pause.inspect 单次允许读取的字段数上限。</summary>
+        /// <summary>debug.pause-inspect 单次允许读取的字段数上限。</summary>
         internal const int MaxPauseInspectFields = 32;
 
         /// <summary>现场操作获取共享编译所有权的有界等待上限（毫秒）；取不到时返回忙，现场继续保留。</summary>
         internal const int PauseCompilerAcquireMs = 2000;
 
-        /// <summary>debug.pause.resume 等待现场真正离开 paused 的上限（毫秒）；到期如实报告未释放。</summary>
+        /// <summary>debug.pause-resume 等待现场真正离开 paused 的上限（毫秒）；到期如实报告未释放。</summary>
         internal const int PauseMaxWaitForReleaseMs = 5000;
 
         /// <summary>session 清理在报告 pending 之前等待现场真正退出的固定窗口（毫秒）。</summary>
@@ -549,7 +549,7 @@ namespace UnityCli
         }
 
         /// <summary>
-        /// 同一 debug.value.read 结果在框架内需要的有预算序列化次数：
+        /// 同一 debug.value-read 结果在框架内需要的有预算序列化次数：
         /// 结果 DTO 序列化、完成校验重读与 terminal envelope 序列化各自读取一次同一批 member。
         /// </summary>
         internal const int ValueReadSerializations = 3;
@@ -594,7 +594,7 @@ namespace UnityCli
             + (ValueReadClocksMax - ValueReadClocksWithoutPublish) * ValueReadClockMembers;
 
         /// <summary>
-        /// 一次 debug.value.read 结果在框架内可能需要的最小 read budget。
+        /// 一次 debug.value-read 结果在框架内可能需要的最小 read budget。
         /// 按最坏形态推导：固定 member、句柄视图、发布的逻辑时钟与整个命名时钟注册表，再乘框架的序列化次数。
         /// 推导值必须不高于 ValueReadBudgetShareGetters，因此也必然低于默认请求预算。
         /// </summary>
@@ -626,7 +626,7 @@ namespace UnityCli
         internal const int ValueWriteSerializations = ValueReadSerializations;
 
         /// <summary>
-        /// 一次 debug.value.write 结果在框架内需要的最小 read budget。
+        /// 一次 debug.value-write 结果在框架内需要的最小 read budget。
         /// 按最坏形态推导：结果 DTO、三条固定时钟、句柄视图、句柄预算与条件恢复视图，再乘框架的序列化次数。
         /// 写入结果不含读取那样的命名逻辑时钟注册表，因此本推导值是写入结果形状的完整上界，
         /// 且必然远低于默认请求预算；定向测试据此断言写入路径的真实 getter 用量。
@@ -789,3 +789,4 @@ namespace UnityCli
     }
 }
 #endif
+

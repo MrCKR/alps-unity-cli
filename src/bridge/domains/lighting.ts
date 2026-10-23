@@ -2,38 +2,38 @@ import { boolFlag, compactArgs, floatFlag, numberFlag, queryArgs, stringFlag } f
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const lightingBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "lighting", command: "bake.start", bridgeCommand: "catalog.editor.run", toolName: "lighting.bake.start", buildArgs: lightingArgs, destructiveHint: true },
-  { group: "lighting", command: "bake.cancel", bridgeCommand: "catalog.editor.run", toolName: "lighting.bake.cancel", buildArgs: lightingArgs },
-  { group: "lighting", command: "bake.status", bridgeCommand: "catalog.editor.run", toolName: "lighting.bake.status", buildArgs: lightingArgs },
-  { group: "lighting", command: "bake.clear", bridgeCommand: "catalog.editor.run", toolName: "lighting.bake.clear", buildArgs: lightingArgs, destructiveHint: true },
-  { group: "lighting", command: "bake.reflection-probe", bridgeCommand: "catalog.editor.run", toolName: "lighting.bake.reflection-probe", buildArgs: lightingArgs, destructiveHint: true },
-  { group: "lighting", command: "bake.settings", bridgeCommand: "catalog.editor.run", toolName: "lighting.bake.settings", buildArgs: lightingArgs, destructiveHint: true },
+  { group: "lighting", command: "bake-start", bridgeCommand: "catalog.editor.run", toolName: "lighting.bake-start", buildArgs: lightingArgs, destructiveHint: true },
+  { group: "lighting", command: "bake-cancel", bridgeCommand: "catalog.editor.run", toolName: "lighting.bake-cancel", buildArgs: lightingArgs },
+  { group: "lighting", command: "bake-status", bridgeCommand: "catalog.editor.run", toolName: "lighting.bake-status", buildArgs: lightingArgs },
+  { group: "lighting", command: "bake-clear", bridgeCommand: "catalog.editor.run", toolName: "lighting.bake-clear", buildArgs: lightingArgs, destructiveHint: true },
+  { group: "lighting", command: "bake-reflection-probe", bridgeCommand: "catalog.editor.run", toolName: "lighting.bake-reflection-probe", buildArgs: lightingArgs, destructiveHint: true },
+  { group: "lighting", command: "bake-settings", bridgeCommand: "catalog.editor.run", toolName: "lighting.bake-settings", buildArgs: lightingArgs, destructiveHint: true },
   { group: "lighting", command: "light-probe-group", bridgeCommand: "catalog.editor.run", toolName: "lighting.light-probe-group", buildArgs: lightingArgs },
   { group: "lighting", command: "reflection-probe", bridgeCommand: "catalog.editor.run", toolName: "lighting.reflection-probe", buildArgs: lightingArgs },
-  { group: "lighting", command: "skybox.get", bridgeCommand: "catalog.editor.run", toolName: "lighting.skybox.get", buildArgs: lightingArgs },
-  { group: "lighting", command: "skybox.set-material", bridgeCommand: "catalog.editor.run", toolName: "lighting.skybox.set-material", buildArgs: lightingArgs },
-  { group: "lighting", command: "skybox.set-properties", bridgeCommand: "catalog.editor.run", toolName: "lighting.skybox.set-properties", buildArgs: lightingArgs, destructiveHint: true },
-  { group: "lighting", command: "skybox.set-ambient", bridgeCommand: "catalog.editor.run", toolName: "lighting.skybox.set-ambient", buildArgs: lightingArgs },
-  { group: "lighting", command: "skybox.set-fog", bridgeCommand: "catalog.editor.run", toolName: "lighting.skybox.set-fog", buildArgs: lightingArgs },
-  { group: "lighting", command: "skybox.set-reflection", bridgeCommand: "catalog.editor.run", toolName: "lighting.skybox.set-reflection", buildArgs: lightingArgs },
-  { group: "lighting", command: "skybox.set-sun", bridgeCommand: "catalog.editor.run", toolName: "lighting.skybox.set-sun", buildArgs: lightingArgs }
+  { group: "lighting", command: "skybox-get", bridgeCommand: "catalog.editor.run", toolName: "lighting.skybox-get", buildArgs: lightingArgs },
+  { group: "lighting", command: "skybox-set-material", bridgeCommand: "catalog.editor.run", toolName: "lighting.skybox-set-material", buildArgs: lightingArgs },
+  { group: "lighting", command: "skybox-set-properties", bridgeCommand: "catalog.editor.run", toolName: "lighting.skybox-set-properties", buildArgs: lightingArgs, destructiveHint: true },
+  { group: "lighting", command: "skybox-set-ambient", bridgeCommand: "catalog.editor.run", toolName: "lighting.skybox-set-ambient", buildArgs: lightingArgs },
+  { group: "lighting", command: "skybox-set-fog", bridgeCommand: "catalog.editor.run", toolName: "lighting.skybox-set-fog", buildArgs: lightingArgs },
+  { group: "lighting", command: "skybox-set-reflection", bridgeCommand: "catalog.editor.run", toolName: "lighting.skybox-set-reflection", buildArgs: lightingArgs },
+  { group: "lighting", command: "skybox-set-sun", bridgeCommand: "catalog.editor.run", toolName: "lighting.skybox-set-sun", buildArgs: lightingArgs }
 ];
 
 function lightingArgs({ command, flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   const s = structuredInput(flags);
-  if (command === "lighting.bake.status" || command === "lighting.skybox.get") {
+  if (command === "lighting.bake-status" || command === "lighting.skybox-get") {
     return queryArgs(flags);
   }
-  if (command === "lighting.bake.start" || command === "lighting.bake.cancel") {
+  if (command === "lighting.bake-start" || command === "lighting.bake-cancel") {
     return compactArgs({ ...queryArgs(flags) });
   }
-  if (command === "lighting.bake.clear") {
+  if (command === "lighting.bake-clear") {
     return compactArgs({ bakedData: boolFlag(flags, "baked-data") ?? boolField(s, "bakedData"), realtimeData: boolFlag(flags, "realtime-data") ?? boolField(s, "realtimeData") });
   }
-  if (command === "lighting.bake.reflection-probe") {
+  if (command === "lighting.bake-reflection-probe") {
     return compactArgs({ target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") ?? stringField(s, "target") });
   }
-  if (command === "lighting.bake.settings") {
+  if (command === "lighting.bake-settings") {
     return compactArgs({
       scene: stringFlag(flags, "scene") ?? stringField(s, "scene"),
       lightingMode: stringFlag(flags, "lighting-mode") ?? stringField(s, "lightingMode"),
@@ -65,13 +65,13 @@ function lightingArgs({ command, flags, positionalTarget }: Parameters<BridgeCom
       boxOffset: stringFlag(flags, "box-offset") ?? stringField(s, "boxOffset")
     });
   }
-  if (command === "lighting.skybox.set-material") {
+  if (command === "lighting.skybox-set-material") {
     return compactArgs({ material: positionalTarget ?? stringFlag(flags, "material") ?? stringField(s, "material") });
   }
-  if (command === "lighting.skybox.set-properties") {
+  if (command === "lighting.skybox-set-properties") {
     return compactArgs({ property: stringFlag(flags, "property") ?? stringField(s, "property"), value: stringFlag(flags, "value") ?? stringField(s, "value") });
   }
-  if (command === "lighting.skybox.set-ambient") {
+  if (command === "lighting.skybox-set-ambient") {
     return compactArgs({
       mode: stringFlag(flags, "mode") ?? stringField(s, "mode"),
       intensity: floatFlag(flags, "intensity") ?? numberField(s, "intensity"),
@@ -81,7 +81,7 @@ function lightingArgs({ command, flags, positionalTarget }: Parameters<BridgeCom
       ambientSkyColor: stringFlag(flags, "ambient-sky-color") ?? stringField(s, "ambientSkyColor")
     });
   }
-  if (command === "lighting.skybox.set-fog") {
+  if (command === "lighting.skybox-set-fog") {
     return compactArgs({
       enabled: boolFlag(flags, "enabled") ?? boolField(s, "enabled"),
       mode: stringFlag(flags, "mode") ?? stringField(s, "mode"),
@@ -91,7 +91,7 @@ function lightingArgs({ command, flags, positionalTarget }: Parameters<BridgeCom
       endDistance: floatFlag(flags, "end-distance") ?? numberField(s, "endDistance")
     });
   }
-  if (command === "lighting.skybox.set-reflection") {
+  if (command === "lighting.skybox-set-reflection") {
     return compactArgs({
       mode: stringFlag(flags, "mode") ?? stringField(s, "mode"),
       bounces: numberFlag(flags, "bounces") ?? numberField(s, "bounces"),
@@ -99,7 +99,7 @@ function lightingArgs({ command, flags, positionalTarget }: Parameters<BridgeCom
       resolution: stringFlag(flags, "resolution") ?? stringField(s, "resolution")
     });
   }
-  // lighting.skybox.set-sun
+  // lighting.skybox-set-sun
   return compactArgs({ target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(s, "target") });
 }
 

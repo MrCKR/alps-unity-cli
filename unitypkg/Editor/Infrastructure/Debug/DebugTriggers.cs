@@ -45,7 +45,7 @@ namespace UnityCli
 
         /// <summary>
         /// hook listener 可以直接订阅的触发源。editor-tick 是中央 scheduler 自己的推进点，
-        /// 不是 listener 的触发源：需要主线程 tick 时用 debug.program.run 的 executionSite editor-tick。
+        /// 不是 listener 的触发源：需要主线程 tick 时用 debug.program-run 的 executionSite editor-tick。
         /// </summary>
         internal static bool IsHookTrigger(string value)
         {

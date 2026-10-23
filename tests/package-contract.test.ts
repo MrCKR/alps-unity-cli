@@ -12,7 +12,7 @@ import { dispatchTool } from "../src/tools/dispatcher.js";
 import { findToolByName, filterToolsByGroup } from "../src/tools/metadata/index.js";
 import { createUnityProject } from "./helpers/instance-registry-v3.js";
 
-const LOCAL_PACKAGE_COMMANDS = ["package.bridge-remove", "package.deploy", "package.embed", "package.install", "package.install.status", "package.registry.clear", "package.registry.set", "package.remove", "package.remove.status", "package.resolve", "package.restore", "package.scoped-registry.add", "package.scoped-registry.remove"];
+const LOCAL_PACKAGE_COMMANDS = ["package.bridge-remove", "package.deploy", "package.embed", "package.install", "package.install-status", "package.registry-clear", "package.registry-set", "package.remove", "package.remove-status", "package.resolve", "package.restore", "package.scoped-registry-add", "package.scoped-registry-remove"];
 
 /** Package 域只保留文件 mutation、真实 Unity resolve 与明确 registry mutation。 */
 
@@ -130,14 +130,14 @@ test("contract entries exist for all package tools", () => {
 });
 
 test("retained package registry mutations expose single-action metadata and security", () => {
-  for (const name of ["package.registry.set", "package.registry.clear", "package.scoped-registry.add", "package.scoped-registry.remove"]) {
+  for (const name of ["package.registry-set", "package.registry-clear", "package.scoped-registry-add", "package.scoped-registry-remove"]) {
     const tool = findToolByName(name)!;
     assert.equal(tool.handler, "offline");
     assert.equal(tool.destructiveHint, true);
     assert.equal(tool.supportsDryRun, true);
     assert.doesNotMatch(JSON.stringify(tool.inputSchema), /action/);
   }
-  const remove = findToolByName("package.scoped-registry.remove")!;
+  const remove = findToolByName("package.scoped-registry-remove")!;
   assert.match(remove.description, /force=true/);
   assert.match(JSON.stringify(remove.inputSchema), /force/);
   assert.match(JSON.stringify(remove.outputSchema), /matchedPackages/);
@@ -154,10 +154,10 @@ test("local package manifest mutations reject an input project outside the selec
   await writeFile(manifestPath, originalManifest, "utf8");
   const instanceIdA = resolveProjectIdentity(projectA).instanceId;
   const cases = [
-    ["package.registry.set", { project: projectB, url: "https://registry.example.test" }],
-    ["package.registry.clear", { project: projectB }],
-    ["package.scoped-registry.add", { project: projectB, name: "Acme", url: "https://registry.example.test", scope: "com.acme" }],
-    ["package.scoped-registry.remove", { project: projectB, name: "Acme", force: true }],
+    ["package.registry-set", { project: projectB, url: "https://registry.example.test" }],
+    ["package.registry-clear", { project: projectB }],
+    ["package.scoped-registry-add", { project: projectB, name: "Acme", url: "https://registry.example.test", scope: "com.acme" }],
+    ["package.scoped-registry-remove", { project: projectB, name: "Acme", force: true }],
   ] as const;
   try {
     for (const [name, input] of cases) {

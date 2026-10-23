@@ -38,7 +38,7 @@ namespace UnityCli
                 .Where(assembly => string.Equals(assembly.GetName().Name, spec.AssemblyName, StringComparison.Ordinal))
                 .ToArray();
             if (assemblies.Length == 0)
-                throw new BridgeCommandException("E_HOOK_TARGET_NOT_FOUND", "No loaded assembly has the exact name " + spec.AssemblyName + ".", null, new[] { "Use debug.method.find or assemblyName from a loaded type to confirm the current domain." });
+                throw new BridgeCommandException("E_HOOK_TARGET_NOT_FOUND", "No loaded assembly has the exact name " + spec.AssemblyName + ".", null, new[] { "Use debug.method-find or assemblyName from a loaded type to confirm the current domain." });
             if (assemblies.Length > 1)
                 throw new BridgeCommandException("E_HOOK_TARGET_AMBIGUOUS", "Multiple loaded assemblies share the exact name " + spec.AssemblyName + ".", null, new[] { "Reduce duplicate assembly names in the project before targeting this method." });
 

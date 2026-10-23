@@ -94,16 +94,16 @@ PowerShell 中以单引号包住内联 JSON 和 `tools search '<k1|k2|...>'`。�
 
 ## 能力扩展
 
-普通源码或文本仍可直接处理。需要 Unity 侧执行时，先按上述规则检查相关候选和分组分页；只有专用 Tool 或组合无法满足需求时，才考虑 `debug.code.execute` 或项目自定义 Tool。发现受阻时先处理阻塞，不以扩展能力代替尚未完成的发现。
+普通源码或文本仍可直接处理。需要 Unity 侧执行时，先按上述规则检查相关候选和分组分页；只有专用 Tool 或组合无法满足需求时，才考虑 `debug.code-execute` 或项目自定义 Tool。发现受阻时先处理阻塞，不以扩展能力代替尚未完成的发现。
 
-有界的临时 Unity 内存或 Editor API 逻辑可以考虑 `debug.code.execute`。同步 C# 开始后不能由 CLI timeout 中止，复杂等待或不确定终态先读 `references/operation-protocol.md`。
+有界的临时 Unity 内存或 Editor API 逻辑可以考虑 `debug.code-execute`。同步 C# 开始后不能由 CLI timeout 中止，复杂等待或不确定终态先读 `references/operation-protocol.md`。
 
 执行代码时先按“要不要等帧”选入口，三者不可互相代替：
 
 ```text
-一次读写、不等帧            -> debug.code.execute
-要等帧 / 等条件 / 等信号   -> debug.code.flow.execute，再用 .wait 续等
-可复用套件 + 证据窗口        -> debug.program.*
+一次读写、不等帧            -> debug.code-execute
+要等帧 / 等条件 / 等信号   -> debug.code-flow-run，再用 debug.code-flow-wait 续等
+可复用套件 + 证据窗口        -> debug.program-install / debug.program-run
 ```
 
 跨帧流的等待原语、结果规则、并发额度与存活边界读 `references/debugging.md`。

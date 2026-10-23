@@ -127,6 +127,7 @@
     "OBSERVER_ASYNC",
     "DUPLICATE",
     "REJECTED",
+    "DISABLED",
     "NESTED",
     "PAUSED",
     "REQUIRES_INVOCATION",
@@ -294,6 +295,10 @@
       false
     ],
     "EXPIRED": [
+      "false",
+      false
+    ],
+    "DISABLED": [
       "false",
       false
     ],
@@ -636,9 +641,9 @@
     "TIMED_OUT"
   ],
   "counts": {
-    "files": 785,
-    "codes": 1010,
-    "classified": 1010,
+    "files": 787,
+    "codes": 1008,
+    "classified": 1008,
     "unclassified": 0,
     "dynamicConcatenationSites": 0
   },
@@ -690,7 +695,7 @@
       "prefix": "AMBIENT",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/skybox/set-ambient.cs"
+        "unitypkg/Editor/Tools/lighting/skybox-set-ambient.cs"
       ]
     },
     {
@@ -1331,7 +1336,7 @@
       "prefix": "BAKE",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/bake/start.cs"
+        "unitypkg/Editor/Tools/lighting/bake-start.cs"
       ]
     },
     {
@@ -1342,7 +1347,7 @@
       "prefix": "BAKE",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/bake/cancel.cs"
+        "unitypkg/Editor/Tools/lighting/bake-cancel.cs"
       ]
     },
     {
@@ -1353,7 +1358,7 @@
       "prefix": "BAKE",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/bake/settings.cs"
+        "unitypkg/Editor/Tools/lighting/bake-settings.cs"
       ]
     },
     {
@@ -1364,7 +1369,7 @@
       "prefix": "BAKE",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/bake/settings.cs"
+        "unitypkg/Editor/Tools/lighting/bake-settings.cs"
       ]
     },
     {
@@ -1375,7 +1380,7 @@
       "prefix": "BAKE",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/bake/settings.cs"
+        "unitypkg/Editor/Tools/lighting/bake-settings.cs"
       ]
     },
     {
@@ -1386,7 +1391,7 @@
       "prefix": "BAKE",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/bake/start.cs"
+        "unitypkg/Editor/Tools/lighting/bake-start.cs"
       ]
     },
     {
@@ -1569,7 +1574,7 @@
       "prefix": "BUILD",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/build/profile/create.cs"
+        "unitypkg/Editor/Tools/build/profile-create.cs"
       ]
     },
     {
@@ -1591,7 +1596,7 @@
       "prefix": "BUILD",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/build/profile/create.cs"
+        "unitypkg/Editor/Tools/build/profile-create.cs"
       ]
     },
     {
@@ -1602,7 +1607,7 @@
       "prefix": "BUILD",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/build/profile/modify.cs"
+        "unitypkg/Editor/Tools/build/profile-modify.cs"
       ]
     },
     {
@@ -1613,7 +1618,7 @@
       "prefix": "BUILD",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/build/profile/modify.cs"
+        "unitypkg/Editor/Tools/build/profile-modify.cs"
       ]
     },
     {
@@ -1646,7 +1651,7 @@
       "prefix": "BUILD",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/build/profile/switch.cs"
+        "unitypkg/Editor/Tools/build/profile-switch.cs"
       ]
     },
     {
@@ -1668,7 +1673,7 @@
       "prefix": "BUILD",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/build/scene/add.cs"
+        "unitypkg/Editor/Tools/build/scene-add.cs"
       ]
     },
     {
@@ -1680,7 +1685,7 @@
       "renameTo": null,
       "emitters": [
         "unitypkg/Editor/Tools/build/BuildSceneStateTool.cs",
-        "unitypkg/Editor/Tools/build/scene/add.cs"
+        "unitypkg/Editor/Tools/build/scene-add.cs"
       ]
     },
     {
@@ -1691,7 +1696,7 @@
       "prefix": "BUILD",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/build/scene/add.cs"
+        "unitypkg/Editor/Tools/build/scene-add.cs"
       ]
     },
     {
@@ -1703,8 +1708,8 @@
       "renameTo": null,
       "emitters": [
         "unitypkg/Editor/Tools/build/BuildSceneStateTool.cs",
-        "unitypkg/Editor/Tools/build/scene/add.cs",
-        "unitypkg/Editor/Tools/build/scene/remove.cs"
+        "unitypkg/Editor/Tools/build/scene-add.cs",
+        "unitypkg/Editor/Tools/build/scene-remove.cs"
       ]
     },
     {
@@ -1715,7 +1720,7 @@
       "prefix": "BUILD",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/build/scene/remove.cs"
+        "unitypkg/Editor/Tools/build/scene-remove.cs"
       ]
     },
     {
@@ -1749,7 +1754,7 @@
       "prefix": "BUILD",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/build/settings/set.cs"
+        "unitypkg/Editor/Tools/build/settings-set.cs"
       ]
     },
     {
@@ -1760,7 +1765,7 @@
       "prefix": "BUILD",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/build/settings/set.cs"
+        "unitypkg/Editor/Tools/build/settings-set.cs"
       ]
     },
     {
@@ -1771,7 +1776,7 @@
       "prefix": "BUILD",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/build/settings/set.cs"
+        "unitypkg/Editor/Tools/build/settings-set.cs"
       ]
     },
     {
@@ -1782,7 +1787,7 @@
       "prefix": "BUILD",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/build/platform/set.cs"
+        "unitypkg/Editor/Tools/build/platform-set.cs"
       ]
     },
     {
@@ -1793,7 +1798,7 @@
       "prefix": "BUILD",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/build/platform/set.cs"
+        "unitypkg/Editor/Tools/build/platform-set.cs"
       ]
     },
     {
@@ -1804,7 +1809,7 @@
       "prefix": "BUILD",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/build/platform/set.cs"
+        "unitypkg/Editor/Tools/build/platform-set.cs"
       ]
     },
     {
@@ -1815,7 +1820,7 @@
       "prefix": "BUILD",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/build/platform/set.cs"
+        "unitypkg/Editor/Tools/build/platform-set.cs"
       ]
     },
     {
@@ -2738,7 +2743,7 @@
       "emitters": [
         "unitypkg/Editor/Tools/component/remove.cs",
         "unitypkg/Editor/Tools/component/set.cs",
-        "unitypkg/Editor/Tools/scene/gameobject/component.cs"
+        "unitypkg/Editor/Tools/scene/gameobject-component.cs"
       ]
     },
     {
@@ -2849,7 +2854,7 @@
       "renameTo": null,
       "emitters": [
         "unitypkg/Editor/Tools/component/add.cs",
-        "unitypkg/Editor/Tools/scene/gameobject/component.cs"
+        "unitypkg/Editor/Tools/scene/gameobject-component.cs"
       ]
     },
     {
@@ -2893,7 +2898,7 @@
       "prefix": "CONSOLE",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/debug/console/clear.cs"
+        "unitypkg/Editor/Tools/debug/console-clear.cs"
       ]
     },
     {
@@ -2904,7 +2909,7 @@
       "prefix": "CONSOLE",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/debug/console/clear.cs"
+        "unitypkg/Editor/Tools/debug/console-clear.cs"
       ]
     },
     {
@@ -2946,9 +2951,9 @@
         "unitypkg/Editor/Infrastructure/MethodHooks/MethodHookHost.cs",
         "unitypkg/Editor/Infrastructure/UnityCliHierarchyPager.cs",
         "unitypkg/Editor/Infrastructure/UnityCliReflection.cs",
-        "unitypkg/Editor/Tools/profiler/frame-debugger/events.cs",
+        "unitypkg/Editor/Tools/profiler/frame-debugger-events.cs",
         "unitypkg/Editor/Tools/profiler/hierarchy.cs",
-        "unitypkg/Editor/Tools/profiler/memory-snapshot/list.cs"
+        "unitypkg/Editor/Tools/profiler/memory-snapshot-list.cs"
       ]
     },
     {
@@ -3997,7 +4002,7 @@
       "prefix": "DIRECTIONAL",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/skybox/set-sun.cs"
+        "unitypkg/Editor/Tools/lighting/skybox-set-sun.cs"
       ]
     },
     {
@@ -4046,7 +4051,7 @@
       "renameTo": null,
       "emitters": [
         "unitypkg/Editor/Infrastructure/UnityCliOperationCoordinator.cs",
-        "unitypkg/Editor/Tools/editor/play-mode/stop.cs"
+        "unitypkg/Editor/Tools/editor/play-mode-stop.cs"
       ]
     },
     {
@@ -4057,7 +4062,7 @@
       "prefix": "EDITOR",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/editor/active-tool/set.cs"
+        "unitypkg/Editor/Tools/editor/active-tool-set.cs"
       ]
     },
     {
@@ -4068,7 +4073,7 @@
       "prefix": "EDITOR",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/editor/autotick/set.cs"
+        "unitypkg/Editor/Tools/editor/autotick-set.cs"
       ]
     },
     {
@@ -4090,7 +4095,7 @@
       "prefix": "EDITOR",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/editor/autotick/set.cs"
+        "unitypkg/Editor/Tools/editor/autotick-set.cs"
       ]
     },
     {
@@ -4388,7 +4393,7 @@
       "prefix": "EDITOR",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/editor/selection/set.cs"
+        "unitypkg/Editor/Tools/editor/selection-set.cs"
       ]
     },
     {
@@ -4505,9 +4510,10 @@
         "unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs",
         "unitypkg/Editor/Tools/animator/crossfade.cs",
         "unitypkg/Editor/Tools/debug/code/DebugCodeFlowDtos.cs",
-        "unitypkg/Editor/Tools/debug/pause/inspect.cs",
-        "unitypkg/Editor/Tools/debug/value/read.cs",
-        "unitypkg/Editor/Tools/debug/value/write.cs",
+        "unitypkg/Editor/Tools/debug/pause-inspect.cs",
+        "unitypkg/Editor/Tools/debug/value-read.cs",
+        "unitypkg/Editor/Tools/debug/value-write.cs",
+        "unitypkg/Editor/Tools/editor/menu-execute.cs",
         "unitypkg/Editor/Tools/navmesh/bake-clear.cs",
         "unitypkg/Editor/Tools/navmesh/NavMeshToolSupport.cs",
         "unitypkg/Editor/Tools/occlusion/bake-clear.cs",
@@ -4763,7 +4769,7 @@
       "prefix": "FOG",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/skybox/set-fog.cs"
+        "unitypkg/Editor/Tools/lighting/skybox-set-fog.cs"
       ]
     },
     {
@@ -4774,8 +4780,8 @@
       "prefix": "FRAME",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/profiler/frame-debugger/disable.cs",
-        "unitypkg/Editor/Tools/profiler/frame-debugger/enable.cs"
+        "unitypkg/Editor/Tools/profiler/frame-debugger-disable.cs",
+        "unitypkg/Editor/Tools/profiler/frame-debugger-enable.cs"
       ]
     },
     {
@@ -4786,7 +4792,7 @@
       "prefix": "FRAME",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/profiler/frame-debugger/enable.cs"
+        "unitypkg/Editor/Tools/profiler/frame-debugger-enable.cs"
       ]
     },
     {
@@ -4797,8 +4803,8 @@
       "prefix": "FRAME",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/profiler/frame-debugger/disable.cs",
-        "unitypkg/Editor/Tools/profiler/frame-debugger/enable.cs"
+        "unitypkg/Editor/Tools/profiler/frame-debugger-disable.cs",
+        "unitypkg/Editor/Tools/profiler/frame-debugger-enable.cs"
       ]
     },
     {
@@ -4809,9 +4815,9 @@
       "prefix": "FRAME",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/profiler/frame-debugger/disable.cs",
-        "unitypkg/Editor/Tools/profiler/frame-debugger/enable.cs",
-        "unitypkg/Editor/Tools/profiler/frame-debugger/events.cs"
+        "unitypkg/Editor/Tools/profiler/frame-debugger-disable.cs",
+        "unitypkg/Editor/Tools/profiler/frame-debugger-enable.cs",
+        "unitypkg/Editor/Tools/profiler/frame-debugger-events.cs"
       ]
     },
     {
@@ -4988,7 +4994,7 @@
       "prefix": "GRAPHICS",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/bake/reflection-probe.cs"
+        "unitypkg/Editor/Tools/lighting/bake-reflection-probe.cs"
       ]
     },
     {
@@ -5010,7 +5016,7 @@
       "prefix": "GRAPHICS",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/bake/clear.cs"
+        "unitypkg/Editor/Tools/lighting/bake-clear.cs"
       ]
     },
     {
@@ -5043,8 +5049,8 @@
       "prefix": "GRAPHICS",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/skybox/set-fog.cs",
-        "unitypkg/Editor/Tools/lighting/skybox/set-reflection.cs",
+        "unitypkg/Editor/Tools/lighting/skybox-set-fog.cs",
+        "unitypkg/Editor/Tools/lighting/skybox-set-reflection.cs",
         "unitypkg/Editor/Tools/rendering/GraphicsToolSupport.cs"
       ]
     },
@@ -5056,7 +5062,7 @@
       "prefix": "GRAPHICS",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/bake/clear.cs"
+        "unitypkg/Editor/Tools/lighting/bake-clear.cs"
       ]
     },
     {
@@ -5612,40 +5618,6 @@
       ]
     },
     {
-      "code": "E_INIT_EDITOR_RUNNING",
-      "fact": "RUNNING",
-      "effectStarted": "false",
-      "transient": false,
-      "semanticsOverrideReason": "Retrying without changing the Editor state can never succeed, so this code is not transient even though the RUNNING fact defaults to transient.",
-      "prefix": "INIT",
-      "renameTo": null,
-      "emitters": [
-        "src/cli-commands/package.ts"
-      ]
-    },
-    {
-      "code": "E_INIT_HOT_CHECK_FORBIDDEN",
-      "fact": "FORBIDDEN",
-      "effectStarted": "false",
-      "transient": false,
-      "prefix": "INIT",
-      "renameTo": null,
-      "emitters": [
-        "src/cli-commands/package.ts"
-      ]
-    },
-    {
-      "code": "E_INIT_HOT_CLOSE_EDITOR_CONFLICT",
-      "fact": "CONFLICT",
-      "effectStarted": "false",
-      "transient": false,
-      "prefix": "INIT",
-      "renameTo": null,
-      "emitters": [
-        "src/cli-commands/package.ts"
-      ]
-    },
-    {
       "code": "E_INIT_PROJECT_REQUIRED",
       "fact": "REQUIRED",
       "effectStarted": "false",
@@ -6157,7 +6129,7 @@
       "prefix": "MATERIAL",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/skybox/set-material.cs",
+        "unitypkg/Editor/Tools/lighting/skybox-set-material.cs",
         "unitypkg/Editor/Tools/material/MaterialToolSupport.cs"
       ]
     },
@@ -6192,7 +6164,7 @@
       "prefix": "MATERIAL",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/skybox/set-material.cs",
+        "unitypkg/Editor/Tools/lighting/skybox-set-material.cs",
         "unitypkg/Editor/Tools/material/MaterialToolSupport.cs"
       ]
     },
@@ -6305,14 +6277,36 @@
       ]
     },
     {
-      "code": "E_MENU_COMPLETION_UNSUPPORTED",
-      "fact": "UNSUPPORTED",
+      "code": "E_MENU_DISABLED",
+      "fact": "DISABLED",
       "effectStarted": "false",
       "transient": false,
       "prefix": "MENU",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/editor/menu.cs"
+        "unitypkg/Editor/Tools/editor/menu-execute.cs"
+      ]
+    },
+    {
+      "code": "E_MENU_ENUMERATION_FAILED",
+      "fact": "FAILED",
+      "effectStarted": "unknown",
+      "transient": false,
+      "prefix": "MENU",
+      "renameTo": null,
+      "emitters": [
+        "unitypkg/Editor/Tools/editor/EditorMenuSupport.cs"
+      ]
+    },
+    {
+      "code": "E_MENU_ENUMERATION_UNAVAILABLE",
+      "fact": "UNAVAILABLE",
+      "effectStarted": "false",
+      "transient": false,
+      "prefix": "MENU",
+      "renameTo": null,
+      "emitters": [
+        "unitypkg/Editor/Tools/editor/EditorMenuSupport.cs"
       ]
     },
     {
@@ -6323,18 +6317,7 @@
       "prefix": "MENU",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/editor/menu.cs"
-      ]
-    },
-    {
-      "code": "E_MENU_TERMINAL_NOT_OBSERVED",
-      "fact": "NOT_OBSERVED",
-      "effectStarted": "unknown",
-      "transient": false,
-      "prefix": "MENU",
-      "renameTo": null,
-      "emitters": [
-        "unitypkg/Editor/Tools/editor/menu.cs"
+        "unitypkg/Editor/Tools/editor/menu-execute.cs"
       ]
     },
     {
@@ -6400,7 +6383,7 @@
       "prefix": "METHOD",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/debug/method/invoke.cs"
+        "unitypkg/Editor/Tools/debug/method-invoke.cs"
       ]
     },
     {
@@ -6876,7 +6859,7 @@
         "unitypkg/Editor/Tools/camera/CameraToolSupport.cs",
         "unitypkg/Editor/Tools/profiler/capture.cs",
         "unitypkg/Editor/Tools/profiler/export.cs",
-        "unitypkg/Editor/Tools/profiler/memory-snapshot/take.cs",
+        "unitypkg/Editor/Tools/profiler/memory-snapshot-take.cs",
         "unitypkg/Editor/Tools/profiler/ProfilerMemorySnapshotSupport.cs",
         "unitypkg/Editor/Tools/screenshot/from-camera.cs",
         "unitypkg/Editor/Tools/screenshot/game-view.cs",
@@ -7203,7 +7186,7 @@
       "prefix": "PHYSICS",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/physics/joint/add.cs"
+        "unitypkg/Editor/Tools/physics/joint-add.cs"
       ]
     },
     {
@@ -7214,7 +7197,7 @@
       "prefix": "PHYSICS",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/physics/joint/add.cs"
+        "unitypkg/Editor/Tools/physics/joint-add.cs"
       ]
     },
     {
@@ -7225,7 +7208,7 @@
       "prefix": "PHYSICS",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/physics/joint/remove.cs"
+        "unitypkg/Editor/Tools/physics/joint-remove.cs"
       ]
     },
     {
@@ -7236,7 +7219,7 @@
       "prefix": "PHYSICS",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/physics/joint/remove.cs"
+        "unitypkg/Editor/Tools/physics/joint-remove.cs"
       ]
     },
     {
@@ -7247,7 +7230,7 @@
       "prefix": "PHYSICS",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/physics/joint/remove.cs"
+        "unitypkg/Editor/Tools/physics/joint-remove.cs"
       ]
     },
     {
@@ -7380,7 +7363,7 @@
       "renameTo": null,
       "emitters": [
         "unitypkg/Editor/Infrastructure/UnityCliOperationCoordinator.cs",
-        "unitypkg/Editor/Tools/editor/play-mode/start.cs"
+        "unitypkg/Editor/Tools/editor/play-mode-start.cs"
       ]
     },
     {
@@ -7811,7 +7794,7 @@
       "prefix": "PROFILER",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/profiler/memory-snapshot/take.cs"
+        "unitypkg/Editor/Tools/profiler/memory-snapshot-take.cs"
       ]
     },
     {
@@ -8067,7 +8050,7 @@
       "prefix": "PROFILER",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/profiler/memory-snapshot/take.cs"
+        "unitypkg/Editor/Tools/profiler/memory-snapshot-take.cs"
       ]
     },
     {
@@ -8133,7 +8116,7 @@
       "prefix": "PROFILER",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/profiler/memory-snapshot/take.cs"
+        "unitypkg/Editor/Tools/profiler/memory-snapshot-take.cs"
       ]
     },
     {
@@ -8155,7 +8138,7 @@
       "prefix": "PROFILER",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/profiler/memory-snapshot/compare.cs"
+        "unitypkg/Editor/Tools/profiler/memory-snapshot-compare.cs"
       ]
     },
     {
@@ -8177,7 +8160,7 @@
       "prefix": "PROFILER",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/profiler/memory-snapshot/compare.cs"
+        "unitypkg/Editor/Tools/profiler/memory-snapshot-compare.cs"
       ]
     },
     {
@@ -8437,7 +8420,7 @@
       "prefix": "REFLECTION",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/bake/reflection-probe.cs"
+        "unitypkg/Editor/Tools/lighting/bake-reflection-probe.cs"
       ]
     },
     {
@@ -8448,7 +8431,7 @@
       "prefix": "REFLECTION",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/bake/reflection-probe.cs"
+        "unitypkg/Editor/Tools/lighting/bake-reflection-probe.cs"
       ]
     },
     {
@@ -8459,7 +8442,7 @@
       "prefix": "REFLECTION",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/bake/reflection-probe.cs"
+        "unitypkg/Editor/Tools/lighting/bake-reflection-probe.cs"
       ]
     },
     {
@@ -8470,7 +8453,7 @@
       "prefix": "REFLECTION",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/bake/reflection-probe.cs"
+        "unitypkg/Editor/Tools/lighting/bake-reflection-probe.cs"
       ]
     },
     {
@@ -8503,7 +8486,7 @@
       "prefix": "REFLECTION",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/bake/reflection-probe.cs",
+        "unitypkg/Editor/Tools/lighting/bake-reflection-probe.cs",
         "unitypkg/Editor/Tools/lighting/reflection-probe.cs"
       ]
     },
@@ -8548,7 +8531,7 @@
       "prefix": "REFLECTION",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/debug/method/find.cs"
+        "unitypkg/Editor/Tools/debug/method-find.cs"
       ]
     },
     {
@@ -8559,7 +8542,7 @@
       "prefix": "REFLECTION",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/skybox/set-reflection.cs"
+        "unitypkg/Editor/Tools/lighting/skybox-set-reflection.cs"
       ]
     },
     {
@@ -8570,7 +8553,7 @@
       "prefix": "RENDER",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/rendering/pipeline/settings.cs"
+        "unitypkg/Editor/Tools/rendering/pipeline-settings.cs"
       ]
     },
     {
@@ -8581,7 +8564,7 @@
       "prefix": "RENDER",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/rendering/pipeline/settings.cs"
+        "unitypkg/Editor/Tools/rendering/pipeline-settings.cs"
       ]
     },
     {
@@ -8688,7 +8671,7 @@
       "renameTo": null,
       "emitters": [
         "unitypkg/Editor/Tools/physics/force.cs",
-        "unitypkg/Editor/Tools/physics/joint/add.cs"
+        "unitypkg/Editor/Tools/physics/joint-add.cs"
       ]
     },
     {
@@ -9100,7 +9083,6 @@
       "prefix": "SCENE",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/editor/menu.cs",
         "unitypkg/Editor/Tools/scene/save.cs",
         "unitypkg/Editor/Tools/scene/SceneToolSupport.cs"
       ]
@@ -9274,9 +9256,9 @@
         "unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs",
         "unitypkg/Editor/ProjectTools/ProjectToolSchemaValidator.cs",
         "unitypkg/Editor/Tools/debug/code/DebugCodeFlowDtos.cs",
-        "unitypkg/Editor/Tools/debug/pause/evaluate.cs",
+        "unitypkg/Editor/Tools/debug/pause-evaluate.cs",
         "unitypkg/Editor/Tools/editor/EditorActionToolSupport.cs",
-        "unitypkg/Editor/Tools/editor/menu.cs",
+        "unitypkg/Editor/Tools/editor/menu-execute.cs",
         "unitypkg/Editor/Tools/navmesh/NavMeshToolSupport.cs",
         "unitypkg/Editor/Tools/occlusion/OcclusionToolSupport.cs",
         "unitypkg/Editor/Tools/physics/simulation.cs",
@@ -9613,7 +9595,7 @@
       "prefix": "SELECTION",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/editor/selection/set.cs"
+        "unitypkg/Editor/Tools/editor/selection-set.cs"
       ]
     },
     {
@@ -9926,7 +9908,7 @@
       "prefix": "SKYBOX",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/skybox/set-properties.cs"
+        "unitypkg/Editor/Tools/lighting/skybox-set-properties.cs"
       ]
     },
     {
@@ -9937,7 +9919,7 @@
       "prefix": "SKYBOX",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/skybox/set-material.cs"
+        "unitypkg/Editor/Tools/lighting/skybox-set-material.cs"
       ]
     },
     {
@@ -9948,7 +9930,7 @@
       "prefix": "SKYBOX",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/skybox/set-properties.cs"
+        "unitypkg/Editor/Tools/lighting/skybox-set-properties.cs"
       ]
     },
     {
@@ -9959,7 +9941,7 @@
       "prefix": "SKYBOX",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/skybox/set-properties.cs"
+        "unitypkg/Editor/Tools/lighting/skybox-set-properties.cs"
       ]
     },
     {
@@ -9970,7 +9952,7 @@
       "prefix": "SKYBOX",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/skybox/set-properties.cs"
+        "unitypkg/Editor/Tools/lighting/skybox-set-properties.cs"
       ]
     },
     {
@@ -9981,7 +9963,7 @@
       "prefix": "SKYBOX",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/skybox/set-properties.cs"
+        "unitypkg/Editor/Tools/lighting/skybox-set-properties.cs"
       ]
     },
     {
@@ -9992,7 +9974,7 @@
       "prefix": "SKYBOX",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/skybox/set-sun.cs"
+        "unitypkg/Editor/Tools/lighting/skybox-set-sun.cs"
       ]
     },
     {
@@ -10003,7 +9985,7 @@
       "prefix": "SKYBOX",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/lighting/skybox/set-properties.cs"
+        "unitypkg/Editor/Tools/lighting/skybox-set-properties.cs"
       ]
     },
     {
@@ -11083,7 +11065,7 @@
       "prefix": "TOOL",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/editor/active-tool/set.cs"
+        "unitypkg/Editor/Tools/editor/active-tool-set.cs"
       ]
     },
     {
@@ -11124,7 +11106,7 @@
       "prefix": "TOOL",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/editor/active-tool/set.cs"
+        "unitypkg/Editor/Tools/editor/active-tool-set.cs"
       ]
     },
     {
@@ -11190,8 +11172,8 @@
       "prefix": "TYPE",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/debug/method/find.cs",
-        "unitypkg/Editor/Tools/debug/type/schema.cs"
+        "unitypkg/Editor/Tools/debug/method-find.cs",
+        "unitypkg/Editor/Tools/debug/type-schema.cs"
       ]
     },
     {
@@ -11214,7 +11196,7 @@
       "prefix": "UI",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/ui/button/create.cs"
+        "unitypkg/Editor/Tools/ui/button-create.cs"
       ]
     },
     {
@@ -11225,7 +11207,7 @@
       "prefix": "UI",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/ui/canvas/create.cs"
+        "unitypkg/Editor/Tools/ui/canvas-create.cs"
       ]
     },
     {
@@ -11247,7 +11229,7 @@
       "prefix": "UI",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/ui/document/update.cs"
+        "unitypkg/Editor/Tools/ui/document-update.cs"
       ]
     },
     {
@@ -11258,7 +11240,7 @@
       "prefix": "UI",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/ui/document/delete.cs"
+        "unitypkg/Editor/Tools/ui/document-delete.cs"
       ]
     },
     {
@@ -11270,8 +11252,8 @@
       "renameTo": null,
       "emitters": [
         "unitypkg/Editor/Tools/ui/detach-document.cs",
-        "unitypkg/Editor/Tools/ui/document/delete.cs",
-        "unitypkg/Editor/Tools/ui/document/info.cs",
+        "unitypkg/Editor/Tools/ui/document-delete.cs",
+        "unitypkg/Editor/Tools/ui/document-info.cs",
         "unitypkg/Editor/Tools/ui/modify-visual-element.cs",
         "unitypkg/Editor/Tools/ui/render-preview.cs",
         "src/output.ts"
@@ -11297,7 +11279,7 @@
       "prefix": "UI",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/ui/document/info.cs"
+        "unitypkg/Editor/Tools/ui/document-info.cs"
       ]
     },
     {
@@ -11310,9 +11292,9 @@
       "emitters": [
         "unitypkg/Editor/Tools/ui/attach-document.cs",
         "unitypkg/Editor/Tools/ui/detach-document.cs",
-        "unitypkg/Editor/Tools/ui/document/create.cs",
-        "unitypkg/Editor/Tools/ui/document/delete.cs",
-        "unitypkg/Editor/Tools/ui/document/update.cs"
+        "unitypkg/Editor/Tools/ui/document-create.cs",
+        "unitypkg/Editor/Tools/ui/document-delete.cs",
+        "unitypkg/Editor/Tools/ui/document-update.cs"
       ]
     },
     {
@@ -11367,7 +11349,7 @@
       "prefix": "UI",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/ui/image/create.cs"
+        "unitypkg/Editor/Tools/ui/image-create.cs"
       ]
     },
     {
@@ -11390,7 +11372,7 @@
       "renameTo": null,
       "emitters": [
         "unitypkg/Editor/Tools/ui/attach-document.cs",
-        "unitypkg/Editor/Tools/ui/document/create.cs",
+        "unitypkg/Editor/Tools/ui/document-create.cs",
         "unitypkg/Editor/Tools/ui/update-panel-settings.cs"
       ]
     },
@@ -11460,9 +11442,9 @@
       "prefix": "UI",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/ui/button/create.cs",
-        "unitypkg/Editor/Tools/ui/image/create.cs",
-        "unitypkg/Editor/Tools/ui/text/create.cs"
+        "unitypkg/Editor/Tools/ui/button-create.cs",
+        "unitypkg/Editor/Tools/ui/image-create.cs",
+        "unitypkg/Editor/Tools/ui/text-create.cs"
       ]
     },
     {
@@ -11495,7 +11477,7 @@
       "prefix": "UI",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/ui/image/create.cs"
+        "unitypkg/Editor/Tools/ui/image-create.cs"
       ]
     },
     {
@@ -11517,7 +11499,7 @@
       "prefix": "UI",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/ui/text/create.cs"
+        "unitypkg/Editor/Tools/ui/text-create.cs"
       ]
     },
     {
@@ -11528,7 +11510,7 @@
       "prefix": "UI",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/ui/document/create.cs"
+        "unitypkg/Editor/Tools/ui/document-create.cs"
       ]
     },
     {
@@ -11561,7 +11543,7 @@
       "prefix": "UI",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/ui/document/create.cs"
+        "unitypkg/Editor/Tools/ui/document-create.cs"
       ]
     },
     {
@@ -11572,7 +11554,7 @@
       "prefix": "UI",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/ui/document/update.cs",
+        "unitypkg/Editor/Tools/ui/document-update.cs",
         "unitypkg/Editor/Tools/ui/UiToolSupport.cs"
       ]
     },
@@ -11584,7 +11566,7 @@
       "prefix": "UI",
       "renameTo": null,
       "emitters": [
-        "unitypkg/Editor/Tools/ui/document/update.cs",
+        "unitypkg/Editor/Tools/ui/document-update.cs",
         "unitypkg/Editor/Tools/ui/UiToolSupport.cs"
       ]
     },

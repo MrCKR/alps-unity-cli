@@ -12,14 +12,14 @@ const PREFAB_COMMANDS = [
   "prefab.info",
   "prefab.instantiate",
   "prefab.modify",
-  "prefab.overrides.apply",
-  "prefab.overrides.revert",
+  "prefab.overrides-apply",
+  "prefab.overrides-revert",
   "prefab.stage",
   "prefab.stage-close",
   "prefab.stage-open",
   "prefab.stage-save",
   "prefab.unpack",
-  "prefab.variant.create"
+  "prefab.variant-create"
 ];
 
 test("prefab group is contract-discovered with 13 tools", () => {
@@ -67,9 +67,9 @@ test("bridge specs resolve for prefab tools", () => {
     info: "prefab.info",
     create: "prefab.create",
     modify: "prefab.modify",
-    "overrides.apply": "prefab.overrides.apply",
-    "overrides.revert": "prefab.overrides.revert",
-    "variant.create": "prefab.variant.create",
+    "overrides-apply": "prefab.overrides-apply",
+    "overrides-revert": "prefab.overrides-revert",
+    "variant-create": "prefab.variant-create",
     "stage-open": "prefab.stage-open",
     "stage-save": "prefab.stage-save",
     "stage-close": "prefab.stage-close",

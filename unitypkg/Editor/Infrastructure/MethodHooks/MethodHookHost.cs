@@ -1211,21 +1211,21 @@ namespace UnityCli
         private static MethodHookDefinition RequireDefinition(string hookId, string editorSessionId, long? expectedRevision, bool allowUnknownSession = false)
         {
             if (string.IsNullOrWhiteSpace(hookId))
-                throw new BridgeCommandException("E_SCHEMA_INVALID", "hookId is required.", "Pass the hookId returned by debug.hook.install or debug.hook.list.");
+                throw new BridgeCommandException("E_SCHEMA_INVALID", "hookId is required.", "Pass the hookId returned by debug.hook-install or debug.hook-list.");
             if (!allowUnknownSession)
             {
                 if (string.IsNullOrWhiteSpace(editorSessionId))
                     throw new BridgeCommandException("E_SCHEMA_INVALID", "editorSessionId is required for this mutation.", "Pass the editorSessionId returned by install or info.");
                 if (!string.Equals(editorSessionId, UnityCliBridge.EditorSessionId(), StringComparison.Ordinal))
-                    throw new BridgeCommandException("E_HOOK_SESSION_STALE", "The definition belongs to a different Editor session.", null, new[] { "Re-read debug.hook.list on the current session before mutating definitions." });
+                    throw new BridgeCommandException("E_HOOK_SESSION_STALE", "The definition belongs to a different Editor session.", null, new[] { "Re-read debug.hook-list on the current session before mutating definitions." });
             }
             lock (Sync)
             {
                 MethodHookDefinition definition;
                 if (!Definitions.TryGetValue(hookId, out definition))
-                    throw new BridgeCommandException("E_HOOK_NOT_FOUND", "No hook definition with that id exists in the current Editor session.", null, new[] { "Read debug.hook.list to inspect the current definitions." });
+                    throw new BridgeCommandException("E_HOOK_NOT_FOUND", "No hook definition with that id exists in the current Editor session.", null, new[] { "Read debug.hook-list to inspect the current definitions." });
                 if (expectedRevision.HasValue && definition.Revision != expectedRevision.Value)
-                    throw new BridgeCommandException("E_HOOK_REVISION_STALE", "The definition revision changed from " + expectedRevision.Value.ToString(CultureInfo.InvariantCulture) + " to " + definition.Revision.ToString(CultureInfo.InvariantCulture) + ".", null, new[] { "Read debug.hook.info for the current revision and retry with expectedRevision." });
+                    throw new BridgeCommandException("E_HOOK_REVISION_STALE", "The definition revision changed from " + expectedRevision.Value.ToString(CultureInfo.InvariantCulture) + " to " + definition.Revision.ToString(CultureInfo.InvariantCulture) + ".", null, new[] { "Read debug.hook-info for the current revision and retry with expectedRevision." });
                 return definition;
             }
         }
@@ -1345,7 +1345,7 @@ namespace UnityCli
             }
             catch (Exception)
             {
-                throw new BridgeCommandException("E_CONTINUATION_STALE", "The list continuation no longer matches the current Editor session or filters.", null, new[] { "Re-read debug.hook.list without a cursor." });
+                throw new BridgeCommandException("E_CONTINUATION_STALE", "The list continuation no longer matches the current Editor session or filters.", null, new[] { "Re-read debug.hook-list without a cursor." });
             }
         }
     }

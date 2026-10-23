@@ -82,7 +82,7 @@
 
 - 计划中 `activation: play` + 进入 Play 时重建域的自动重挂方向是必要的：新域中游戏调用点的首次编译发生在重挂之后，这是补丁能生效的前提。
 - 必须在游戏首帧逻辑之前完成安装；中途安装要明确披露可能漏掉已经编译的调用点。
-- `debug.hook.install` 的语义保持"证明定义已持久化且补丁已建立"，不得夸大；是否命中由 `events` 或业务副作用单独证明。
+- `debug.hook-install` 的语义保持"证明定义已持久化且补丁已建立"，不得夸大；是否命中由 `events` 或业务副作用单独证明。
 - `info`/`events` 需要能表达"已安装但无命中"，并提示可改用更晚编译或体量更大的目标方法。
 
 ## 6. 与计划中的判断对照
@@ -331,7 +331,7 @@ overhead.measured :: PASS | baseline=2.2ns/call patched=2.0ns/call ratio=0.90
 
 | 行为 | 证据 |
 | --- | --- |
-| group/describe 自足 | `tools group` 返回 exact `method-hook` 摘要；`tools group list method-hook` 恰为八个 Tool；`tools describe debug.hook.install` 的公开字段只有 name/description/inputSchema/destructiveHint/sideEffects/playModeSupport/supportsDryRun/examples/target |
+| group/describe 自足 | `tools group` 返回 exact `method-hook` 摘要；`tools group list method-hook` 恰为八个 Tool；`tools describe debug.hook-install` 的公开字段只有 name/description/inputSchema/destructiveHint/sideEffects/playModeSupport/supportsDryRun/examples/target |
 | dry-run 无副作用 | `--dry-run` 返回 plannedEffects 且 `Library/UnityCli/code-exec-temp` 为空、定义列表仍为空 |
 | 无代码捕获不启动 compiler | 只带 capture 的 install 后 callbacks 两个槽位 present=false，`code-exec-temp` 无文件 |
 | 最早时机重挂 | 进入 Play（默认设置会重载域）后，事件页里最早的 prefix 事件 `frame=0`，与探针 `awake` 同帧之前已 armed |
@@ -372,7 +372,7 @@ overhead.measured :: PASS | baseline=2.2ns/call patched=2.0ns/call ratio=0.90
 针对“统一动态编译与执行预算”逐条核对后确认并修正了两点：
 
 1. **累计 bytes 必须在加载新产物之前用真实值核对。** 原实现只在编译前用 `additionalBytes = 0` 检查，单次编译产物最多可让累计值超出上限一个产物大小；现在编译成功、`Assembly.Load` 之前用真实字节数再次核对，超限则不加载该产物（`E_HOOK_COMPILE_BUDGET_EXHAUSTED`），disable/remove/info 路径完全不引用预算检查。
-2. **引用指纹必须按域快照一次。** 原实现每次编译都重算引用集摘要，于是同域内任何后续加载（上一个回调程序集、`debug.code.execute` 的动态程序集、其他功能的惰性加载）都会改变编译键，导致“同域同 key 复用”实际不可达。Dev 实测证据：修复前同源码两次 install 得到两个不同 `key` 与两个产物（`artifacts 1 -> 2`）；改为按域快照后同源码命中 `method_hook_callback_reuse`，`artifacts 1 -> 1`、`bytes` 不变，而不同源码仍正常产生新产物（`1 -> 2`），业务行为不受影响（`Add` 返回 1、`Fresh` 返回 2）。
+2. **引用指纹必须按域快照一次。** 原实现每次编译都重算引用集摘要，于是同域内任何后续加载（上一个回调程序集、`debug.code-execute` 的动态程序集、其他功能的惰性加载）都会改变编译键，导致“同域同 key 复用”实际不可达。Dev 实测证据：修复前同源码两次 install 得到两个不同 `key` 与两个产物（`artifacts 1 -> 2`）；改为按域快照后同源码命中 `method_hook_callback_reuse`，`artifacts 1 -> 1`、`bytes` 不变，而不同源码仍正常产生新产物（`1 -> 2`），业务行为不受影响（`Add` 返回 1、`Fresh` 返回 2）。
 
 同域缓存与产物计数在 `BeforeReload`/`Shutdown`/`ResetDomainCaches` 中清理，因此跨域必然重新建立引用；预算只按“当前域曾加载的独特产物与累计 bytes”计数，删除 hook 只释放 host 引用，不声称卸载 Mono 程序集。
 
@@ -422,7 +422,7 @@ overhead.measured :: PASS | baseline=2.2ns/call patched=2.0ns/call ratio=0.90
 
 | owner（唯一实现点） | 直接 caller / 接入点 |
 | --- | --- |
-| `unitypkg/Editor/Infrastructure/DynamicCodeCompiler.cs`、`CodeExecSupport.cs` | `debug.code.execute` handler；`MethodHookHost.Operations`（callback 编译）；`UnityCliBridge`（reload/quitting 取消）；唯一 active compiler 与固定临时文件 |
+| `unitypkg/Editor/Infrastructure/DynamicCodeCompiler.cs`、`CodeExecSupport.cs` | `debug.code-execute` handler；`MethodHookHost.Operations`（callback 编译）；`UnityCliBridge`（reload/quitting 取消）；唯一 active compiler 与固定临时文件 |
 | `unitypkg/Editor/Infrastructure/MethodHooks/*`（Host/Operations/Dispatch/Store/EventBuffer/TargetResolver/Projection/Definition/Abi/Limits） | 八个 `method-hook.*` Tool；`UnityCliBridge` 的 `[InitializeOnLoad]`/BeforeReload/Shutdown；命中热路径 `DispatchTargets` |
 | `unitypkg/Hooks/*`（Harmony 后端、IL emitter、asmdef） | `MethodHookHost` 经反射加载后端；asmdef 单向引用 `UnityCli.Editor` |
 | `src/package-manager.ts`、`src/assembly-identity.ts` | `init package` 安装与冲突扫描路径 |
@@ -510,7 +510,7 @@ overhead.measured :: PASS | baseline=2.2ns/call patched=2.0ns/call ratio=0.90
 
 ## 15. 生命周期四组合实测（domain/scene reload on-off）
 
-脚本：以 `debug.code.execute` 显式切换 `EditorSettings.enterPlayModeOptions`（每次读回生效值），四个组合各跑一轮 Play；每轮前后读 `debug.hook.info`（hitCount、adapterIdentities）、从轮次开始 cursor 读事件页与夹具信号线；最后恢复设置并清理定义。
+脚本：以 `debug.code-execute` 显式切换 `EditorSettings.enterPlayModeOptions`（每次读回生效值），四个组合各跑一轮 Play；每轮前后读 `debug.hook-info`（hitCount、adapterIdentities）、从轮次开始 cursor 读事件页与夹具信号线；最后恢复设置并清理定义。
 
 | 组合 | 读回设置 | calls | 本轮 dispatches | first prefix frame | State 首个值 | play / clock | adapter 数 | prefix:postfix:custom |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -526,7 +526,7 @@ overhead.measured :: PASS | baseline=2.2ns/call patched=2.0ns/call ratio=0.90
 - **State 分局**：四轮 State 首值均为 1，Play 入口重置。
 - **Session/clock 语义**：domain reload 组合重新得到 `play-1`（域内计数器随新域重置），无 domain reload 组合继续为 `play-2` 并带新的 clock segment；夹具自身的 `runtime.beforeSceneLoad reload=` 标记与之一致（域重载组合为 false，即静态被清空）。
 - **旧对象引用**：各轮 awake 实例哈希不同；同 Play 内再次 reload 会重建实例，而在 domain+scene reload 均关闭的轮次，前一实例身份可以保留（诚实记录，不声称“总是消失”）。
-- **产品未擅改用户设置**：Enter Play Mode 选项只由本轮显式 `debug.code.execute` 修改，结束后恢复为原值 `False\|None` 并 `AssetDatabase.SaveAssets()`；`debug.hook.install` 的 describe 也明确声明不改变 Enter Play Mode 设置。
+- **产品未擅改用户设置**：Enter Play Mode 选项只由本轮显式 `debug.code-execute` 修改，结束后恢复为原值 `False\|None` 并 `AssetDatabase.SaveAssets()`；`debug.hook-install` 的 describe 也明确声明不改变 Enter Play Mode 设置。
 
 ## 16. 安装闭包与资源边界定向实测
 
@@ -535,7 +535,7 @@ overhead.measured :: PASS | baseline=2.2ns/call patched=2.0ns/call ratio=0.90
 | 场景 | 结果 |
 | --- | --- |
 | 源包缺随包 DLL（临时隐藏 canonical 二进制） | `init package` 与 `--check` 均用 `PACKAGE_SOURCE_INTEGRITY_FAILED` 拒经，消息含确切的源文件绝对路径；恢复二进制后 sha256 回到 `7b9e7563…c55c`，检查重新通过 |
-| 已安装副本被破坏（删除已安装投影的 0Harmony.dll） | `init package --check` 报 `status=damaged`、`reasonCode=PACKAGE_INSTALL_DAMAGED`、message “managed files are missing or do not match canonical bytes”，nextActions 给出收敛命令；不修复、不删除其他文件；此时只读 `editor.state` 与 `debug.hook.list` 仍正常返回 |
+| 已安装副本被破坏（删除已安装投影的 0Harmony.dll） | `init package --check` 报 `status=damaged`、`reasonCode=PACKAGE_INSTALL_DAMAGED`、message “managed files are missing or do not match canonical bytes”，nextActions 给出收敛命令；不修复、不删除其他文件；此时只读 `editor.state` 与 `debug.hook-list` 仍正常返回 |
 | Assets 内异名同 identity（植入 `AliasHarmony.dll`，2461696 字节/同 sha256） | `init package` 拒绝并返回 `PACKAGE_ASSEMBLY_CONFLICT`，details 给出准确路径 `Assets/ThirdParty/HookConflictProbe/AliasHarmony.dll`、sha256 与 `0Harmony, Version=2.4.2.0, Culture=neutral, PublicKeyToken=null`；植入文件未被删除；移除后安装恢复 |
 | 修复 | `init package` 再次运行收敛为 `status=installed`，已安装 DLL sha256 回到 canonical `7B9E756306FA3D76` |
 

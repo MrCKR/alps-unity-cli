@@ -71,7 +71,7 @@ namespace UnityCli
         {
             if (!string.IsNullOrEmpty(tagValue) && !IsKnownTag(tagValue))
             {
-                throw new UnityCliBridge.BridgeCommandException("E_TAG_NOT_FOUND", "Tag not found: " + tagValue, "Create the tag first with project-settings.tag.add or pass an existing Unity tag.");
+                throw new UnityCliBridge.BridgeCommandException("E_TAG_NOT_FOUND", "Tag not found: " + tagValue, "Create the tag first with project-settings.tag-add or pass an existing Unity tag.");
             }
             if (!string.IsNullOrEmpty(layerValue)) ParseLayer(layerValue);
         }
@@ -382,7 +382,7 @@ namespace UnityCli
             var components = gameObject.GetComponents(type);
             if (componentIndex.Value < 0 || componentIndex.Value >= components.Length)
             {
-                throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_INDEX_OUT_OF_RANGE", "componentIndex " + componentIndex.Value + " is out of range for " + componentName + ".", "Run tools run scene.gameobject.components to discover component indices.");
+                throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_INDEX_OUT_OF_RANGE", "componentIndex " + componentIndex.Value + " is out of range for " + componentName + ".", "Run tools run scene.gameobject-components to discover component indices.");
             }
             return components[componentIndex.Value];
         }
@@ -425,7 +425,7 @@ namespace UnityCli
             {
                 return new ComponentPropertyChange(propertyName, ConvertComponentValue(value, field.FieldType), field.FieldType, null, field, value);
             }
-            throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_PROPERTY_NOT_FOUND", "Writable component property not found: " + propertyName, "Use component.get or debug.type.schema to inspect writable public fields/properties.");
+            throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_PROPERTY_NOT_FOUND", "Writable component property not found: " + propertyName, "Use component.get or debug.type-schema to inspect writable public fields/properties.");
         }
 
         public static void ApplyComponentPropertyChanges(Component component, List<ComponentPropertyChange> changes)
@@ -456,7 +456,7 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException(
                     "E_COMPONENT_VALUE_INVALID",
                     "Component value could not be converted to " + type.Name + ": " + exception.Message,
-                    "Pass a JSON value matching the writable member type shown by component.get or debug.type.schema.");
+                    "Pass a JSON value matching the writable member type shown by component.get or debug.type-schema.");
             }
         }
 

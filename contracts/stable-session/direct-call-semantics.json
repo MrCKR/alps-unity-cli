@@ -14,7 +14,7 @@
   },
   "admission": {
     "timeout": "admissionDeadline = dispatchStartedAt + normalized --timeout-ms T",
-    "exactObservationExclusion": ["editor.state", "editor.dialogs", "editor.dialog.click"],
+    "exactObservationExclusion": ["editor.state", "editor.dialogs", "editor.dialog-click"],
     "exactObservationRule": "only these exact frozen local definitions execute without business admission acquire/revoke and without the ordinary strict instance selector; names, aliases, groups, handlers and arbitrary offline Tools cannot inherit the exclusion",
     "consumes": ["input parsing", "live target binding", "identity and lifecycle checks", "internal acquire polling"],
     "polling": "one acquire at a time; each denied response sleeps an independent integer in [80,120] milliseconds",

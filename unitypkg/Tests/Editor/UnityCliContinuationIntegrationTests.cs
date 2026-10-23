@@ -79,7 +79,7 @@ namespace UnityCli.Tests
             currentCount--;
             AssertStale(tool, firstCursor, "issue-042-frame-deleted");
             currentCount = eventCount;
-            var unknown = UnityCliContinuationToken.Create("profiler.frame-debugger.events", generation, "unknown");
+            var unknown = UnityCliContinuationToken.Create("profiler.frame-debugger-events", generation, "unknown");
             AssertStale(tool, unknown, "issue-042-frame-unknown");
         }
 

@@ -71,8 +71,8 @@ const RETURNABLE_TRANSITION_COMMANDS = new Set([
 ]);
 // 只有自身切换 Editor session 状态的 Tool 才能恢复已发出但丢失响应的同根请求。
 const POST_DISPATCH_LISTENER_RECOVERY_TOOLS = new Set([
-  "editor.play-mode.start",
-  "editor.play-mode.stop",
+  "editor.play-mode-start",
+  "editor.play-mode-stop",
 ]);
 const TRANSITION_CODES = new Set([
   "E_UNITY_DOMAIN_RELOAD",
@@ -1026,7 +1026,7 @@ function blockerNextActions(): string[] {
   return [
     "Run unitycli tools run editor.state to check whether the Editor is still transitioning and wait until it reports ready.",
     "Run unitycli tools run editor.dialogs to inspect the current modal dialog.",
-    "Run unitycli tools run editor.dialog.click with a current dialogId and exact button label.",
+    "Run unitycli tools run editor.dialog-click with a current dialogId and exact button label.",
   ];
 }
 

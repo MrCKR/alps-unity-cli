@@ -14,7 +14,7 @@ test("named core atomic tools prevalidate, commit, and return independently obse
     source("Tools/physics/collision-matrix.cs"),
     source("Tools/physics/force.cs"),
     source("Tools/physics/material.cs"),
-    source("Tools/physics/joint/add.cs"),
+    source("Tools/physics/joint-add.cs"),
     source("Tools/physics/simulation.cs"),
     source("Tools/prefab/create.cs"),
     source("Tools/prefab/instantiate.cs"),

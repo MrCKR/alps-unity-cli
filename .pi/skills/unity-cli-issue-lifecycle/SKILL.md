@@ -48,4 +48,4 @@ metadata:
 
 ## 边界
 
-本 Skill 仅管理缺陷记录与状态转换，不替代命中的 `unity-cli-capability`、`unity-cli-validation` 或 `unity-cli-wait`。记录独立于普通任务跟踪；只保留影响工程判断的证据和 terminal 结果，不把 `.issues/` 当执行日志仓库。除非另行要求，不提交、发布或升级版本。
+本 Skill 仅管理缺陷记录与状态转换，不替代命中的 `unity-cli-capability` 或 `unity-cli-validation`。记录独立于普通任务跟踪；只保留影响工程判断的证据和 terminal 结果，不把 `.issues/` 当执行日志仓库。除非另行要求，不提交、发布或升级版本。

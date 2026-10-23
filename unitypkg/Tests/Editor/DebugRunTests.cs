@@ -6,7 +6,7 @@ using NUnit.Framework;
 namespace UnityCli.Tests
 {
     /// <summary>
-    /// 证据窗口（debug.run.begin/end/wait/info/list）的定向逻辑测试。
+    /// 证据窗口（debug.run-begin/end/wait/info/list）的定向逻辑测试。
     ///
     /// 覆盖：声明回读与 capture 边界、开放窗口不声称完成、未知 runId 的硬失败、
     /// 三态 verdict（不把断言失败当错误码）、首个反例、负向与全窗口检查的覆盖证明要求、
@@ -176,7 +176,7 @@ namespace UnityCli.Tests
             Assert.IsTrue(failure.Details is Dictionary<string, object>, "the failure carries machine-readable details");
             var details = (Dictionary<string, object>)failure.Details;
             Assert.IsTrue(details.ContainsKey("domainGeneration"), "the failure names the generation whose windows are live");
-            Assert.IsTrue(failure.NextActions.Count > 0, "a failure must route the caller to debug.run.list or debug.run.begin");
+            Assert.IsTrue(failure.NextActions.Count > 0, "a failure must route the caller to debug.run-list or debug.run-begin");
         }
 
         [Test]
@@ -222,7 +222,7 @@ namespace UnityCli.Tests
             Assert.IsTrue(ended.Report.Checks[0].CoverageProven);
             Assert.AreEqual(0, ended.Report.Checks[0].FailedCount);
             Assert.Contains("manual", Conditions(ended.Report));
-            Assert.IsTrue(ended.Report.Conditions[0].Observed, "sealing by debug.run.end satisfies the implicit manual condition");
+            Assert.IsTrue(ended.Report.Conditions[0].Observed, "sealing by debug.run-end satisfies the implicit manual condition");
             Assert.IsFalse(ended.Report.Conditions[0].DeclaredOnly);
             Assert.IsTrue(ended.Report.DetailAvailable);
             Assert.IsTrue(ended.Report.Capture.QueueDrained);

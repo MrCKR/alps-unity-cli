@@ -11,8 +11,8 @@ export const sceneBridgeSpecs: BridgeCommandSpec[] = [
   { group: "scene", command: "set-active", bridgeCommand: "catalog.editor.run", toolName: "scene.set-active", buildArgs: sceneFileArgs },
   { group: "scene", command: "list-opened", bridgeCommand: "catalog.editor.run", toolName: "scene.list-opened", buildArgs: ({ flags }) => queryArgs(flags) },
   { group: "scene", command: "gameobject", bridgeCommand: "catalog.editor.run", toolName: "scene.gameobject", buildArgs: sceneGameObjectReadArgs },
-  { group: "scene", command: "gameobject.component", bridgeCommand: "catalog.editor.run", toolName: "scene.gameobject.component", buildArgs: sceneGameObjectReadArgs },
-  { group: "scene", command: "gameobject.components", bridgeCommand: "catalog.editor.run", toolName: "scene.gameobject.components", buildArgs: sceneGameObjectReadArgs },
+  { group: "scene", command: "gameobject-component", bridgeCommand: "catalog.editor.run", toolName: "scene.gameobject-component", buildArgs: sceneGameObjectReadArgs },
+  { group: "scene", command: "gameobject-components", bridgeCommand: "catalog.editor.run", toolName: "scene.gameobject-components", buildArgs: sceneGameObjectReadArgs },
   { group: "game-object", command: "move-to-scene", bridgeCommand: "catalog.editor.run", toolName: "game-object.move-to-scene", buildArgs: sceneMoveObjectArgs, supportsDryRun: true },
   { group: "scene", command: "validate", bridgeCommand: "catalog.editor.run", toolName: "scene.validate", buildArgs: sceneValidateArgs },
   { group: "scene", command: "view-frame", bridgeCommand: "catalog.editor.run", toolName: "scene.view-frame", buildArgs: ({ flags }) => { const s = structuredInput(flags); return compactArgs({ target: stringFlag(flags, "target") ?? stringValue(s.target), path: stringFlag(flags, "path") ?? stringValue(s.path), frameAll: boolFlag(flags, "frame-all") ?? boolValue(s.frameAll) }); } }

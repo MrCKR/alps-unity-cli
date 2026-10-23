@@ -25,7 +25,8 @@ unitycli init help
 按返回的 `aiInstructions` 和 `nextActions` 处理目标发现、安装和校验。更新 CLI 后必须重新读取新版协议；不要沿用旧版本的安装假设。安装目标和参数以该协议为准，下列入口仅用于区分安装对象：
 
 - `init discover` 只读返回当前项目计划。用户已指定的目标直接沿用，不重复询问，也不扩大到其他项目或目录。
-- Bridge 使用 `init package --project <UnityProject>`。准确目标 Unity 正在运行时默认保持 Editor 运行：用 `init package --project <UnityProject> --hot` 覆盖包文件，再用 `tools run editor.refresh` 让运行中的 Editor 导入，最后用 `init package --project <UnityProject> --check` 验证已安装字节；只有用户明确愿意关闭时才询问一次，同意后加 `--close-editor`。不得强制终止或替用户处理未保存场景；安装过程不启动或重启 Editor。
+- Bridge 使用 `init package --project <UnityProject>`。准确目标 Unity 打开着是正常安装状态，直接就地安装：安装器用同级 staging 目录加 rename 替换包文件，不要求先关闭 Editor，也从不启动或重启 Editor。安装成功后，如果该项目 Editor 正在运行，用 `tools run editor.refresh` 让它导入替换后的包，再用 `init package --project <UnityProject> --check` 验证已安装字节。
+- 只有发布阶段报告 `PACKAGE_DIRECTORY_LOCKED` 时才评估关闭：如实报告被占用的目录并说明原状态已回滚，询问一次是否可正常关闭该准确项目，同意后才对该项目加 `--close-editor` 重跑。不得强制终止，也不得替用户处理未保存场景。
 - Skill 明确目录使用 `init skill --target <SkillDirectory>`；预设使用 `init skill --agent <.agents|claude> --scope <workspace|user>`，workspace scope 同时传 `--workspace <path>`。明确目录与预设选项不混用。
 - 每个成功的安装或更新效果都用对应原命令加 `--check` 校验。Bridge 与 Skill 是独立效果，一个失败只阻断该效果及其校验，不阻断另一个已授权的效果。
 

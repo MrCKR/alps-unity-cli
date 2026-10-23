@@ -51,7 +51,7 @@ namespace UnityCli
         public string ResourceId { get; set; }
     }
 
-    // ---- debug.pause.list ----
+    // ---- debug.pause-list ----
 
     public sealed class DebugPauseListRequest
     {
@@ -167,7 +167,7 @@ namespace UnityCli
         public string DomainGeneration { get; set; }
     }
 
-    // ---- debug.pause.wait ----
+    // ---- debug.pause-wait ----
 
     public sealed class DebugPauseWaitRequest
     {
@@ -194,7 +194,7 @@ namespace UnityCli
         public string DomainGeneration { get; set; }
     }
 
-    // ---- debug.pause.inspect ----
+    // ---- debug.pause-inspect ----
 
     /// <summary>一次字段读取请求；在暂停线程上按声明类型解析，读取失败按字段给出原因。</summary>
     public sealed class DebugPauseFieldRequest
@@ -262,7 +262,7 @@ namespace UnityCli
         public string ExecutionModel { get; set; }
     }
 
-    // ---- debug.pause.evaluate ----
+    // ---- debug.pause-evaluate ----
 
     /// <summary>已安装 program 的命名入口；与 code/file 互斥。</summary>
     public sealed class DebugPauseProgramEntrySpec
@@ -314,7 +314,7 @@ namespace UnityCli
         public string DomainGeneration { get; set; }
     }
 
-    // ---- debug.pause.resume ----
+    // ---- debug.pause-resume ----
 
     public sealed class DebugPauseResumeRequest
     {

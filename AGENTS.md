@@ -136,12 +136,6 @@ CLI控制面：
 
 新增、修改或删除 `extensions/<id>`、Extension manifest、Unity package 依赖、安装投影或扩展贡献能力时必须读取；同时必须读取 `unity-cli-capability`。
 
-### `unity-cli-wait`
-
-路径：`.pi/skills/unity-cli-wait/SKILL.md`
-
-涉及 `ValueTask`、`Promise`、`ctx.Wait`、callback、`EditorApplication.update`、timeout/cancel、跨帧执行或命令层 wait 时必须读取；涉及公开能力时同时读取 `unity-cli-capability`。
-
 ### `unity-cli-validation`
 
 路径：`.pi/skills/unity-cli-validation/SKILL.md`
@@ -163,6 +157,7 @@ CLI控制面：
 这里的“不兼容旧版本”和维护洁癖针对本项目内部已经废弃的数据格式、命令、路由、字段、行为、重复实现、过渡代码和死代码；不指 Unity、官方 Package 或第三方工具的版本适配。manifest、descriptor 或产品要求声明支持的工具版本属于当前产品能力，即使适配代码位于本仓库，也不得以清理兼容层为由删除。版本分派本身仍必须集中、边界明确、无重复、无未声明兜底且可测试。确需缩小支持范围时必须由项目所有者明确决定，并同步更新全部公开契约。
 
 - Tool 名、group、字段名和错误码一旦公开即视为契约。
+- native Tool 名固定两段：`<group>.<tool>`，只允许一个点号。点前必须等于该 Tool 的 group；点后的 tool 段内部细分只用 `-`（`editor.play-mode-start`、`asset.import-settings-set`、`debug.code-flow-run`）。公开查找只有 group 与 tool 两层，不得用点号暗示不存在的子 group。官方 `UnityPipeline_<name>` 属性 Tool 保留外部作者原名，不受本规则约束。
 - 命名变更必须同步更新 metadata、docs、Skill、schema、contract 和 tests。
 - 只保留当前命令形态与当前语义，不得提交双轨实现、legacy fallback 或兼容 adapter。
 

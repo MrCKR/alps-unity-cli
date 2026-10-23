@@ -21,12 +21,12 @@ export const profilerBridgeSpecs: BridgeCommandSpec[] = [
   { group: "profiler", command: "hierarchy", bridgeCommand: "catalog.editor.run", toolName: "profiler.hierarchy", buildArgs: profilerHierarchyArgs },
   { group: "profiler", command: "rendering-stats", bridgeCommand: "catalog.editor.run", toolName: "profiler.rendering-stats", buildArgs: profilerArgs },
   { group: "profiler", command: "script-stats", bridgeCommand: "catalog.editor.run", toolName: "profiler.script-stats", buildArgs: profilerArgs },
-  { group: "profiler", command: "memory-snapshot.take", bridgeCommand: "catalog.editor.run", toolName: "profiler.memory-snapshot.take", buildArgs: profilerMemorySnapshotArgs },
-  { group: "profiler", command: "memory-snapshot.list", bridgeCommand: "catalog.editor.run", toolName: "profiler.memory-snapshot.list", buildArgs: profilerMemorySnapshotArgs },
-  { group: "profiler", command: "memory-snapshot.compare", bridgeCommand: "catalog.editor.run", toolName: "profiler.memory-snapshot.compare", buildArgs: profilerMemorySnapshotCompareArgs },
-  { group: "profiler", command: "frame-debugger.enable", bridgeCommand: "catalog.editor.run", toolName: "profiler.frame-debugger.enable", buildArgs: ({ flags }) => compactArgs({}) },
-  { group: "profiler", command: "frame-debugger.disable", bridgeCommand: "catalog.editor.run", toolName: "profiler.frame-debugger.disable", buildArgs: ({ flags }) => compactArgs({}) },
-  { group: "profiler", command: "frame-debugger.events", bridgeCommand: "catalog.editor.run", toolName: "profiler.frame-debugger.events", buildArgs: profilerFrameDebuggerEventsArgs }
+  { group: "profiler", command: "memory-snapshot-take", bridgeCommand: "catalog.editor.run", toolName: "profiler.memory-snapshot-take", buildArgs: profilerMemorySnapshotArgs },
+  { group: "profiler", command: "memory-snapshot-list", bridgeCommand: "catalog.editor.run", toolName: "profiler.memory-snapshot-list", buildArgs: profilerMemorySnapshotArgs },
+  { group: "profiler", command: "memory-snapshot-compare", bridgeCommand: "catalog.editor.run", toolName: "profiler.memory-snapshot-compare", buildArgs: profilerMemorySnapshotCompareArgs },
+  { group: "profiler", command: "frame-debugger-enable", bridgeCommand: "catalog.editor.run", toolName: "profiler.frame-debugger-enable", buildArgs: ({ flags }) => compactArgs({}) },
+  { group: "profiler", command: "frame-debugger-disable", bridgeCommand: "catalog.editor.run", toolName: "profiler.frame-debugger-disable", buildArgs: ({ flags }) => compactArgs({}) },
+  { group: "profiler", command: "frame-debugger-events", bridgeCommand: "catalog.editor.run", toolName: "profiler.frame-debugger-events", buildArgs: profilerFrameDebuggerEventsArgs }
 ];
 
 // 读取 tools run --input 中无法映射为简单 flag 的结构化字段

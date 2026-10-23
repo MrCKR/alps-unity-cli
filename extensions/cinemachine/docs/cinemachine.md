@@ -15,11 +15,11 @@ Unity Cinemachine 智能相机系统的 CLI 工具集。支持 Cinemachine CM2 �
 | `cinemachine.body` | 切换或配置 Body 管线组件（CinemachineFollow, CinemachinePositionComposer 等） |
 | `cinemachine.aim` | 切换或配置 Aim 管线组件（CinemachineRotationComposer, CinemachineHardLookAt 等） |
 | `cinemachine.noise` | 添加、配置或移除多通道 Perlin 噪声组件 |
-| `cinemachine.brain.ensure` | 确保目标相机挂载 CinemachineBrain |
-| `cinemachine.brain.status` | 读取 Brain 及当前活动虚拟相机状态 |
-| `cinemachine.extension.list` | 列出目标上的 CinemachineExtension 派生组件 |
-| `cinemachine.extension.add` | 添加 CinemachineExtension 派生组件，并重新枚举相机扩展确认存在 |
-| `cinemachine.extension.remove` | 移除 CinemachineExtension 派生组件，并重新枚举相机扩展确认不存在 |
+| `cinemachine.brain-ensure` | 确保目标相机挂载 CinemachineBrain |
+| `cinemachine.brain-status` | 读取 Brain 及当前活动虚拟相机状态 |
+| `cinemachine.extension-list` | 列出目标上的 CinemachineExtension 派生组件 |
+| `cinemachine.extension-add` | 添加 CinemachineExtension 派生组件，并重新枚举相机扩展确认存在 |
+| `cinemachine.extension-remove` | 移除 CinemachineExtension 派生组件，并重新枚举相机扩展确认不存在 |
 
 ## 前置条件
 

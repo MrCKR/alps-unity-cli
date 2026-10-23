@@ -275,7 +275,7 @@ namespace UnityCli.Tests
         public void ThePublicSchemaDeclaresExactlyTheOwnerPhaseSet()
         {
             var runEnums = typeof(DebugProgramRunRequest).GetProperty("Phase").GetCustomAttributes(typeof(UnityCliStringEnumAttribute), true).Cast<UnityCliStringEnumAttribute>().FirstOrDefault();
-            Assert.That(runEnums, Is.Not.Null, "debug.program.run must declare the phase field as a closed enum");
+            Assert.That(runEnums, Is.Not.Null, "debug.program-run must declare the phase field as a closed enum");
             Assert.That(runEnums.Values, Is.EqualTo(DebugPlayerLoopPhases.All()), "the run schema must not drift from the single phase owner");
 
             var listenerEnums = typeof(MethodHookListenerSpec).GetProperty("Phase").GetCustomAttributes(typeof(UnityCliStringEnumAttribute), true).Cast<UnityCliStringEnumAttribute>().FirstOrDefault();

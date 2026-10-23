@@ -55,7 +55,7 @@ namespace UnityCli
         /// </summary>
         internal static DebugRunBeginPlan PrepareBegin(DebugRunBeginRequest request)
         {
-            if (request == null) throw SchemaInvalid("request", "a debug.run.begin body", "missing");
+            if (request == null) throw SchemaInvalid("request", "a debug.run-begin body", "missing");
             // session 身份用 session owner 的规范错误返回，不建立第二套 session 错误语义。
             var session = DebugSessionHost.Info(new DebugSessionInfoRequest { SessionId = request.SessionId });
             if (!string.Equals(session.Session.State, "open", StringComparison.Ordinal))
@@ -69,7 +69,7 @@ namespace UnityCli
                         { "state", session.Session.State ?? string.Empty },
                         { "cleanupPending", session.Session.CleanupPending }
                     },
-                    new[] { "Run tools run debug.session.info to read the session state, and create a new session for this investigation." });
+                    new[] { "Run tools run debug.session-info to read the session state, and create a new session for this investigation." });
             }
 
             var checks = ValidateChecks(request.RequiredChecks);
@@ -149,7 +149,7 @@ namespace UnityCli
                             { "requested", DetailReservation },
                             { "reason", rejectReason ?? string.Empty }
                         },
-                        new[] { "Run tools run debug.run.end on an open window, or read and release windows you no longer need." });
+                        new[] { "Run tools run debug.run-end on an open window, or read and release windows you no longer need." });
                 }
                 var counter = RunCounters.TryGetValue(plan.SessionId, out var current) ? current : 0L;
                 counter++;
@@ -218,7 +218,7 @@ namespace UnityCli
                 EditorSessionId = editorSessionId,
                 RuntimeId = runtimeId,
                 DomainGeneration = domainGeneration,
-                Note = "The window is open and records only what the unified event store actually retained. begin does not prepare the scene, does not inject inputs and does not schedule anything: pass the returned runId to debug.program.run when a program should run inside this window."
+                Note = "The window is open and records only what the unified event store actually retained. begin does not prepare the scene, does not inject inputs and does not schedule anything: pass the returned runId to debug.program-run when a program should run inside this window."
             };
         }
 
@@ -229,7 +229,7 @@ namespace UnityCli
         /// <summary>封闭窗口并计算判定；已终止的窗口原样重读，绝不重开。</summary>
         internal static DebugRunEndResult End(DebugRunEndRequest request)
         {
-            if (request == null) throw SchemaInvalid("request", "a debug.run.end body", "missing");
+            if (request == null) throw SchemaInvalid("request", "a debug.run-end body", "missing");
             DebugRunWindow window;
             lock (Sync)
             {
@@ -287,7 +287,7 @@ namespace UnityCli
                 Report = report,
                 EditorSessionId = UnityCliBridge.EditorSessionId(),
                 DomainGeneration = DebugSessionHost.DomainGeneration(),
-                Note = "The window is sealed. Sealing closes the evidence, it does not stop a running program: read debug.program.info and use debug.program.stop when that run must also end."
+                Note = "The window is sealed. Sealing closes the evidence, it does not stop a running program: read debug.program-info and use debug.program-stop when that run must also end."
             };
         }
 
@@ -298,7 +298,7 @@ namespace UnityCli
         /// <summary>只观察一个窗口直到终止或有界等待到期；不重新执行、不停止任何资源。</summary>
         internal static async ValueTask<DebugRunWaitResult> WaitAsync(DebugRunWaitRequest request, IUnityCliWaiter waiter, CancellationToken ct)
         {
-            if (request == null) throw SchemaInvalid("request", "a debug.run.wait body", "missing");
+            if (request == null) throw SchemaInvalid("request", "a debug.run-wait body", "missing");
             DebugRunWindow window;
             lock (Sync)
             {
@@ -330,7 +330,7 @@ namespace UnityCli
         /// <summary>读取一个窗口的完整报告；不写存储、不改变判定、不重开窗口。</summary>
         internal static DebugRunInfoResult Info(DebugRunInfoRequest request)
         {
-            if (request == null) throw SchemaInvalid("request", "a debug.run.info body", "missing");
+            if (request == null) throw SchemaInvalid("request", "a debug.run-info body", "missing");
             DebugRunWindow window;
             lock (Sync)
             {
@@ -364,7 +364,7 @@ namespace UnityCli
             }
             var editorSessionId = UnityCliBridge.EditorSessionId();
             var scope = UnityCliContinuationToken.Fingerprint(
-                editorSessionId + "\0debug.run.list\0" + (sessionId ?? string.Empty)
+                editorSessionId + "\0debug.run-list\0" + (sessionId ?? string.Empty)
                 + "\0" + (verdict ?? string.Empty)
                 + "\0" + (detailAvailable.HasValue ? (detailAvailable.Value ? "true" : "false") : string.Empty));
             var offset = 0;
@@ -378,7 +378,7 @@ namespace UnityCli
                         "E_CONTINUATION_STALE",
                         "The run list continuation does not match the current Editor session or the loaded windows.",
                         null,
-                        new[] { "Start a new debug.run.list read without a cursor." });
+                        new[] { "Start a new debug.run-list read without a cursor." });
             }
             var limit = request == null || request.Limit == null
                 ? DebugLimits.RunListDefaultLimit
@@ -920,7 +920,7 @@ namespace UnityCli
         private static string ConditionDetail(DebugRunConditionPlan condition, bool observed)
         {
             if (string.Equals(condition.Kind, UnityCliDebugRunEndConditionKinds.Manual, StringComparison.Ordinal))
-                return "Satisfied by an explicit debug.run.end on this window.";
+                return "Satisfied by an explicit debug.run-end on this window.";
             if (string.Equals(condition.Kind, UnityCliDebugRunEndConditionKinds.Clock, StringComparison.Ordinal))
                 return "Satisfied when the window was sealed after the declared maxWindowMs elapsed.";
             if (string.Equals(condition.Kind, UnityCliDebugRunEndConditionKinds.Check, StringComparison.Ordinal))
@@ -1481,8 +1481,8 @@ namespace UnityCli
                 },
                 new[]
                 {
-                    "Run tools run debug.run.list to read the windows of the current domain generation.",
-                    "Run tools run debug.run.begin to create a new window; a window from a previous domain generation is never reattached."
+                    "Run tools run debug.run-list to read the windows of the current domain generation.",
+                    "Run tools run debug.run-begin to create a new window; a window from a previous domain generation is never reattached."
                 });
         }
 
@@ -1497,7 +1497,7 @@ namespace UnityCli
                     { "expected", expected },
                     { "actual", actual ?? string.Empty }
                 },
-                new[] { "Run tools describe debug.run.begin to read the field contract, then submit the corrected input." });
+                new[] { "Run tools describe debug.run-begin to read the field contract, then submit the corrected input." });
         }
 
     }

@@ -167,7 +167,7 @@ namespace UnityCli
                     {
                         throw new BridgeCommandException("E_OBJECTREF_COMPONENT_INDEX_OUT_OF_RANGE",
                             "componentIndex=" + componentIndex.Value + " out of range (0.." + (components.Length - 1) + ").",
-                            "Run component.get or tools run scene.gameobject.components to list valid indices.");
+                            "Run component.get or tools run scene.gameobject-components to list valid indices.");
                     }
                     return components[componentIndex.Value];
                 }
@@ -182,7 +182,7 @@ namespace UnityCli
                     {
                         throw new BridgeCommandException("E_OBJECTREF_COMPONENT_NOT_FOUND",
                             "Component " + componentType + " not found on " + gameObject.name + ".",
-                            "Run tools run scene.gameobject.components to list available components.");
+                            "Run tools run scene.gameobject-components to list available components.");
                     }
                     return component;
                 }

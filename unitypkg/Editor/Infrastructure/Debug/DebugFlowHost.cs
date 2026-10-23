@@ -584,7 +584,7 @@ namespace UnityCli
                 },
                 new[]
                 {
-                    "Wait for an active flow to reach a terminal state, or cancel one with debug.code.flow.cancel.",
+                    "Wait for an active flow to reach a terminal state, or cancel one with debug.code-flow-cancel.",
                     "Reduce how many flows run at the same time: each flow samples on the main thread, so extra flows make the observed timing less trustworthy."
                 });
         }

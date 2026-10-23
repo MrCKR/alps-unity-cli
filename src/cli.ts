@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { realpathSync } from "node:fs";
-import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs, getBoolean, getString, type CliArgsSpec } from "./args.js";
+import { cliVersion } from "./cli-version.js";
 import { registerBuiltinExtensionContributions } from "./extensions/index.js";
 import { handleCommand } from "./cli-commands/command.js";
 import { hasPendingCliProcessOwners, waitForCliProcessOwners } from "./cli-process-owners.js";
@@ -56,7 +56,6 @@ export const CLI_ARGS_SPEC: CliArgsSpec = {
     workspace: "value",
     check: "boolean",
     "close-editor": "boolean",
-    hot: "boolean",
     force: "boolean",
     all: "boolean",
     job: "boolean",
@@ -88,11 +87,11 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
       return failure(requestId, parsed.issue.code, `Boolean option ${option} accepts only true or false when using an attached value.`, [`Use ${option}, ${option}=true, or ${option}=false.`], { option, expected: "boolean", actual: parsed.issue.actual });
     }
     if (getBoolean(parsed.flags, "version")) {
-      return success(requestId, { version: await packageVersion() });
+      return success(requestId, { version: await cliVersion() });
     }
 
     if (!group || getBoolean(parsed.flags, "help")) {
-      return success(requestId, help());
+      return success(requestId, help(await cliVersion()));
     }
 
     const removedExecutionOption = ["job", "wait", "wait-timeout-ms"].find((option) => parsed.flags[option] !== undefined);
@@ -178,7 +177,7 @@ function commandOptionNames(group: string | undefined, command: string | undefin
   }
   if (group === "init") {
     if (command === "help" || command === "discover") return new Set(global);
-    if (command === "package") return new Set([...global, "project", "check", "close-editor", "hot", "timeout-ms"]);
+    if (command === "package") return new Set([...global, "project", "check", "close-editor", "timeout-ms"]);
     if (command === "skill") return new Set([...global, "agent", "scope", "workspace", "target", "check", "timeout-ms"]);
     return new Set(global);
   }
@@ -212,14 +211,9 @@ function usesLegacyTargetSelector(group: string, command: string | undefined): b
     || (group === "tools" && command !== "run");
 }
 
-async function packageVersion(): Promise<string> {
-  const packagePath = fileURLToPath(new URL("../package.json", import.meta.url));
-  const packageJson = JSON.parse(await readFile(packagePath, "utf8")) as { version?: string };
-  return packageJson.version ?? "0.0.0";
-}
-
-function help(): Record<string, unknown> {
+function help(version: string): Record<string, unknown> {
   return {
+    version,
     usage: "unitycli [options] <command> [options]",
     commands: [
       "tools group [--instance <name|alias|projectPath>]",
@@ -234,7 +228,7 @@ function help(): Record<string, unknown> {
       "extensions doctor [--project <path>]",
       "init help",
       "init discover",
-      "init package --project <UnityProject> [--hot] [--close-editor] [--check] [--timeout-ms <n>]",
+      "init package --project <UnityProject> [--close-editor] [--check] [--timeout-ms <n>]",
       "init skill --target <SkillDirectory> [--check] [--timeout-ms <n>]",
       "init skill --agent <.agents|claude> --scope workspace --workspace <path> [--check] [--timeout-ms <n>]",
       "init skill --agent <.agents|claude> --scope user [--check] [--timeout-ms <n>]",

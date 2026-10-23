@@ -21,7 +21,7 @@ export interface PackageScopedRegistryRemoveResult {
 }
 
 export default defineTool<PackageScopedRegistryRemoveRequest, PackageScopedRegistryRemoveResult>({
-  name: "package.scoped-registry.remove",
+  name: "package.scoped-registry-remove",
   summary: "Remove a scoped registry from the project manifest.",
   description: "Remove a scoped registry from Packages/manifest.json. Matching manifest dependencies require force=true. Supports --dry-run.",
   group: "package",
@@ -32,7 +32,7 @@ export default defineTool<PackageScopedRegistryRemoveRequest, PackageScopedRegis
   handler: "offline",
   supportStatus: "cli-only",
   examples: [
-    { description: "Preview removing a scoped registry", argv: ["tools", "run", "package.scoped-registry.remove", "--input", "{\"name\":\"Acme\"}", "--dry-run"] }
+    { description: "Preview removing a scoped registry", argv: ["tools", "run", "package.scoped-registry-remove", "--input", "{\"name\":\"Acme\"}", "--dry-run"] }
   ],
   async execute(request, context) {
     const projectPath = resolve(request.project ?? context.projectPath);

@@ -38,10 +38,10 @@ test("the paused-session stop widening is precise: only the owning session is se
   const control = await source(debugRoot, "DebugPauseControl.cs");
 
   // 放宽的对象只有一个常量化的 Tool 名，且它不在冻结读名单里。
-  assert.match(control, /internal const string StopTool = "debug\.session\.stop";/, "the widened Tool must have exactly one declared name");
+  assert.match(control, /internal const string StopTool = "debug\.session-stop";/, "the widened Tool must have exactly one declared name");
   const allowlist = control.match(/private static readonly HashSet<string> OffMainTools = new HashSet<string>\(StringComparer\.Ordinal\)\s*\{([\s\S]*?)\};/);
   assert.ok(allowlist, "the frozen off-main Tool allowlist must exist");
-  assert.ok(!allowlist[1].includes("debug.session.stop"), "stop must not become an unconditional member of the frozen allowlist");
+  assert.ok(!allowlist[1].includes("debug.session-stop"), "stop must not become an unconditional member of the frozen allowlist");
   assert.match(
     body(control, "internal static bool IsReachable(string command, string nestedTool, string nestedInputJson)"),
     /if \(string\.Equals\(nestedTool, StopTool, StringComparison\.Ordinal\)\) return OwnsHeldMainThreadPause\(nestedInputJson\);/,
@@ -62,13 +62,13 @@ test("the paused-session stop widening is precise: only the owning session is se
   const serve = body(control, "private static object ServeStop(");
   assert.match(serve, /throw MainThreadPaused\("catalog\.editor\.run", StopTool, held\)/, "a diverging ownership decision must use the single rejection path");
   assert.match(serve, /DebugSessionHost\.StopFromPauseControl\(/, "the served stop must route to the session owner");
-  assert.match(body(control, "private static object ServeToolResult("), /case "debug\.session\.stop":\s*\n\s*return ServeStop\(inputJson\);/, "stop must be served from the same single dispatch switch as the allowlisted reads");
+  assert.match(body(control, "private static object ServeToolResult("), /case "debug\.session-stop":\s*\n\s*return ServeStop\(inputJson\);/, "stop must be served from the same single dispatch switch as the allowlisted reads");
 });
 
 test("the off-main stop keeps exactly one stop owner, one cleanup pipeline and one effect barrier", async () => {
   const host = await source(debugRoot, "DebugSessionHost.cs");
   const shared = await source(sharedRoot, "UnityCliDebugSessions.cs");
-  const tool = await source(sessionToolsRoot, "stop.cs");
+  const tool = await source(sessionToolsRoot, "../session-stop.cs");
 
   // 控制通道没有第二套 stop：它复用同一 PrepareStop/ApplyStop 与同一报告，只标记"本次服务不在主线程上"。
   const offMain = body(host, "internal static DebugSessionStopResult StopFromPauseControl(");

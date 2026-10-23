@@ -14,7 +14,7 @@ namespace UnityCli
 
         /// <summary>
         /// 检查位置：该来源内必须命中捕获位置 ExecutionPoint 的精确取值；"*" 表示该来源的任意位置。
-        /// 捕获位置的实际取值用 debug.events.read 读取（例如 editor-tick、method-prefix、run-scheduled）。
+        /// 捕获位置的实际取值用 debug.events-read 读取（例如 editor-tick、method-prefix、run-scheduled）。
         /// </summary>
         [UnityCliRequired] public string Position { get; set; }
 

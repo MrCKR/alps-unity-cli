@@ -8,12 +8,12 @@ import "../src/tools/.generated-registry.js";
 import "../src/tools/.generated-schemas.js";
 
 const cases = [
-  ["asset.refresh.status", "internal.asset.refresh.public-status"],
-  ["build.player.status", "internal.build.player.public-status"],
-  ["editor.play-mode.status", "internal.editor.play-mode.public-status"],
-  ["package.install.status", "internal.package.install.public-status"],
-  ["package.remove.status", "internal.package.remove.public-status"],
-  ["test.run.status", "internal.test.run.public-status"],
+  ["asset.refresh-status", "internal.asset.refresh.public-status"],
+  ["build.player-status", "internal.build.player.public-status"],
+  ["editor.play-mode-status", "internal.editor.play-mode.public-status"],
+  ["package.install-status", "internal.package.install.public-status"],
+  ["package.remove-status", "internal.package.remove.public-status"],
+  ["test.run-status", "internal.test.run.public-status"],
 ] as const;
 
 function context(bridgeExecute: ToolContext["bridgeExecute"]): ToolContext {
@@ -40,7 +40,7 @@ for (const [toolName, bridgeCommand] of cases) {
 }
 
 test("durable status returns the exact terminal envelope object", async () => {
-  const tool = findDefineTool("test.run.status");
+  const tool = findDefineTool("test.run-status");
   assert.ok(tool);
   const terminalEnvelope = { ok: false, requestId: "root-terminal", error: { code: "E_TESTS_FAILED", message: "failed", nextActions: [] } };
   const result = await tool.execute({ requestId: "root-terminal" }, context(async (payload: BridgeRequest): Promise<BridgeResponse> => ({
@@ -50,7 +50,7 @@ test("durable status returns the exact terminal envelope object", async () => {
 });
 
 test("durable status fails closed on malformed state and preserves bridge errors", async () => {
-  const tool = findDefineTool("asset.refresh.status");
+  const tool = findDefineTool("asset.refresh-status");
   assert.ok(tool);
   await assert.rejects(
     async () => await tool.execute({ requestId: "root-invalid" }, context(async (payload: BridgeRequest): Promise<BridgeResponse> => ({ ok: true, requestId: payload.requestId, data: { state: "completed" } }))),

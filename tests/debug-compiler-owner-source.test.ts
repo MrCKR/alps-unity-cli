@@ -53,7 +53,7 @@ test("all four submit shapes share the owner for admission and accounting", asyn
   assert.match(owner, /internal static DebugCompilerBudgetReport Budget\(\)/);
   // code 与 hook 的产物 identity 都来自同一 owner 推导。
   assert.match(owner, /internal static string CandidateIdentity\(string shape, string sourceText, string defines\)/);
-  assert.match(codeExec, /DebugCompilerOwner\.CandidateIdentity\("debug\.code\.execute"/);
+  assert.match(codeExec, /DebugCompilerOwner\.CandidateIdentity\("debug\.code-execute"/);
   assert.match(hookHost, /var key = CompileKey\(prefix, postfix\);/);
 });
 

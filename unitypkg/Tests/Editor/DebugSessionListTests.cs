@@ -7,7 +7,7 @@ using NUnit.Framework;
 namespace UnityCli.Tests
 {
     /// <summary>
-    /// debug.session.list 的状态过滤、跨过滤游标失效，以及 stop/remove 对会话定义槽位的可见语义。
+    /// debug.session-list 的状态过滤、跨过滤游标失效，以及 stop/remove 对会话定义槽位的可见语义。
     ///
     /// 这些用例直接调用 host：过滤发生在分页之前，而分页与 continuation scope 都属于 host 的职责，
     /// 只在 registry 层断言无法覆盖"游标是否绑定了同一次查询"。

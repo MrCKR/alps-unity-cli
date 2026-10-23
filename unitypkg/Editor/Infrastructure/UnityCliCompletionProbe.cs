@@ -38,7 +38,7 @@ namespace UnityCli
             RegisterCompletionProofObserver(observers, CreateCompletionProofObserver<SceneGameObjectTool.Request, SceneGameObjectTool.Result>(
                 "scene.gameobject", gameObject.ExecuteAsync, gameObject.ResolveProofResource));
             RegisterCompletionProofObserver(observers, CreateCompletionProofObserver<SceneGameObjectComponentTool.Request, SceneGameObjectComponentTool.Result>(
-                "scene.gameobject.component", component.ExecuteAsync, component.ResolveProofResource));
+                "scene.gameobject-component", component.ExecuteAsync, component.ResolveProofResource));
             return observers;
         }
 

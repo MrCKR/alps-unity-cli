@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const readPath = "unitypkg/Editor/Tools/asset/import-settings.cs";
-const setPath = "unitypkg/Editor/Tools/asset/import-settings/set.cs";
+const setPath = "unitypkg/Editor/Tools/asset/import-settings-set.cs";
 const supportPath = "unitypkg/Editor/Tools/asset/AssetImportSettingsToolSupport.cs";
 
 test("asset importer settings expose one read Tool and one atomic write Tool", async () => {
@@ -14,7 +14,7 @@ test("asset importer settings expose one read Tool and one atomic write Tool", a
   assert.match(read, /PlayModeSupport = "editor-only"/);
   assert.doesNotMatch(read, /CommitEffect|SaveAndReimport|AssetDatabase\.Refresh|AssetDatabase\.ImportAsset/);
 
-  assert.match(set, /Name = "asset\.import-settings\.set"/);
+  assert.match(set, /Name = "asset\.import-settings-set"/);
   assert.match(set, /SideEffects = new\[\] \{ "asset-meta-write", "asset-import" \}/);
   assert.match(set, /SupportsDryRun = true/);
   assert.match(set, /Permissions = new\[\] \{ "project-asset-write" \}/);

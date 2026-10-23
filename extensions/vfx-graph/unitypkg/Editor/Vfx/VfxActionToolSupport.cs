@@ -22,7 +22,7 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException(
                     "E_VFX_COMPONENT_NOT_FOUND",
                     "VisualEffect component not found on target: " + GameObjectToolSupport.HierarchyPath(gameObject),
-                    "Add one with vfx.effect.add or pass a target that already has VisualEffect.");
+                    "Add one with vfx.effect-add or pass a target that already has VisualEffect.");
             }
             return effect;
         }
@@ -103,7 +103,7 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException(
                     "E_VFX_GRAPH_NOT_FOUND",
                     "VFX Graph asset not found: " + graphPath,
-                    "Create it with vfx.graph.create or pass an existing Assets/*.vfx path.");
+                    "Create it with vfx.graph-create or pass an existing Assets/*.vfx path.");
             }
             SetRequired(effect, "visualEffectAsset", graph);
         }

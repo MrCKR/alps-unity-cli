@@ -4,7 +4,7 @@ import { runNavMeshBake, type NavMeshBakeResult } from "./live.js";
 export interface NavMeshSurfaceBakeRequest { }
 
 export default defineTool<NavMeshSurfaceBakeRequest, NavMeshBakeResult>({
-  name: "navmesh.surface.bake",
+  name: "navmesh.surface-bake",
   summary: "Bake all active NavMeshSurface components and prove each generated data asset.",
   description: "Requires com.unity.ai.navigation. Uses the package's registered NavMeshAssetManager editor API through a package-optional reflection boundary. Every target scene must already be saved and clean; terminal proof saves only those frozen scenes and returns scene plus fresh .asset GUID/localId/hash proofs. Dry-run validates the exact surface set without baking.",
   group: "navmesh",
@@ -19,8 +19,8 @@ export default defineTool<NavMeshSurfaceBakeRequest, NavMeshBakeResult>({
   handler: "hybrid",
   supportStatus: "live-bridge",
   examples: [
-    { description: "Bake all active surfaces.", argv: ["tools", "run", "navmesh.surface.bake"] },
-    { description: "Validate the surface bake plan.", argv: ["tools", "run", "navmesh.surface.bake", "--dry-run"] }
+    { description: "Bake all active surfaces.", argv: ["tools", "run", "navmesh.surface-bake"] },
+    { description: "Validate the surface bake plan.", argv: ["tools", "run", "navmesh.surface-bake", "--dry-run"] }
   ],
   execute(_request, context) { return runNavMeshBake("surfaces", context); }
 });

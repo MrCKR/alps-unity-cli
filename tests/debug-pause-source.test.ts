@@ -49,9 +49,9 @@ const TOOLS = ["list", "wait", "inspect", "evaluate", "resume"];
 
 test("the five debug.pause tools exist with the declared descriptor shape", async () => {
   for (const tool of TOOLS) {
-    const text = await source(pauseToolsRoot, `${tool}.cs`);
+    const text = await source(pauseToolsRoot, `../pause-${tool}.cs`);
     assert.match(text, /IUnityCliTool<DebugPause\w+Request, DebugPause\w+Result>/, `${tool}.cs must implement the typed Tool interface`);
-    assert.match(text, new RegExp(`Name = "debug\\.pause\\.${tool}"`), `${tool}.cs must declare its exact public name`);
+    assert.match(text, new RegExp(`Name = "debug\\.pause-${tool}"`), `${tool}.cs must declare its exact public name`);
     assert.match(text, /Group = "debug"/);
     assert.match(text, /Target = "editor"/);
     assert.match(text, /PlayModeSupport = "supported"/);
@@ -59,21 +59,21 @@ test("the five debug.pause tools exist with the declared descriptor shape", asyn
     assert.doesNotMatch(text, /EditorApplication\.update \+=|EditorApplication\.delayCall|new Timer\(/, `${tool}.cs must not register its own update, timer or delay callback`);
   }
   // 证据链与冻结的破坏性语义：evaluate 执行用户代码，resume 只解除线程暂停。
-  const evaluate = await source(pauseToolsRoot, "evaluate.cs");
+  const evaluate = await source(pauseToolsRoot, "../pause-evaluate.cs");
   assert.match(evaluate, /DestructiveHint = true/);
   assert.match(evaluate, /SideEffects = new\[\] \{ "debug-pause", "user-code-execution" \}/);
-  assert.match(evaluate, /ctx\.CommitEffect\(\);/, "debug.pause.evaluate must cross the single effect barrier");
-  const resume = await source(pauseToolsRoot, "resume.cs");
+  assert.match(evaluate, /ctx\.CommitEffect\(\);/, "debug.pause-evaluate must cross the single effect barrier");
+  const resume = await source(pauseToolsRoot, "../pause-resume.cs");
   assert.match(resume, /DestructiveHint = false/);
   assert.match(resume, /SideEffects = new\[\] \{ "debug-pause" \}/);
-  assert.match(resume, /ctx\.CommitEffect\(\);/, "debug.pause.resume must cross the single effect barrier");
+  assert.match(resume, /ctx\.CommitEffect\(\);/, "debug.pause-resume must cross the single effect barrier");
   for (const reader of ["list", "wait", "inspect"]) {
-    const text = await source(pauseToolsRoot, `${reader}.cs`);
+    const text = await source(pauseToolsRoot, `../pause-${reader}.cs`);
     assert.doesNotMatch(text, /ctx\.CommitEffect\(\)|SideEffects =|DestructiveHint = true/, `${reader}.cs must stay a pure read`);
   }
   // 等待与真实栈读取必须由框架 wait 驱动，而不是私有 scheduler。
-  assert.match(await source(pauseToolsRoot, "wait.cs"), /ctx\.Wait\.Until\(/, "debug.pause.wait must use the framework wait");
-  assert.match(await source(pauseToolsRoot, "inspect.cs"), /ctx\.Wait\.Until\(/);
+  assert.match(await source(pauseToolsRoot, "../pause-wait.cs"), /ctx\.Wait\.Until\(/, "debug.pause-wait must use the framework wait");
+  assert.match(await source(pauseToolsRoot, "../pause-inspect.cs"), /ctx\.Wait\.Until\(/);
   assert.match(evaluate, /ctx\.Wait\.Until\(/);
   assert.match(resume, /ctx\.Wait\.Until\(/);
 });
@@ -227,16 +227,16 @@ test("a compile that did not finish inside the on-site budget keeps its own stab
   const attribution = body(evaluation, "private static BridgeCommandException CompileBudgetExceeded(");
   assert.match(attribution, new RegExp(`"${code}"`), `${code} must be the code produced at the single attribution point`);
   assert.match(attribution, /DebugLimits\.PauseOperationTimeoutMs/, "the reported budget must come from the single limits owner");
-  assert.match(attribution, /debug\.pause\.list/);
-  assert.match(attribution, /debug\.code\.execute/);
-  assert.match(attribution, /debug\.pause\.resume/);
+  assert.match(attribution, /debug\.pause-list/);
+  assert.match(attribution, /debug\.code-execute/);
+  assert.match(attribution, /debug\.pause-resume/);
   assert.match(attribution, /not a compile failure and not user code that failed to return/);
 });
 
 test("the main-thread pause control channel is frozen, published before any pause resource, and keeps the queue out of the path", async () => {
   const control = await source(debugRoot, "DebugPauseControl.cs");
   // 可达集合必须是冻结名单：逐条列出，不靠前缀或语义推断。
-  for (const tool of ["debug.pause.list", "debug.pause.wait", "debug.pause.inspect", "debug.pause.evaluate", "debug.pause.resume", "debug.events.read", "debug.thread.list", "debug.session.info", "debug.session.list", "debug.program.info", "debug.program.list", "debug.hook.info", "debug.hook.list"]) {
+  for (const tool of ["debug.pause-list", "debug.pause-wait", "debug.pause-inspect", "debug.pause-evaluate", "debug.pause-resume", "debug.events-read", "debug.thread-list", "debug.session-info", "debug.session-list", "debug.program-info", "debug.program-list", "debug.hook-info", "debug.hook-list"]) {
     assert.match(control, new RegExp(`"${tool.replace(/\./g, "\\.")}"`), `${tool} must be listed in the frozen off-main allowlist`);
   }
   assert.match(control, /internal static void Activate\(\)/, "the channel must have one publication point");
@@ -284,7 +284,7 @@ test("the main-thread pause control channel is frozen, published before any paus
   assert.match(registry, /catalogOffMainRead \? cachedIsPlaying : EditorApplication\.isPlaying/);
 });
 
-test("F-16 makes debug.hook.list self-sufficient and F-17 treats a pause breakpoint as an intervention owner", async () => {
+test("F-16 makes debug.hook-list self-sufficient and F-17 treats a pause breakpoint as an intervention owner", async () => {
   const dtos = await source(new URL("Editor/Tools/debug/hook/", unitypkg), "MethodHookDtos.cs");
   const itemStart = dtos.indexOf("public sealed class MethodHookListItem");
   const item = dtos.slice(itemStart, dtos.indexOf("public sealed class MethodHookListResult", itemStart));
@@ -341,7 +341,7 @@ test("no production source can reach a Unity quit, close or exit API from any pa
   assert.deepEqual(offenders, [], "the product must never ask Unity Editor to quit, close, exit or force-terminate a process");
   // Play 模式退出是已冻结的公开能力，只允许它有这个赋值；暂停/清理路径一个也不得触碰。
   const playModeOwners = production.filter(([, text]) => /EditorApplication\.isPlaying\s*=\s*false/.test(text)).map(([path]) => path.split("/").pop());
-  assert.deepEqual(playModeOwners, ["stop.cs"], "only editor.play-mode.stop may toggle EditorApplication.isPlaying");
+  assert.deepEqual(playModeOwners, ["play-mode-stop.cs"], "only editor.play-mode-stop may toggle EditorApplication.isPlaying");
   // 退出通知里的清理顺序：先解除暂停现场，再清定义与状态，不得留下已释放但未终结的现场。
   const bridge = await source(unitypkg, "Editor/UnityCliBridge.cs");
   const quitHandler = body(bridge, "private static void UnregisterAndStop()");
@@ -376,3 +376,4 @@ test("the off-main control channel never reads main-thread-only Editor state and
   const limits = await source(debugRoot, "DebugLimits.cs");
   assert.match(limits, /internal const int MaxDiagnosticTextBytes = 512;/, "the diagnostic bound must live in the single debug-domain limits owner");
 });
+

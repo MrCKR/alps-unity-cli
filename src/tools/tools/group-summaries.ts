@@ -13,7 +13,7 @@ export const GROUP_SUMMARIES: Record<string, string> = {
   component: "Add, get, list, modify, remove, and set components on scene objects.",
   debug: "Live Editor runtime debugging: sessions, C# code, methods, hooks, threads, breakpoints, values, event stream, and evidence windows.",
   docs: "Offline documentation lookup and search.",
-  editor: "Unity Editor state, transitions, dialogs, refresh, selection, focus, and session controls.",
+  editor: "Unity Editor state, transitions, dialogs, refresh, selection, focus, menu execution and listing, and session controls.",
   "game-object": "Create, find, parent, duplicate, transform, and delete scene GameObjects.",
   hdrp: "High Definition Render Pipeline asset settings and per-effect configuration of scene Volume components.",
   lighting: "Lightmapping bake, light probes, reflection probes, skybox, ambient, and fog settings.",

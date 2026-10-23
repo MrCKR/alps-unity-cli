@@ -103,7 +103,7 @@ namespace UnityCli
                     + "\0" + first + "\0" + last + "\0" + Interlocked.Read(ref captureGeneration).ToString(CultureInfo.InvariantCulture);
             }
             return UnityCliContinuationToken.Fingerprint(
-                UnityCliReadGeneration.Session("profiler.frame-debugger.events") + "\0" + eventCount.ToString(CultureInfo.InvariantCulture)
+                UnityCliReadGeneration.Session("profiler.frame-debugger-events") + "\0" + eventCount.ToString(CultureInfo.InvariantCulture)
                 + "\0" + Interlocked.Read(ref captureGeneration).ToString(CultureInfo.InvariantCulture) + "\0" + sourceIdentity);
         }
 

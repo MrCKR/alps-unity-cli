@@ -1240,9 +1240,9 @@ namespace UnityCli
         /// <summary>这些 Tool 在所有版本注册；版本差异仅通过 availability 与执行错误表达。</summary>
         private static bool BuildProfileApiRequired(RegisteredToolDescriptor definition)
         {
-            return definition.Name == "build.profile.create"
-                || definition.Name == "build.profile.modify"
-                || definition.Name == "build.profile.switch";
+            return definition.Name == "build.profile-create"
+                || definition.Name == "build.profile-modify"
+                || definition.Name == "build.profile-switch";
         }
 
         private static bool EditorElementCaptureApiRequired(RegisteredToolDescriptor definition)

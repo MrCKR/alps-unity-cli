@@ -138,7 +138,7 @@ namespace UnityCli
                     "E_SCHEMA_INVALID",
                     "Field logCapture is invalid: " + logReason + ".",
                     new Dictionary<string, object> { { "path", "$.logCapture" }, { "reason", logReason } },
-                    new[] { "Run tools describe debug.session.create to read the log capture contract, then submit the corrected input." });
+                    new[] { "Run tools describe debug.session-create to read the log capture contract, then submit the corrected input." });
             int sessionsUsed;
             var failure = session.CanCreate(label, request.ActivationScope, stateBytes, isPlaying, out sessionsUsed);
             if (failure != null) throw CreateRejection(failure, label, request.ActivationScope, stateBytes, sessionsUsed, isPlaying);
@@ -353,7 +353,7 @@ namespace UnityCli
         // info / list（纯读取）
         // ------------------------------------------------------------------
 
-        /// <summary>debug.session.info：读取一个定义的完整事实；不写存储、不改变 Unity 状态。</summary>
+        /// <summary>debug.session-info：读取一个定义的完整事实；不写存储、不改变 Unity 状态。</summary>
         internal static DebugSessionInfoResult Info(DebugSessionInfoRequest request)
         {
             SyncObservedState();
@@ -378,7 +378,7 @@ namespace UnityCli
             };
         }
 
-        /// <summary>debug.session.list：按 session 序号分页读取定义摘要；不写存储、不改变 Unity 状态。</summary>
+        /// <summary>debug.session-list：按 session 序号分页读取定义摘要；不写存储、不改变 Unity 状态。</summary>
         internal static DebugSessionListResult List(DebugSessionListRequest request)
         {
             SyncObservedState();
@@ -398,7 +398,7 @@ namespace UnityCli
             }
             var editorSessionId = UnityCliBridge.EditorSessionId();
             // 过滤值进入 continuation scope：跨过滤复用游标返回 stale，而不是静默混读两个集合。
-            var scope = UnityCliContinuationToken.Fingerprint(editorSessionId + "\0debug.session.list\0" + (stateFilter ?? string.Empty));
+            var scope = UnityCliContinuationToken.Fingerprint(editorSessionId + "\0debug.session-list\0" + (stateFilter ?? string.Empty));
             var offset = 0;
             if (request != null && !string.IsNullOrEmpty(request.Cursor))
             {
@@ -410,7 +410,7 @@ namespace UnityCli
                         "E_CONTINUATION_STALE",
                         "The session list continuation does not match the current Editor session or the loaded store.",
                         null,
-                        new[] { "Start a new debug.session.list read without a cursor." });
+                        new[] { "Start a new debug.session-list read without a cursor." });
             }
             var limit = request == null || request.Limit == null
                 ? capacity.ListDefaultLimit
@@ -656,7 +656,7 @@ namespace UnityCli
                     { "storeUsable", storeUsable },
                     { "storeReason", storeReason }
                 },
-                new[] { "Run tools run debug.session.list to read the currently loaded session definitions." });
+                new[] { "Run tools run debug.session-list to read the currently loaded session definitions." });
         }
 
         private static BridgeCommandException CreateRejection(string failure, string label, string activationScope, long stateBytes, int sessionsUsed, bool isPlaying)
@@ -673,8 +673,8 @@ namespace UnityCli
                     },
                     new[]
                     {
-                        "Send a smaller initialState payload; tools describe debug.session.create reports the per-session state budget.",
-                        "Run tools run debug.session.list to read the current session budget usage."
+                        "Send a smaller initialState payload; tools describe debug.session-create reports the per-session state budget.",
+                        "Run tools run debug.session-list to read the current session budget usage."
                     });
             }
             if (string.Equals(failure, UnityCliDebugSessionFailures.LimitExceeded, StringComparison.Ordinal))
@@ -688,8 +688,8 @@ namespace UnityCli
                     },
                     new[]
                     {
-                        "Run tools run debug.session.list with state stopped to find definitions you no longer need, then run tools run debug.session.remove for each of them and retry this create.",
-                        "Run tools run debug.session.list to read the current session definitions."
+                        "Run tools run debug.session-list with state stopped to find definitions you no longer need, then run tools run debug.session-remove for each of them and retry this create.",
+                        "Run tools run debug.session-list to read the current session definitions."
                     });
             }
             if (string.Equals(failure, UnityCliDebugSessionFailures.DuplicateLabel, StringComparison.Ordinal))
@@ -704,7 +704,7 @@ namespace UnityCli
                     new[]
                     {
                         "Choose a label that no current session definition uses.",
-                        "Run tools run debug.session.list to read the current labels."
+                        "Run tools run debug.session-list to read the current labels."
                     });
             }
             if (string.Equals(failure, UnityCliDebugSessionFailures.ScopeConflict, StringComparison.Ordinal))
@@ -713,12 +713,12 @@ namespace UnityCli
                     ? new[]
                     {
                         "Create the session with activationScope editor-and-play, or stop Play Mode before creating an edit-only session.",
-                        "Run tools run editor.play-mode.stop, wait until editor.state reports Edit Mode, then create the session again."
+                        "Run tools run editor.play-mode-stop, wait until editor.state reports Edit Mode, then create the session again."
                     }
                     : new[]
                     {
-                        "Create the session with activationScope editor-and-play, or run tools run editor.play-mode.start first.",
-                        "Run tools run debug.session.list to read the current session definitions."
+                        "Create the session with activationScope editor-and-play, or run tools run editor.play-mode-start first.",
+                        "Run tools run debug.session-list to read the current session definitions."
                     };
                 return new BridgeCommandException(
                     "E_DEBUG_SESSION_SCOPE_CONFLICT",
@@ -747,9 +747,9 @@ namespace UnityCli
             var nextActions = new[]
             {
                 string.Equals(state, UnityCliDebugSessionStates.Open, StringComparison.Ordinal)
-                    ? "Run tools run debug.session.stop for this session before removing it."
-                    : "Run tools run debug.session.stop for this session to run or repeat the cleanup pipeline.",
-                "Run tools run debug.session.info to read the pending cleanup detail."
+                    ? "Run tools run debug.session-stop for this session before removing it."
+                    : "Run tools run debug.session-stop for this session to run or repeat the cleanup pipeline.",
+                "Run tools run debug.session-info to read the pending cleanup detail."
             };
             return new BridgeCommandException(
                 "E_DEBUG_CLEANUP_PENDING",
@@ -764,7 +764,7 @@ namespace UnityCli
                 "E_SCHEMA_INVALID",
                 "Field " + field + " is invalid: expected " + expected + ".",
                 new Dictionary<string, object> { { "path", "$." + field }, { "expected", expected }, { "actual", actual } },
-                new[] { "Run tools describe debug.session.create to read the field contract, then submit the corrected input." });
+                new[] { "Run tools describe debug.session-create to read the field contract, then submit the corrected input." });
         }
 
         /// <summary>有界的当前定义摘要；只用于拒绝路径的 details，不返回完整清理报告。</summary>

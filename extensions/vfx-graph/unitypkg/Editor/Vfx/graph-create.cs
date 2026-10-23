@@ -13,7 +13,7 @@ namespace UnityCli
 
         public ToolDescriptor Describe() => new()
         {
-            Name = "vfx.graph.create", Summary = "Create a VFX Graph asset.",
+            Name = "vfx.graph-create", Summary = "Create a VFX Graph asset.",
             Description = "Create one Assets/*.vfx Visual Effect Graph asset, optionally replacing an existing graph. Supports --dry-run without writing the asset.",
             Group = "vfx",DestructiveHint = true, SupportsDryRun = true,
             RequiresPackages = new[] { "com.unity.visualeffectgraph" }, SideEffects = new[] { "asset-write" },
@@ -23,7 +23,7 @@ namespace UnityCli
 
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            VfxToolSupport.EnsureEditorReady("vfx.graph.create");
+            VfxToolSupport.EnsureEditorReady("vfx.graph-create");
             var path = VfxToolSupport.RequireVfxGraphPath(request.Path);
             var graphType = VfxToolSupport.RequireVfxAssetType();
             VfxToolSupport.PrepareVfxGraphFactory();
@@ -31,7 +31,7 @@ namespace UnityCli
             if (existing != null && request.Overwrite != true)
                 throw new UnityCliBridge.BridgeCommandException("E_VFX_GRAPH_EXISTS", "VFX Graph already exists: " + path, "Pass overwrite=true or choose a different Assets/*.vfx path.");
 
-            var effects = new List<VfxPlannedEffect> { new VfxPlannedEffect { Type = "vfx.graph.create", Path = path } };
+            var effects = new List<VfxPlannedEffect> { new VfxPlannedEffect { Type = "vfx.graph-create", Path = path } };
             if (ctx.DryRun)
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result

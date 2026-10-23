@@ -64,7 +64,7 @@ test("discover finds CWD, ancestor, and bounded descendant Unity projects with e
   }
 });
 
-test("discover reports one close-Editor decision for the exact running current project", async () => {
+test("discover reports the running Editor as a fact without asking to close it", async () => {
   const root = await mkdtemp(join(tmpdir(), "unity-discover-running-"));
   try {
     await makeUnityProject(root);
@@ -76,12 +76,8 @@ test("discover reports one close-Editor decision for the exact running current p
     assert.equal(project.editor.status, "running");
     assert.equal(project.editor.processCount, 1);
     assert.equal(project.bridge.status, "drifted");
-    assert.deepEqual((data.requiredDecisions as Array<{ id: string; projectPath: string }>), [{
-      id: "closeEditor",
-      question: "May UnityCLI normally close the exact target Unity project before Bridge installation?",
-      projectPath: resolve(root),
-      multiple: false,
-    }]);
+    assert.deepEqual(data.requiredDecisions, []);
+    assert.match((data.nextActions as string[])[0], /unique current project/);
     assert.equal(data.scan, undefined);
   } finally {
     await rm(root, { recursive: true, force: true });

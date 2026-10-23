@@ -495,8 +495,8 @@ test("Unity Bridge rendering, volume and physics commands expose settings, rayca
   assert.match(source, /QualitySettings\.SetQualityLevel/);
   assert.match(source, /GraphicsSettings\.defaultRenderPipeline/);
   assert.match(source, /RenderPipelineAsset/);
-  assert.match(source, /Name = "rendering\.pipeline\.info",[^\n]*Group = "rendering",/);
-  assert.match(source, /Name = "rendering\.pipeline\.settings",[^\n]*Group = "rendering",/);
+  assert.match(source, /Name = "rendering\.pipeline-info",[^\n]*Group = "rendering",/);
+  assert.match(source, /Name = "rendering\.pipeline-settings",[^\n]*Group = "rendering",/);
   assert.match(source, /Name = "volume\.list",[^\n]*Group = "volume",/);
   assert.doesNotMatch(source, /Group = "graphics"/);
   assert.match(source, /FindType\("UnityEngine\.Rendering\.Volume"\)/);
@@ -585,11 +585,12 @@ test("Unity Bridge editor commands expose state, play/pause/stop, menu execution
 
   assert.doesNotMatch(source, /Name = "editor\.state"/);
   assert.match(source, /"internal\.editor\.state\.snapshot"/);
-  assert.match(source, /Name = "editor\.play-mode\.start"/);
+  assert.match(source, /Name = "editor\.play-mode-start"/);
   assert.match(source, /Name = "editor\.pause"/);
-  assert.match(source, /Name = "editor\.play-mode\.stop"/);
-  assert.match(source, /Name = "editor\.menu"/);
-  assert.match(source, /Name = "debug\.console\.read"/);
+  assert.match(source, /Name = "editor\.play-mode-stop"/);
+  assert.match(source, /Name = "editor\.menu-execute"/);
+  assert.match(source, /Name = "editor\.menu-list"/);
+  assert.match(source, /Name = "debug\.console-read"/);
   assert.match(source, /private static string BridgeBuildStamp\(\)/);
   assert.match(source, /private static string BridgeHealthJson\(\)/);
   assert.match(source, /private const string BridgeDiagnosticsFingerprint = "health-fingerprint-play-mode-guard-v3"/);
@@ -616,8 +617,9 @@ test("Unity Bridge editor commands expose state, play/pause/stop, menu execution
   assert.match(source, /"listenerId", ListenerId/);
   assert.match(source, /"actualPort", \(long\)port/);
   assert.match(source, /"buildStamp", BridgeBuildStamp\(\)/);
-  assert.match(source, /EditorApplication\.ExecuteMenuItem\(request\.Path\)/);
-  assert.match(source, /E_MENU_COMPLETION_UNSUPPORTED/);
+  assert.match(source, /EditorApplication\.ExecuteMenuItem\(path\)/);
+  assert.match(source, /E_MENU_DISABLED/);
+  assert.match(source, /UnityEditor\.Menu/);
   assert.match(source, /EditorApplication\.isPlaying/);
   assert.match(source, /EditorApplication\.isPaused/);
   assert.match(source, /EditorApplication\.isPlayingOrWillChangePlaymode/);
@@ -685,7 +687,7 @@ test("BridgeHttpServer Play Mode guard only blocks transitions", async () => {
   assert.doesNotMatch(httpBlock, /request\.Command == "editor\.state"/, "The removed public editor.state command must not stay in the transition allowlist");
   assert.doesNotMatch(httpBlock, /request\.Command == "editor\.console"/, "removed Console bridge route must not stay in the transition allowlist");
   assert.match(httpBlock, /request\.Command == "editor\.pause"/, "HandleHttpCore must allow editor.pause during Play Mode transitions");
-  assert.match(httpBlock, /request\.Command == "editor\.play-mode\.stop"/, "HandleHttpCore must allow editor.play-mode.stop during Play Mode transitions");
+  assert.match(httpBlock, /request\.Command == "editor\.play-mode-stop"/, "HandleHttpCore must allow editor.play-mode-stop during Play Mode transitions");
   assert.match(httpBlock, /IsProjectToolCatalogReadCommand\(request\.Command\)/, "HandleHttpCore must allow bounded catalog readers during Play Mode transitions");
   assert.match(httpBlock, /request.Command == "catalog.player.run"/, "HandleHttpCore must allow catalog.player.run during Play Mode transitions");
   assert.match(httpBlock, /IsDoctorAdmissionBypassCommand\(request\.Command\)/, "HandleHttpCore must allow bounded doctor catalog/compile reads during Play Mode transitions");

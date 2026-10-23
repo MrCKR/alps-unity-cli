@@ -6,7 +6,7 @@ using NUnit.Framework;
 namespace UnityCli.Tests
 {
     /// <summary>
-    /// 证据窗口比较（debug.run.compare）与封闭证据保留的定向逻辑测试。
+    /// 证据窗口比较（debug.run-compare）与封闭证据保留的定向逻辑测试。
     ///
     /// 覆盖：调用方必须声明的对齐键、值路径与时钟；equal/diverged/indeterminate 三态；
     /// 首个可证明差异与两侧有限上下文；按单来源调用序号与业务键对齐；

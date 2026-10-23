@@ -41,7 +41,7 @@ namespace UnityCli
         public ToolDescriptor Describe() => new()
         {
             Name = "component.modify",
-            Summary = "Modify one Component with verified serialized pathPatches; use component.get/debug.type.schema first.",
+            Summary = "Modify one Component with verified serialized pathPatches; use component.get/debug.type-schema first.",
             Description = "Apply direct replace pathPatches to verifiable SerializedProperties of one Component. Returns fresh updated data and changed paths. Use component.get first. In Play Mode, scene component changes affect only the current runtime session unless later persisted by Unity workflow; in Edit Mode they mark scene/component state dirty.",
             Group = "component",
             DestructiveHint = true,

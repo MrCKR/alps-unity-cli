@@ -36,7 +36,7 @@ test("serialized-object patches are validate-only with fresh readback", async ()
 
 test("uGUI creation fresh-resolves requested parent, rect, and components", async () => {
   const [canvas, button, image, text, panel] = await Promise.all([
-    source("Tools/ui/canvas/create.cs"), source("Tools/ui/button/create.cs"), source("Tools/ui/image/create.cs"), source("Tools/ui/text/create.cs"), source("Tools/ui/update-panel-settings.cs")
+    source("Tools/ui/canvas-create.cs"), source("Tools/ui/button-create.cs"), source("Tools/ui/image-create.cs"), source("Tools/ui/text-create.cs"), source("Tools/ui/update-panel-settings.cs")
   ]);
   for (const item of [canvas, button, image, text]) {
     assert.match(item, /EditorUtility\.InstanceIDToObject/);
@@ -51,7 +51,7 @@ test("uGUI creation fresh-resolves requested parent, rect, and components", asyn
 
 test("UI Toolkit mutations commit only for real writes and prove from frozen identities", async () => {
   const [modify, create, attach, detach, panel] = await Promise.all([
-    source("Tools/ui/modify-visual-element.cs"), source("Tools/ui/document/create.cs"), source("Tools/ui/attach-document.cs"), source("Tools/ui/detach-document.cs"), source("Tools/ui/update-panel-settings.cs")
+    source("Tools/ui/modify-visual-element.cs"), source("Tools/ui/document-create.cs"), source("Tools/ui/attach-document.cs"), source("Tools/ui/detach-document.cs"), source("Tools/ui/update-panel-settings.cs")
   ]);
   assert.match(modify, /var hasRequestedMutation =/);
   assert.match(modify, /if \(!dryRun && hasRequestedMutation\)\s*\{\s*ctx\.CommitEffect\(\)/);

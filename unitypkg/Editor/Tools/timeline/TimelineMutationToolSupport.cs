@@ -660,7 +660,7 @@ namespace UnityCli
                 code,
                 message,
                 new Dictionary<string, object> { { "path", path }, { "guid", guid }, { "requiredPackage", TimelineToolSupport.PackageId } },
-                new[] { "Run tools describe timeline.track.add or timeline.clip.add, then use timeline.info for current track identities." });
+                new[] { "Run tools describe timeline.track-add or timeline.clip-add, then use timeline.info for current track identities." });
         }
     }
 

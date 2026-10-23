@@ -695,6 +695,24 @@ namespace UnityCli.Tests
             Assert.That(MethodHookHost.Info(new MethodHookInfoRequest { HookId = healthy.HookId }).State, Is.EqualTo("armed"));
         }
 
+        /// <summary>
+        /// 回调失败语义必须在 install 的公开描述里自足：否则调用方会把“hook 已经停止派发、原方法照常执行”
+        /// 误认为“逻辑已经被改写”。本断言与上面的行为断言配套，防止描述再次漂移。
+        /// </summary>
+        [Test]
+        public void InstallDescriptorDisclosesCallbackFaultSemantics()
+        {
+            var description = new MethodHookInstallTool().Describe().Description;
+            Assert.That(description, Does.Contain("Callback failure:"));
+            Assert.That(description, Does.Contain("E_HOOK_CALLBACK_FAILED"));
+            Assert.That(description, Does.Contain("the definition becomes faulted"));
+            Assert.That(description, Does.Contain("stops dispatching"));
+            Assert.That(description, Does.Contain("keeps its original behaviour"));
+            Assert.That(description, Does.Contain("debug.hook-info lastFault"));
+            Assert.That(description, Does.Contain("kind=fault"));
+            Assert.That(description, Does.Contain("debug.hook-enable"));
+        }
+
         public static class ForeignPatches
         {
             public static void ForeignPostfix(ref string __result)

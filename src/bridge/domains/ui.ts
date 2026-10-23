@@ -2,14 +2,14 @@ import { boolFlag, compactArgs, contentFlag, numberFlag, queryArgs, stringFlag }
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const uiBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "ui", command: "canvas.create", bridgeCommand: "catalog.editor.run", toolName: "ui.canvas.create", buildArgs: uiArgs },
-  { group: "ui", command: "text.create", bridgeCommand: "catalog.editor.run", toolName: "ui.text.create", buildArgs: uiArgs },
-  { group: "ui", command: "button.create", bridgeCommand: "catalog.editor.run", toolName: "ui.button.create", buildArgs: uiArgs },
-  { group: "ui", command: "image.create", bridgeCommand: "catalog.editor.run", toolName: "ui.image.create", buildArgs: uiArgs },
-  { group: "ui", command: "document.info", bridgeCommand: "catalog.editor.run", toolName: "ui.document.info", buildArgs: uiArgs },
-  { group: "ui", command: "document.create", bridgeCommand: "catalog.editor.run", toolName: "ui.document.create", buildArgs: uiArgs, destructiveHint: true },
-  { group: "ui", command: "document.update", bridgeCommand: "catalog.editor.run", toolName: "ui.document.update", buildArgs: uiArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "ui", command: "document.delete", bridgeCommand: "catalog.editor.run", toolName: "ui.document.delete", buildArgs: uiArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "ui", command: "canvas-create", bridgeCommand: "catalog.editor.run", toolName: "ui.canvas-create", buildArgs: uiArgs },
+  { group: "ui", command: "text-create", bridgeCommand: "catalog.editor.run", toolName: "ui.text-create", buildArgs: uiArgs },
+  { group: "ui", command: "button-create", bridgeCommand: "catalog.editor.run", toolName: "ui.button-create", buildArgs: uiArgs },
+  { group: "ui", command: "image-create", bridgeCommand: "catalog.editor.run", toolName: "ui.image-create", buildArgs: uiArgs },
+  { group: "ui", command: "document-info", bridgeCommand: "catalog.editor.run", toolName: "ui.document-info", buildArgs: uiArgs },
+  { group: "ui", command: "document-create", bridgeCommand: "catalog.editor.run", toolName: "ui.document-create", buildArgs: uiArgs, destructiveHint: true },
+  { group: "ui", command: "document-update", bridgeCommand: "catalog.editor.run", toolName: "ui.document-update", buildArgs: uiArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "ui", command: "document-delete", bridgeCommand: "catalog.editor.run", toolName: "ui.document-delete", buildArgs: uiArgs, destructiveHint: true, supportsDryRun: true },
   { group: "ui", command: "hierarchy", bridgeCommand: "catalog.editor.run", toolName: "ui.hierarchy", buildArgs: uiArgs },
   { group: "ui", command: "attach-document", bridgeCommand: "catalog.editor.run", toolName: "ui.attach-document", buildArgs: uiAttachArgs, supportsDryRun: true },
   { group: "ui", command: "detach-document", bridgeCommand: "catalog.editor.run", toolName: "ui.detach-document", buildArgs: uiAttachArgs, supportsDryRun: true },
@@ -70,7 +70,7 @@ async function uiArgs({ command, flags, positionalTarget }: Parameters<BridgeCom
       cursor: stringFlag(flags, "cursor") ?? stringField(flags, "cursor")
     });
   }
-  if (command === "ui.document.info") {
+  if (command === "ui.document-info") {
     const documentTarget = positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") ?? stringField(flags, "target");
     return compactArgs({
       target: documentTarget,
@@ -78,7 +78,7 @@ async function uiArgs({ command, flags, positionalTarget }: Parameters<BridgeCom
       uss: stringFlag(flags, "uss") ?? stringFlag(flags, "style") ?? stringField(flags, "uss")
     });
   }
-  if (command === "ui.document.create") {
+  if (command === "ui.document-create") {
     return compactArgs({
       name: stringFlag(flags, "name") ?? stringField(flags, "name"),
       uxml: positionalTarget ?? stringFlag(flags, "uxml") ?? stringFlag(flags, "path") ?? stringField(flags, "uxml") ?? stringField(flags, "path"),
@@ -87,14 +87,14 @@ async function uiArgs({ command, flags, positionalTarget }: Parameters<BridgeCom
       overwrite: boolFlag(flags, "overwrite") ?? boolField(flags, "overwrite")
     });
   }
-  if (command === "ui.document.update") {
+  if (command === "ui.document-update") {
     return compactArgs({
       path: positionalTarget ?? stringFlag(flags, "path") ?? stringField(flags, "path"),
       uxml: stringFlag(flags, "uxml") ?? stringField(flags, "uxml"),
       content: await resolveUiContent(flags)
     });
   }
-  if (command === "ui.document.delete") {
+  if (command === "ui.document-delete") {
     return compactArgs({
       path: positionalTarget ?? stringFlag(flags, "path") ?? stringField(flags, "path"),
       uxml: stringFlag(flags, "uxml") ?? stringField(flags, "uxml")

@@ -8,8 +8,8 @@ const read = (relative: string): string => readFileSync(path.join(root, relative
 const tool = read("unitypkg/Editor/Tools/timeline/create.cs");
 const support = read("unitypkg/Editor/Tools/timeline/TimelineToolSupport.cs");
 const infoTool = read("unitypkg/Editor/Tools/timeline/info.cs");
-const trackAddTool = read("unitypkg/Editor/Tools/timeline/track/add.cs");
-const clipAddTool = read("unitypkg/Editor/Tools/timeline/clip/add.cs");
+const trackAddTool = read("unitypkg/Editor/Tools/timeline/track-add.cs");
+const clipAddTool = read("unitypkg/Editor/Tools/timeline/clip-add.cs");
 const readSupport = read("unitypkg/Editor/Tools/timeline/TimelineReadToolSupport.cs");
 const mutationSupport = read("unitypkg/Editor/Tools/timeline/TimelineMutationToolSupport.cs");
 const bridge = read("src/bridge/domains/timeline.ts");
@@ -96,8 +96,8 @@ test("timeline.info returns stable track parent clip and output binding identiti
   assert.match(readSupport, /new\[\] \{ "clip", "prefabGameObject" \}/);
 });
 
-test("timeline.track.add freezes built-in type parent and sibling identity before one effect", () => {
-  assert.match(trackAddTool, /Name = "timeline\.track\.add"/);
+test("timeline.track-add freezes built-in type parent and sibling identity before one effect", () => {
+  assert.match(trackAddTool, /Name = "timeline\.track-add"/);
   assert.match(trackAddTool, /SupportsDryRun = true/);
   assert.match(trackAddTool, /PlayModeSupport = "editor-only"/);
   assert.equal(trackAddTool.match(/ctx\.CommitEffect\(\);/g)?.length, 1);
@@ -111,8 +111,8 @@ test("timeline.track.add freezes built-in type parent and sibling identity befor
   assert.match(mutationSupport, /SameIdentity\(observed\.ParentIdentity/);
 });
 
-test("timeline.clip.add freezes track source API and timing before one effect", () => {
-  assert.match(clipAddTool, /Name = "timeline\.clip\.add"/);
+test("timeline.clip-add freezes track source API and timing before one effect", () => {
+  assert.match(clipAddTool, /Name = "timeline\.clip-add"/);
   assert.match(clipAddTool, /SupportsDryRun = true/);
   assert.match(clipAddTool, /PlayModeSupport = "editor-only"/);
   assert.equal(clipAddTool.match(/ctx\.CommitEffect\(\);/g)?.length, 1);
@@ -139,8 +139,8 @@ test("timeline mutations prove fresh stable identities and serialized hash chang
 
 test("timeline bridge exposes exactly the four approved canonical routes", () => {
   assert.match(bridge, /toolName: "timeline\.info"/);
-  assert.match(bridge, /toolName: "timeline\.track\.add"/);
-  assert.match(bridge, /toolName: "timeline\.clip\.add"/);
+  assert.match(bridge, /toolName: "timeline\.track-add"/);
+  assert.match(bridge, /toolName: "timeline\.clip-add"/);
   assert.match(bridge, /pageSize: numberFlag\(flags, "page-size"\)/);
   assert.match(bridge, /parentLocalId: stringFlag\(flags, "parent-local-id"\)/);
   assert.match(bridge, /trackLocalId: stringFlag\(flags, "track-local-id"\)/);

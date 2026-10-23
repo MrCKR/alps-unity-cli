@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace UnityCli
 {
-    /// <summary>urp.volume.create：创建仅存在于当前会话的 URP Volume。</summary>
+    /// <summary>urp.volume-create：创建仅存在于当前会话的 URP Volume。</summary>
     public sealed class UrpVolumeCreateTool : IUnityCliTool<UrpVolumeCreateTool.Request, UrpVolumeCreateTool.Result>
     {
         public sealed class Request { public string Name { get; set; } public bool? IsGlobal { get; set; } public double? Priority { get; set; } public double? Weight { get; set; } }
@@ -11,7 +11,7 @@ namespace UnityCli
 
         public ToolDescriptor Describe() => new()
         {
-            Name = "urp.volume.create",
+            Name = "urp.volume-create",
             Summary = "Create a scene-session URP Volume with a new in-memory profile.",
             Description = "Creates a URP Volume GameObject and assigns a new in-memory VolumeProfile. name defaults to URPVolume; isGlobal defaults to true. The scene and profile are not saved as assets. Requires com.unity.render-pipelines.universal and an active UniversalRenderPipelineAsset.",
             Group = "urp",DestructiveHint = false,
@@ -21,12 +21,12 @@ namespace UnityCli
 
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            GameObjectToolSupport.EnsureEditorNotBusy("urp.volume.create");
+            GameObjectToolSupport.EnsureEditorNotBusy("urp.volume-create");
             UrpToolSupport.EnsureUrpAvailable();
             var plan = UrpVolumeOperations.ValidateCreate(request.Priority, request.Weight, "E_URP");
             ctx.CommitEffect();
             var created = UrpVolumeOperations.Create(request.Name, request.IsGlobal, plan, "URP", "E_URP");
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = GameObjectToolSupport.BuildGameObjectRef(created.GameObject), PlannedEffects = new List<UrpPlannedEffect> { new UrpPlannedEffect { Type = "urp.volume.create", Name = created.GameObject.name } }});
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = GameObjectToolSupport.BuildGameObjectRef(created.GameObject), PlannedEffects = new List<UrpPlannedEffect> { new UrpPlannedEffect { Type = "urp.volume-create", Name = created.GameObject.name } }});
         }
     }
 }

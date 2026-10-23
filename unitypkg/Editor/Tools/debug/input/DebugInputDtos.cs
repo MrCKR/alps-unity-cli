@@ -114,7 +114,7 @@ namespace UnityCli
         public string ConfirmReason { get; set; }
     }
 
-    /// <summary>输入域自身的占用事实；不含监听式触发预算，后者由 debug.session.info 报告。</summary>
+    /// <summary>输入域自身的占用事实；不含监听式触发预算，后者由 debug.session-info 报告。</summary>
     public sealed class DebugInputBudgetView
     {
         public long DevicesUsed { get; set; }
@@ -147,7 +147,7 @@ namespace UnityCli
 
     // ---- key ----
 
-    /// <summary>键下发：按下声明的键并携带自己的显式结束边界；释放用 debug.input.release。</summary>
+    /// <summary>键下发：按下声明的键并携带自己的显式结束边界；释放用 debug.input-release。</summary>
     public sealed class DebugInputKeyRequest
     {
         [UnityCliRequired] public string SessionId { get; set; }
@@ -179,7 +179,7 @@ namespace UnityCli
         [UnityCliRequired] public double X { get; set; }
         [UnityCliRequired] public double Y { get; set; }
 
-        /// <summary>要按下的指针按键：left、right、middle；空表示只移动指针。释放用 debug.input.release。</summary>
+        /// <summary>要按下的指针按键：left、right、middle；空表示只移动指针。释放用 debug.input-release。</summary>
         [UnityCliItemsRange(0, DebugLimits.MaxInputPointerButtons)] public List<string> Buttons { get; set; }
 
         /// <summary>按下按键时必需的结束边界：hold-ms 或 until-release；纯移动不得声明。</summary>
@@ -225,7 +225,7 @@ namespace UnityCli
         public int DispatchedThreadId { get; set; }
         public string ExecutionPoint { get; set; }
 
-        /// <summary>本 owner 记录的触发事实的 sequence；用它读取 debug.events.read 里的同一条事件。</summary>
+        /// <summary>本 owner 记录的触发事实的 sequence；用它读取 debug.events-read 里的同一条事件。</summary>
         public long EvidenceSequence { get; set; }
 
         public DebugInputBudgetView Budget { get; set; }

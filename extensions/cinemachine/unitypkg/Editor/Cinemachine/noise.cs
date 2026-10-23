@@ -80,7 +80,7 @@ namespace UnityCli.Cinemachine
                 if (CinemachineToolSupport.GetPipelineComponent(removedCamera, "Noise") != null)
                     throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_NOISE_VERIFY_FAILED", "Cinemachine noise component still exists after removal.", "Inspect the virtual camera before retrying.");
                 CinemachineToolSupport.MarkDirty(removedTarget);
-                effects.Add(new CinemachinePlannedEffect { Type = "cinemachine.noise.remove", Target = GameObjectToolSupport.HierarchyPath(removedTarget) });
+                effects.Add(new CinemachinePlannedEffect { Type = "cinemachine.noise-remove", Target = GameObjectToolSupport.HierarchyPath(removedTarget) });
                 return new System.Threading.Tasks.ValueTask<Result>(new Result { Cinemachine = CinemachineToolSupport.BuildPackageStatus(), Object = CinemachineToolSupport.BuildObjectInfo(removedTarget), PlannedEffects = effects });
             }
 

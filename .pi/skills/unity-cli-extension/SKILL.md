@@ -30,6 +30,8 @@ Packages/com.alpsckr.unitycli/Extensions/<id>/
 
 不得创建 `Packages/com.alpsckr.unitycli.<id>` 一类独立 Unity package。
 
+`<id>` 是安装与回执身份（目录名、manifest `id`、extension receipt）；Tool 的 `group` 是公开能力域。两者不要求相同，也不得为了“对齐”而把一个域拆成多个 extension：`vfx-graph` 是安装身份，其贡献的全部 Tool 属于 `vfx` 能力域（含 VFX Graph、ParticleSystem、LineRenderer、TrailRenderer）。
+
 ## Manifest 与依赖
 
 - manifest必须声明Unity package依赖、tools和csharpEntries；不得出现contexts贡献。

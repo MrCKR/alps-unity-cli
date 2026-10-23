@@ -332,8 +332,8 @@ test("hook.list reports what hook.remove requires", async () => {
   assert.match(publicItem, /item\.Breakpoint = SummarizeBreakpoint\(definition\);/, "the list must project the declared breakpoint");
   // 只读精查入口必须复用同一份投影：缺一个入口就会让声明过的 listener 在该入口凭空消失（导入后精查看到 null）。
   const info = memberBody(operations, "internal static MethodHookInfoResult Info(");
-  assert.match(info, /Listener = SummarizeListener\(definition\.Listener\),/, "debug.hook.info must project the declared listener instead of returning null");
-  assert.match(info, /Breakpoint = SummarizeBreakpoint\(definition\),/, "debug.hook.info must project the declared breakpoint");
+  assert.match(info, /Listener = SummarizeListener\(definition\.Listener\),/, "debug.hook-info must project the declared listener instead of returning null");
+  assert.match(info, /Breakpoint = SummarizeBreakpoint\(definition\),/, "debug.hook-info must project the declared breakpoint");
   const dtos = await source(hookToolsRoot, "MethodHookDtos.cs");
   const item = memberBody(dtos, "public sealed class MethodHookListItem");
   for (const field of ["public string HookId { get; set; }", "public long Revision { get; set; }", "public string EditorSessionId { get; set; }", "public MethodHookListenerSummary Listener { get; set; }"]) {
@@ -341,8 +341,8 @@ test("hook.list reports what hook.remove requires", async () => {
   }
   // 列表报告的 revision 与 editorSessionId 正是 remove/replace/enable/disable 要求的输入，不新增别名字段。
   assert.ok(!item.includes("ExpectedRevision"), "the list must not add an alias revision field");
-  assert.match(item, /这正是 debug\.hook\.remove\/replace\/enable\/disable 要求的 expectedRevision/);
-  const removeTool = await source(hookToolsRoot, "remove.cs");
+  assert.match(item, /这正是 debug\.hook-remove\/replace\/enable\/disable 要求的 expectedRevision/);
+  const removeTool = await source(hookToolsRoot, "../hook-remove.cs");
   assert.match(removeTool, /pass the item's editorSessionId as-is and its revision as expectedRevision/);
   const limits = await source(debugRoot, "DebugLimits.cs");
   assert.match(limits, /internal const int ListItemMembers = 12;/, "the list read budget must track the added DTO member");

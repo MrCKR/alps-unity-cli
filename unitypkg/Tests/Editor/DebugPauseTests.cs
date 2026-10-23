@@ -318,9 +318,9 @@ namespace UnityCli
             Assert.AreEqual(site.PauseId, pause.PauseId);
 
             // 后台线程：真实桥的服务线程不是主线程，因此在主线程专属 Unity API 上会像产品一样失败。
-            var envelope = OffMain(() => Serve(WrappedRequest("debug.pause.list", "{}"), "debug.pause.list", pause));
+            var envelope = OffMain(() => Serve(WrappedRequest("debug.pause-list", "{}"), "debug.pause-list", pause));
             Assert.AreEqual("req-under-test", Convert.ToString(envelope["requestId"]), "the off-main reply must carry the request's own id");
-            Assert.IsTrue(Convert.ToBoolean(envelope["ok"]), "debug.pause.list must be served while a site is held");
+            Assert.IsTrue(Convert.ToBoolean(envelope["ok"]), "debug.pause-list must be served while a site is held");
             var data = TerminalResult(envelope);
             Assert.AreEqual(1L, Convert.ToInt64(data["total"]), "the off-main list must see the held site");
             var listed = ((IEnumerable<object>)data["sites"]).Select(item => (IDictionary<string, object>)item).ToList();
@@ -331,13 +331,13 @@ namespace UnityCli
             Assert.AreEqual(pause.PausedForMs, Convert.ToDouble(listed[0]["pausedForMs"]), 1000d, "the published pause duration must be the same fact health reads");
 
             // 业务变更仍在任何 effect 之前被拒绝：控制通道只服务冻结名单。
-            foreach (var tool in new[] { "debug.session.stop", "debug.hook.install", "debug.code.execute" })
+            foreach (var tool in new[] { "debug.session-stop", "debug.hook-install", "debug.code-execute" })
             {
                 string nestedTool;
                 Assert.IsFalse(DebugPauseControl.IsReachable(WrappedRequest(tool, "{}"), out nestedTool, out _), tool + " must stay refused while the main thread is held");
                 Assert.AreEqual(tool, nestedTool);
             }
-            Assert.AreEqual(DebugPauseControl.RejectionCode, DebugPauseControl.MainThreadPaused("catalog.editor.run", "debug.session.stop", pause).Code);
+            Assert.AreEqual(DebugPauseControl.RejectionCode, DebugPauseControl.MainThreadPaused("catalog.editor.run", "debug.session-stop", pause).Code);
 
             DebugPauseHost.RequestResume(site.PauseId, DebugPauseReleaseReasons.Resume);
             JoinHosts();
@@ -363,7 +363,7 @@ namespace UnityCli
             DebugMainThreadPauseView pause;
             Assert.IsTrue(DebugPauseControl.TryGetMainThreadPause(out pause));
             // 解除路径必须在后台线程上真正到达现场，而不是死在主线程专属 API 上。
-            var envelope = OffMain(() => Serve(WrappedRequest("debug.pause.resume", "{\"pauseId\":\"" + site.PauseId + "\"}"), "debug.pause.resume", pause));
+            var envelope = OffMain(() => Serve(WrappedRequest("debug.pause-resume", "{\"pauseId\":\"" + site.PauseId + "\"}"), "debug.pause-resume", pause));
             Assert.AreEqual("req-under-test", Convert.ToString(envelope["requestId"]), "the resume reply must carry the request's own id");
             Assert.IsTrue(Convert.ToBoolean(envelope["ok"]), "an unbounded pause must be releasable by an explicit resume while it is held");
             var data = TerminalResult(envelope);
@@ -393,8 +393,8 @@ namespace UnityCli
             // 名单里的只读能力必须逐一在后台线程上得到带正确 requestId 的成功答复。
             foreach (var tool in new[]
             {
-                "debug.pause.list", "debug.pause.wait", "debug.events.read", "debug.thread.list",
-                "debug.hook.list", "debug.session.list", "debug.program.list"
+                "debug.pause-list", "debug.pause-wait", "debug.events-read", "debug.thread-list",
+                "debug.hook-list", "debug.session-list", "debug.program-list"
             })
             {
                 var envelope = OffMain(() => Serve(WrappedRequest(tool, "{}"), tool, pause));
@@ -403,13 +403,13 @@ namespace UnityCli
             }
 
             // 现场读取走到暂停线程上的 mailbox：答复同样必须与请求相关。
-            var inspect = OffMain(() => Serve(WrappedRequest("debug.pause.inspect", "{\"pauseId\":\"" + site.PauseId + "\"}"), "debug.pause.inspect", pause));
+            var inspect = OffMain(() => Serve(WrappedRequest("debug.pause-inspect", "{\"pauseId\":\"" + site.PauseId + "\"}"), "debug.pause-inspect", pause));
             Assert.AreEqual("req-under-test", Convert.ToString(inspect["requestId"]));
-            Assert.IsTrue(Convert.ToBoolean(inspect["ok"]), "debug.pause.inspect must be served while a site is held");
+            Assert.IsTrue(Convert.ToBoolean(inspect["ok"]), "debug.pause-inspect must be served while a site is held");
             Assert.AreEqual(site.PauseId, Convert.ToString(TerminalResult(inspect)["pauseId"]));
 
             // 命名了未知 id 的信息读取必须给出“已服务”的确定性答复，而不是死在写回复之前。
-            var unknown = OffMain(() => Serve(WrappedRequest("debug.hook.info", "{\"hookId\":\"no-such-hook\"}"), "debug.hook.info", pause));
+            var unknown = OffMain(() => Serve(WrappedRequest("debug.hook-info", "{\"hookId\":\"no-such-hook\"}"), "debug.hook-info", pause));
             Assert.AreEqual("req-under-test", Convert.ToString(unknown["requestId"]));
             Assert.IsFalse(Convert.ToBoolean(unknown["ok"]));
             var failure = (IDictionary<string, object>)unknown["error"];
@@ -468,22 +468,22 @@ namespace UnityCli
                 // 精确放宽：只有 stop 持有现场的那个 session 可达；其它 session 与其它变更仍在效果之前被拒。
                 string nestedTool;
                 Assert.IsTrue(
-                    DebugPauseControl.IsReachable(WrappedRequest("debug.session.stop", "{\"sessionId\":\"" + sessionId + "\"}"), out nestedTool, out _),
+                    DebugPauseControl.IsReachable(WrappedRequest("debug.session-stop", "{\"sessionId\":\"" + sessionId + "\"}"), out nestedTool, out _),
                     "stop of the session that owns the held site must be reachable while the main thread is paused");
                 Assert.IsFalse(
-                    DebugPauseControl.IsReachable(WrappedRequest("debug.session.stop", "{\"sessionId\":\"dbg-other\"}"), out nestedTool, out _),
+                    DebugPauseControl.IsReachable(WrappedRequest("debug.session-stop", "{\"sessionId\":\"dbg-other\"}"), out nestedTool, out _),
                     "a stop that names another session must stay refused");
                 Assert.IsFalse(
-                    DebugPauseControl.IsReachable(WrappedRequest("debug.session.stop", "{}"), out nestedTool, out _),
+                    DebugPauseControl.IsReachable(WrappedRequest("debug.session-stop", "{}"), out nestedTool, out _),
                     "a stop that names no session must stay refused");
-                foreach (var tool in new[] { "debug.hook.install", "debug.hook.remove", "debug.code.execute", "debug.hook.disable" })
+                foreach (var tool in new[] { "debug.hook-install", "debug.hook-remove", "debug.code-execute", "debug.hook-disable" })
                 {
                     Assert.IsFalse(DebugPauseControl.IsReachable(WrappedRequest(tool, "{}"), out nestedTool, out _), tool + " must stay refused while the main thread is held");
                     Assert.AreEqual(tool, nestedTool);
                 }
 
                 // 真实服务路径：后台线程上的控制通道服务同一个 stop。
-                var envelope = OffMain(() => Serve(WrappedRequest("debug.session.stop", "{\"sessionId\":\"" + sessionId + "\"}"), "debug.session.stop", pause));
+                var envelope = OffMain(() => Serve(WrappedRequest("debug.session-stop", "{\"sessionId\":\"" + sessionId + "\"}"), "debug.session-stop", pause));
                 Assert.AreEqual("req-under-test", Convert.ToString(envelope["requestId"]), "the off-main stop reply must carry the request's own id");
                 Assert.IsTrue(Convert.ToBoolean(envelope["ok"]), "the owning session stop must be served off-main; got " + FieldText(envelope, "error"));
                 var data = TerminalResult(envelope);
@@ -564,7 +564,7 @@ namespace UnityCli
                 DebugMainThreadPauseView pause;
                 Assert.IsTrue(DebugPauseControl.TryGetMainThreadPause(out pause), "a held main-thread site must be published as the blocker source");
 
-                var envelope = OffMain(() => Serve(WrappedRequest("debug.session.stop", "{\"sessionId\":\"" + sessionId + "\"}"), "debug.session.stop", pause));
+                var envelope = OffMain(() => Serve(WrappedRequest("debug.session-stop", "{\"sessionId\":\"" + sessionId + "\"}"), "debug.session-stop", pause));
                 Assert.IsTrue(Convert.ToBoolean(envelope["ok"]), "the owning session stop must be served off-main; got " + FieldText(envelope, "error"));
                 var data = TerminalResult(envelope);
                 Assert.AreEqual(UnityCliDebugSessionStates.Stopped, Convert.ToString(data["state"]), "stop must close future dispatch for that owner");
@@ -627,7 +627,7 @@ namespace UnityCli
                 Assert.IsTrue(DebugPauseControl.TryGetMainThreadPause(out pause), "a held main-thread site must be published as the blocker source");
                 Assert.AreEqual(sessionId, pause.SessionId, "the held site must name the session that owns it");
 
-                var envelope = OffMain(() => Serve(WrappedRequest("debug.session.stop", "{\"sessionId\":\"" + sessionId + "\"}"), "debug.session.stop", pause));
+                var envelope = OffMain(() => Serve(WrappedRequest("debug.session-stop", "{\"sessionId\":\"" + sessionId + "\"}"), "debug.session-stop", pause));
                 Assert.IsTrue(Convert.ToBoolean(envelope["ok"]), "the owning session stop must be served off-main; got " + FieldText(envelope, "error"));
                 var data = TerminalResult(envelope);
                 Assert.AreEqual(UnityCliDebugSessionStates.Stopped, Convert.ToString(data["state"]));
@@ -712,8 +712,8 @@ namespace UnityCli
 
             // 公开 CLI 只接受携带 result 包装的 catalog.editor.run 成功终态；缺少它时一个已经生效的响应
             // 会被报成 malformed terminal，调用方拿不到事实却看到效果。
-            var listed = OffMain(() => Serve(WrappedRequest("debug.pause.list", "{}"), "debug.pause.list", pause));
-            Assert.IsTrue(Convert.ToBoolean(listed["ok"]), "debug.pause.list must be served off-main while a site is held");
+            var listed = OffMain(() => Serve(WrappedRequest("debug.pause-list", "{}"), "debug.pause-list", pause));
+            Assert.IsTrue(Convert.ToBoolean(listed["ok"]), "debug.pause-list must be served off-main while a site is held");
             var listTerminal = (IDictionary<string, object>)listed["data"];
             Assert.AreEqual(1, listTerminal.Count, "a successful catalog.editor.run terminal must carry exactly the result wrapper");
             Assert.IsTrue(listTerminal.ContainsKey("result"), "the off-main Tool terminal must carry the result the CLI projects");
@@ -723,8 +723,8 @@ namespace UnityCli
             Assert.AreEqual(site.PauseId, Convert.ToString(listedSite["pauseId"]));
 
             // 解除路径同理：现场真的被释放时，调用方必须拿到被投影接受的终态而不是响应非法。
-            var resumed = OffMain(() => Serve(WrappedRequest("debug.pause.resume", "{\"pauseId\":\"" + site.PauseId + "\"}"), "debug.pause.resume", pause));
-            Assert.IsTrue(Convert.ToBoolean(resumed["ok"]), "debug.pause.resume must be served off-main while a site is held");
+            var resumed = OffMain(() => Serve(WrappedRequest("debug.pause-resume", "{\"pauseId\":\"" + site.PauseId + "\"}"), "debug.pause-resume", pause));
+            Assert.IsTrue(Convert.ToBoolean(resumed["ok"]), "debug.pause-resume must be served off-main while a site is held");
             var resumeTerminal = (IDictionary<string, object>)resumed["data"];
             Assert.AreEqual(1, resumeTerminal.Count);
             Assert.IsTrue(resumeTerminal.ContainsKey("result"));
@@ -748,7 +748,7 @@ namespace UnityCli
             Assert.AreEqual(DebugPauseTimeoutKinds.Bounded, pause.TimeoutKind);
 
             // 有限现场必须在它自己的窗口内可读：拿到 hasDeadline、声明时长与仍在推进的 pausedForMs。
-            var envelope = OffMain(() => Serve(WrappedRequest("debug.pause.list", "{}"), "debug.pause.list", pause));
+            var envelope = OffMain(() => Serve(WrappedRequest("debug.pause-list", "{}"), "debug.pause-list", pause));
             Assert.IsTrue(Convert.ToBoolean(envelope["ok"]), "a bounded site must be readable through the off-main list while it is held");
             var data = TerminalResult(envelope);
             var listed = ((IEnumerable<object>)data["sites"]).Select(item => (IDictionary<string, object>)item)
@@ -780,7 +780,7 @@ namespace UnityCli
         public void DebugPauseRequestQueuedBeforeThePauseIsServedByTheControlChannelInsteadOfWaitingBehindIt()
         {
             // 没有暂停时不得伪造答复：等待只由请求自己的 deadline 结束，队列项保持原样。
-            var idle = QueuedRequestItem(WrappedRequestWithDeadline("debug.pause.list", "{}", DateTimeOffset.UtcNow.AddMilliseconds(1200L)));
+            var idle = QueuedRequestItem(WrappedRequestWithDeadline("debug.pause-list", "{}", DateTimeOffset.UtcNow.AddMilliseconds(1200L)));
             var idleOutcome = WaitQueuedRequest(idle);
             Assert.IsFalse(idleOutcome.Served, "a queued request must never be answered before a pause exists");
             Assert.AreEqual(WaitHandle.WaitTimeout, idleOutcome.Signal, "the wait must end on the request's own deadline");
@@ -789,7 +789,7 @@ namespace UnityCli
             Assert.IsFalse(idle.HasStarted, "the queued item must stay un-started");
 
             // 暂停在请求入队之后才发布：同一队列项必须在发起请求的线程上被服务，而不是继续等在主线程队列里。
-            var queued = QueuedRequestItem(WrappedRequest("debug.pause.list", "{}"));
+            var queued = QueuedRequestItem(WrappedRequest("debug.pause-list", "{}"));
             var site = HitMainThreadPauseInBackground(Binding(DebugPausePositions.Prefix, PauseTimeout(4000L, false)));
             var outcome = WaitQueuedRequest(queued);
             Assert.IsTrue(outcome.Served, "a reachable request queued before the pause must be served by the control channel");
@@ -811,7 +811,7 @@ namespace UnityCli
         public void DebugPauseRequestQueuedBeforeThePauseIsNotTakenOverOutsideTheFrozenList()
         {
             // 不在冻结名单上的请求不得被控制通道接管：名单不得因入队时序而被放宽，也不得被静默取消。
-            var queued = QueuedRequestItem(WrappedRequestWithDeadline("debug.session.stop", "{\"sessionId\":\"no-such-session\"}", DateTimeOffset.UtcNow.AddMilliseconds(1200L)));
+            var queued = QueuedRequestItem(WrappedRequestWithDeadline("debug.session-stop", "{\"sessionId\":\"no-such-session\"}", DateTimeOffset.UtcNow.AddMilliseconds(1200L)));
             HitMainThreadPauseInBackground(Binding(DebugPausePositions.Prefix, PauseTimeout(60000L, false)));
             var outcome = WaitQueuedRequest(queued);
             Assert.IsFalse(outcome.Served,
@@ -867,7 +867,7 @@ namespace UnityCli
             // 同一事实必须能通过暂停控制通道读到：覆盖缺口带精确 reason 与计数，而不是静默通过。
             DebugMainThreadPauseView pause;
             Assert.IsTrue(DebugPauseControl.TryGetMainThreadPause(out pause));
-            var envelope = OffMain(() => Serve(WrappedRequest("debug.pause.list", "{}"), "debug.pause.list", pause));
+            var envelope = OffMain(() => Serve(WrappedRequest("debug.pause-list", "{}"), "debug.pause-list", pause));
             Assert.IsTrue(Convert.ToBoolean(envelope["ok"]), "the off-main list must stay readable while the main thread is held");
             var coverage = (IDictionary<string, object>)TerminalResult(envelope)["coverage"];
             Assert.AreEqual(1L, Convert.ToInt64(coverage["skippedSites"]), "an uninstallable declared pause must be counted");
@@ -1023,7 +1023,7 @@ namespace UnityCli
             var operation = DebugPauseHost.EnqueueEvaluate(
                 site,
                 new DebugPauseEvaluateRequest { PauseId = site.PauseId, SourceText = "return UnityCli.UnityCliPauseProbe.NestedHit();" },
-                "test:origin:debug.pause.evaluate");
+                "test:origin:debug.pause-evaluate");
             Assert.IsTrue(WaitFor(() => operation.Completed, 30000), "the evaluation must return; a nested pause would block it to its own timeout");
             if (operation.Failure != null)
             {
@@ -1035,7 +1035,7 @@ namespace UnityCli
             Assert.AreEqual(1L, DebugPauseHost.ActiveSiteCount, "a servicing thread must not enter a nested pause");
             var coverage = DebugPauseHost.Coverage();
             Assert.AreEqual(1L, coverage.SuppressedNestedHits);
-            Assert.IsTrue(coverage.SuppressOrigins.Any(origin => origin.Reason == "test:origin:debug.pause.evaluate"), "the suppression must record the request origin");
+            Assert.IsTrue(coverage.SuppressOrigins.Any(origin => origin.Reason == "test:origin:debug.pause-evaluate"), "the suppression must record the request origin");
             Assert.AreEqual(1L, DebugPauseHost.View(site).SuppressedNestedHits, "the site must report its own suppressed nested hits");
             var suppressed = PauseEvents("pause-suppressed");
             Assert.AreEqual(1, suppressed.Count);

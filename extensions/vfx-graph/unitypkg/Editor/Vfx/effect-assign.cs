@@ -10,7 +10,7 @@ namespace UnityCli
 
         public ToolDescriptor Describe() => new()
         {
-            Name = "vfx.effect.assign", Summary = "Assign a VFX Graph to a VisualEffect.",
+            Name = "vfx.effect-assign", Summary = "Assign a VFX Graph to a VisualEffect.",
             Description = "Bind one existing Assets/*.vfx graph to the existing VisualEffect component on the target.",
             Group = "vfx",RequiresPackages = new[] { "com.unity.visualeffectgraph" },
             SideEffects = new[] { "scene-modify", "component-reference-edit" }, Target = "editor", PlayModeSupport = "session-affecting",
@@ -20,7 +20,7 @@ namespace UnityCli
 
         public System.Threading.Tasks.ValueTask<VfxEffectActionResult> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            var effect = VfxActionToolSupport.RequireEffect(request.Target, "vfx.effect.assign");
+            var effect = VfxActionToolSupport.RequireEffect(request.Target, "vfx.effect-assign");
             VfxActionToolSupport.PrepareGraphAssignment(effect.GetType());
             var graphPath = VfxToolSupport.RequireVfxGraphPath(request.Graph);
             if (UnityEditor.AssetDatabase.LoadAssetAtPath(graphPath, VfxToolSupport.RequireVfxAssetType()) == null) throw new UnityCliBridge.BridgeCommandException("E_VFX_GRAPH_NOT_FOUND", "VFX Graph asset not found: " + request.Graph, "Pass an existing Assets/*.vfx path.");
@@ -29,14 +29,14 @@ namespace UnityCli
             ctx.CommitEffect();
             var observedObject = VfxToolSupport.FindGameObjectByTarget(gameObjectId.ToString(System.Globalization.CultureInfo.InvariantCulture));
             effect = observedObject == null ? null : observedObject.GetComponent(effectType);
-            if (effect == null) throw new UnityCliBridge.BridgeCommandException("E_VFX_OBSERVED_TARGET_MISSING", "vfx.effect.assign target/component disappeared after commit.", "Retry after checking the target still exists.");
+            if (effect == null) throw new UnityCliBridge.BridgeCommandException("E_VFX_OBSERVED_TARGET_MISSING", "vfx.effect-assign target/component disappeared after commit.", "Retry after checking the target still exists.");
             VfxActionToolSupport.AssignGraph(effect, graphPath);
             VfxActionToolSupport.VerifyAssignedGraph(effect, graphPath);
             return new System.Threading.Tasks.ValueTask<VfxEffectActionResult>(new VfxEffectActionResult
             {
                 Action = "assigned",
                 Effect = VfxToolSupport.BuildEffectInfo(effect),
-                PlannedEffects = new List<VfxPlannedEffect> { new VfxPlannedEffect { Type = "vfx.effect.assign", Target = request.Target, Graph = request.Graph } }
+                PlannedEffects = new List<VfxPlannedEffect> { new VfxPlannedEffect { Type = "vfx.effect-assign", Target = request.Target, Graph = request.Graph } }
             });
         }
     }

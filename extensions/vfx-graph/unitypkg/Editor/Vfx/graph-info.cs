@@ -11,7 +11,7 @@ namespace UnityCli
 
         public ToolDescriptor Describe() => new()
         {
-            Name = "vfx.graph.info", Summary = "Read a VFX Graph asset.",
+            Name = "vfx.graph-info", Summary = "Read a VFX Graph asset.",
             Description = "Read metadata for one existing Assets/*.vfx Visual Effect Graph asset without modifying it.",
             Group = "vfx",RequiresPackages = new[] { "com.unity.visualeffectgraph" },
             SideEffects = new string[0], Target = "editor", PlayModeSupport = "supported",
@@ -21,10 +21,10 @@ namespace UnityCli
 
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext context, System.Threading.CancellationToken ct = default)
         {
-            VfxToolSupport.EnsureEditorReady("vfx.graph.info");
+            VfxToolSupport.EnsureEditorReady("vfx.graph-info");
             var path = VfxToolSupport.RequireVfxGraphPath(request.Path);
             var graph = AssetDatabase.LoadAssetAtPath(path, VfxToolSupport.RequireVfxAssetType());
-            if (graph == null) throw new UnityCliBridge.BridgeCommandException("E_VFX_GRAPH_NOT_FOUND", "VFX Graph asset not found: " + path, "Create it with vfx.graph.create or pass an existing Assets/*.vfx path.");
+            if (graph == null) throw new UnityCliBridge.BridgeCommandException("E_VFX_GRAPH_NOT_FOUND", "VFX Graph asset not found: " + path, "Create it with vfx.graph-create or pass an existing Assets/*.vfx path.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result { Graph = VfxToolSupport.BuildGraphInfo(path, graph) });
         }
     }

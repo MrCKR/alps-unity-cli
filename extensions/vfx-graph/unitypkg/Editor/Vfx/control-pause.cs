@@ -8,7 +8,7 @@ namespace UnityCli
 
         public ToolDescriptor Describe() => new()
         {
-            Name = "vfx.control.pause", Summary = "Toggle VisualEffect pause state.",
+            Name = "vfx.control-pause", Summary = "Toggle VisualEffect pause state.",
             Description = "Toggle the public pause property on the existing VisualEffect component.",
             Group = "vfx",RequiresPackages = new[] { "com.unity.visualeffectgraph" },
             SideEffects = new[] { "component-state-edit" }, Target = "editor", PlayModeSupport = "supported",
@@ -18,7 +18,7 @@ namespace UnityCli
 
         public async System.Threading.Tasks.ValueTask<VfxControlActionResult> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            var effect = VfxActionToolSupport.RequireEffect(request.Target, "vfx.control.pause");
+            var effect = VfxActionToolSupport.RequireEffect(request.Target, "vfx.control-pause");
             var paused = VfxActionToolSupport.ReadBool(effect, "pause");
             if (!paused.HasValue) throw new UnityCliBridge.BridgeCommandException("E_VFX_PROPERTY_UNSUPPORTED", "VisualEffect pause state is unavailable.", "Check the installed Visual Effect Graph package version.");
             var expected = !paused.Value;
@@ -26,11 +26,11 @@ namespace UnityCli
             VfxActionToolSupport.PrepareWritableBoolProperty(effectType, "pause");
             ctx.CommitEffect();
 
-            effect = VfxActionToolSupport.ResolveObservedEffect(gameObjectId, effectType, "vfx.control.pause");
+            effect = VfxActionToolSupport.ResolveObservedEffect(gameObjectId, effectType, "vfx.control-pause");
             VfxActionToolSupport.SetRequired(effect, "pause", expected);
-            await VfxActionToolSupport.RequirePauseState(effect, expected, "vfx.control.pause", ctx, ct);
-            effect = VfxActionToolSupport.ResolveObservedEffect(gameObjectId, effectType, "vfx.control.pause");
-            return VfxActionToolSupport.BuildControlResult(effect, "vfx.control.pause", ctx.LogPath);
+            await VfxActionToolSupport.RequirePauseState(effect, expected, "vfx.control-pause", ctx, ct);
+            effect = VfxActionToolSupport.ResolveObservedEffect(gameObjectId, effectType, "vfx.control-pause");
+            return VfxActionToolSupport.BuildControlResult(effect, "vfx.control-pause", ctx.LogPath);
         }
     }
 }

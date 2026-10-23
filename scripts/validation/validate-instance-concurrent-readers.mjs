@@ -42,7 +42,7 @@ finally
 return 200;
 `;
 
-const writerPromise = run(["tools", "run", "debug.code.execute", "--instance", instanceId, "--input", JSON.stringify({ code }), "--timeout-ms", "120000"]);
+const writerPromise = run(["tools", "run", "debug.code-execute", "--instance", instanceId, "--input", JSON.stringify({ code }), "--timeout-ms", "120000"]);
 const signalDeadline = Date.now() + 60_000;
 while (!(await exists(signalPath))) {
   if (Date.now() >= signalDeadline) throw new Error("Writer signal did not appear before deadline.");

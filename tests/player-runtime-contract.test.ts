@@ -79,7 +79,7 @@ test("runtime listener and registry freeze one loopback session identity", async
 });
 
 test("Runtime observation Tools are owned by the TS catalog and routed through one Player dispatcher", async () => {
-  const names = ["player-runtime.console", "player-runtime.log", "player-runtime.state", "player-runtime.ui.capture-element"];
+  const names = ["player-runtime.console", "player-runtime.log", "player-runtime.state", "player-runtime.ui-capture-element"];
   for (const name of names) {
     const tool = findToolByName(name);
     assert.ok(tool, name);
@@ -112,7 +112,7 @@ test("Runtime observation Tools are owned by the TS catalog and routed through o
 });
 
 test("Runtime controls stay session-only and package-gated", async () => {
-  const names = ["player-runtime.input.key", "player-runtime.input.pointer", "player-runtime.target-framerate.set", "player-runtime.time-scale.set"];
+  const names = ["player-runtime.input-key", "player-runtime.input-pointer", "player-runtime.target-framerate-set", "player-runtime.time-scale-set"];
   for (const name of names) {
     const tool = findToolByName(name);
     assert.ok(tool, name);
@@ -121,14 +121,14 @@ test("Runtime controls stay session-only and package-gated", async () => {
     assert.equal(tool.supportsDryRun, true);
     assert.deepEqual(tool.sideEffects, ["runtime-session"]);
   }
-  assert.deepEqual(findToolByName("player-runtime.input.key")?.requiresPackages, ["com.unity.inputsystem"]);
-  assert.deepEqual(findToolByName("player-runtime.input.pointer")?.requiresPackages, ["com.unity.inputsystem"]);
+  assert.deepEqual(findToolByName("player-runtime.input-key")?.requiresPackages, ["com.unity.inputsystem"]);
+  assert.deepEqual(findToolByName("player-runtime.input-pointer")?.requiresPackages, ["com.unity.inputsystem"]);
 
   const tools = await readFile("unitypkg/Runtime/Tools/UnityCliRuntimeTools.cs", "utf8");
-  assert.match(tools, /case "player-runtime\.target-framerate\.set"/);
-  assert.match(tools, /case "player-runtime\.time-scale\.set"/);
-  assert.match(tools, /case "player-runtime\.input\.key"/);
-  assert.match(tools, /case "player-runtime\.input\.pointer"/);
+  assert.match(tools, /case "player-runtime\.target-framerate-set"/);
+  assert.match(tools, /case "player-runtime\.time-scale-set"/);
+  assert.match(tools, /case "player-runtime\.input-key"/);
+  assert.match(tools, /case "player-runtime\.input-pointer"/);
   assert.match(tools, /Application\.targetFrameRate =/);
   assert.match(tools, /Time\.timeScale =/);
   assert.match(tools, /LowLevel\.StateEvent/);

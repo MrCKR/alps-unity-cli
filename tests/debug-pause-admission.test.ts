@@ -30,8 +30,8 @@ const DEBUG_PAUSE_BLOCKER: EditorDebugPauseBlocker = {
   timeoutKind: "bounded",
   remainingMs: 21_310,
   pausedForMs: 8_689,
-  resumeTool: "debug.pause.resume",
-  infoTool: "debug.pause.list",
+  resumeTool: "debug.pause-resume",
+  infoTool: "debug.pause-list",
   requiresUserAction: false,
   source: "unity-debug-pause",
   confidence: "exact",
@@ -125,12 +125,12 @@ function pausedGateRejection(request: BridgeRequest): BridgeResponse {
       code: "E_DEBUG_MAIN_THREAD_PAUSED",
       message: "The Unity Editor main thread is deliberately paused at a debug hook breakpoint, so this request was refused before any effect instead of waiting behind the paused main-thread queue.",
       nextActions: [
-        "Run tools run debug.pause.list to read the pause site that is holding the main thread.",
-        "Run tools run debug.pause.resume with pauseId pause-1 to release the site and let the main thread continue.",
+        "Run tools run debug.pause-list to read the pause site that is holding the main thread.",
+        "Run tools run debug.pause-resume with pauseId pause-1 to release the site and let the main thread continue.",
       ],
       transient: false,
       retryAfterMs: 0,
-      details: { pauseId: "pause-1", threadId: 1, mainThread: true, timeoutKind: "bounded", remainingMs: 21_310, pauseTool: "debug.pause.list", resumeTool: "debug.pause.resume" },
+      details: { pauseId: "pause-1", threadId: 1, mainThread: true, timeoutKind: "bounded", remainingMs: 21_310, pauseTool: "debug.pause-list", resumeTool: "debug.pause-resume" },
     },
   };
 }
@@ -145,24 +145,24 @@ test("a proven main-thread pause reaches the single Bridge gate instead of the l
       commands.push(request.payload.command);
       // 冻结的可达集合由 Bridge 控制通道在自己的 HTTP 线程上服务；不可达的普通变更在同一闸门被拒。
       const nested = (request.payload.input as { name?: string }).name;
-      const response = nested === "debug.code.execute" ? pausedGateRejection(request.payload) : { ok: true as const, requestId: request.payload.requestId, data: { sites: [] } };
+      const response = nested === "debug.code-execute" ? pausedGateRejection(request.payload) : { ok: true as const, requestId: request.payload.requestId, data: { sites: [] } };
       return { response, attestation: attestation() };
     },
   });
 
-  const describe = await supervisor.read({ requestId: "req_paused_describe", command: "catalog.editor.describe", input: { name: "debug.pause.list" }, timeoutMs: 500 });
+  const describe = await supervisor.read({ requestId: "req_paused_describe", command: "catalog.editor.describe", input: { name: "debug.pause-list" }, timeoutMs: 500 });
   assert.equal(describe.ok, true);
-  const list = await supervisor.execute({ requestId: "req_paused_list", command: "catalog.editor.run", input: { name: "debug.pause.list" }, timeoutMs: 500, mutation: false });
+  const list = await supervisor.execute({ requestId: "req_paused_list", command: "catalog.editor.run", input: { name: "debug.pause-list" }, timeoutMs: 500, mutation: false });
   assert.equal(list.ok, true);
-  const events = await supervisor.execute({ requestId: "req_paused_events", command: "catalog.editor.run", input: { name: "debug.events.read", sourceId: "pause" }, timeoutMs: 500, mutation: false });
+  const events = await supervisor.execute({ requestId: "req_paused_events", command: "catalog.editor.run", input: { name: "debug.events-read", sourceId: "pause" }, timeoutMs: 500, mutation: false });
   assert.equal(events.ok, true);
 
-  const mutation = await supervisor.execute({ requestId: "req_paused_mutation", command: "catalog.editor.run", input: { name: "debug.code.execute" }, timeoutMs: 500, mutation: true });
+  const mutation = await supervisor.execute({ requestId: "req_paused_mutation", command: "catalog.editor.run", input: { name: "debug.code-execute" }, timeoutMs: 500, mutation: true });
   assert.equal(mutation.ok, false);
   if (mutation.ok) throw new Error("unreachable");
   assert.equal(mutation.error.code, "E_DEBUG_MAIN_THREAD_PAUSED");
-  assert.match(mutation.error.nextActions.join(" "), /debug\.pause\.list/);
-  assert.match(mutation.error.nextActions.join(" "), /debug\.pause\.resume/);
+  assert.match(mutation.error.nextActions.join(" "), /debug\.pause-list/);
+  assert.match(mutation.error.nextActions.join(" "), /debug\.pause-resume/);
   assert.equal(mutation.error.details?.pauseId, "pause-1");
   assert.deepEqual(commands, ["catalog.editor.describe", "catalog.editor.run", "catalog.editor.run", "catalog.editor.run"]);
 });
@@ -177,7 +177,7 @@ test("without a pause publication the modal refusal stays local, and a worker-on
     post: async () => { modalPosts += 1; throw new Error("must not post"); },
   });
   await assert.rejects(
-    modal.execute({ requestId: "req_modal_blocked", command: "catalog.editor.run", input: { name: "debug.pause.list" }, timeoutMs: 200, mutation: false }),
+    modal.execute({ requestId: "req_modal_blocked", command: "catalog.editor.run", input: { name: "debug.pause-list" }, timeoutMs: 200, mutation: false }),
     (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_UNITY_BLOCKED",
   );
   assert.equal(modalPosts, 0);
@@ -194,7 +194,7 @@ test("without a pause publication the modal refusal stays local, and a worker-on
   // 只暂停 worker 时主线程仍会推进，registry 不会发布主线程暂停证据；
   // 因此这里只能是 transport 层的不可用，绝不能报成 debug-pause block。
   await assert.rejects(
-    workerOnly.execute({ requestId: "req_worker_only", command: "catalog.editor.run", input: { name: "debug.code.execute" }, timeoutMs: 200, mutation: true }),
+    workerOnly.execute({ requestId: "req_worker_only", command: "catalog.editor.run", input: { name: "debug.code-execute" }, timeoutMs: 200, mutation: true }),
     (error: unknown) => error instanceof SessionSupervisorError
       && (error.code === "E_UNITY_UNRESPONSIVE" || error.code === "E_UNITY_TRANSITION_TIMEOUT"),
   );
@@ -244,9 +244,9 @@ test("editor.compile refuses a deliberate pause before any effect with its own c
       assert.equal(error.code, "E_DEBUG_MAIN_THREAD_PAUSED");
       assert.equal(error.transient, false);
       assert.equal(error.details?.pauseId, "pause-1");
-      assert.equal(error.details?.resumeTool, "debug.pause.resume");
-      assert.match(error.nextActions.join(" "), /debug\.pause\.list/);
-      assert.match(error.nextActions.join(" "), /debug\.pause\.resume/);
+      assert.equal(error.details?.resumeTool, "debug.pause-resume");
+      assert.match(error.nextActions.join(" "), /debug\.pause-list/);
+      assert.match(error.nextActions.join(" "), /debug\.pause-resume/);
       return true;
     });
     assert.deepEqual(commands, ["internal.editor.state.snapshot"]);
@@ -354,10 +354,10 @@ test("an accepted test run reports the deliberate pause verbatim once the reques
       // 现场仍未被解除时必须给出暂停事实本身，而不是一个没有原因的 deadline 超时。
       assert.equal(error.code, "E_DEBUG_MAIN_THREAD_PAUSED");
       assert.equal(error.details?.pauseId, "pause-1");
-      assert.equal(error.details?.resumeTool, "debug.pause.resume");
+      assert.equal(error.details?.resumeTool, "debug.pause-resume");
       assert.equal(error.details?.remainingMs, 21_310);
-      assert.match(error.nextActions.join(" "), /debug\.pause\.list/);
-      assert.match(error.nextActions.join(" "), /debug\.pause\.resume/);
+      assert.match(error.nextActions.join(" "), /debug\.pause-list/);
+      assert.match(error.nextActions.join(" "), /debug\.pause-resume/);
       return true;
     });
   } finally {

@@ -62,7 +62,7 @@ export function blockerNextActions(): string[] {
   return [
     "Run unitycli tools run editor.state to check whether the Editor is still transitioning and wait until it reports ready.",
     "Run unitycli tools run editor.dialogs to inspect the current modal dialog.",
-    "Run unitycli tools run editor.dialog.click with a current dialogId and exact button label.",
+    "Run unitycli tools run editor.dialog-click with a current dialogId and exact button label.",
   ];
 }
 
@@ -85,9 +85,9 @@ export function blockedEditorStateError(blockedMessage: string, blockers: readon
     "E_DEBUG_MAIN_THREAD_PAUSED",
     `The Unity Editor main thread is deliberately paused at debug pause site ${pause.pauseId}, so this request was refused before any effect instead of waiting behind the paused main-thread queue.`,
     [
-      "Run unitycli tools run debug.pause.list to read the pause site that is holding the main thread.",
-      `Run unitycli tools run debug.pause.resume with pauseId ${pause.pauseId} to release the site and let the main thread continue.`,
-      "While the site is held you can still read debug.events.read, debug.hook.list, debug.pause.inspect, debug.session.list, debug.program.list and debug.thread.list, then release the site before submitting business mutations again.",
+      "Run unitycli tools run debug.pause-list to read the pause site that is holding the main thread.",
+      `Run unitycli tools run debug.pause-resume with pauseId ${pause.pauseId} to release the site and let the main thread continue.`,
+      "While the site is held you can still read debug.events-read, debug.hook-list, debug.pause-inspect, debug.session-list, debug.program-list and debug.thread-list, then release the site before submitting business mutations again.",
     ],
     {
       pauseId: pause.pauseId,
@@ -126,8 +126,8 @@ export function debugPausePartialOutcome(requestId: string, pause: MainThreadDeb
       ? `${base} The live boundary facts (timeoutKind, remainingMs) were not read from the current publication, so this answer names the pause but not its boundary.`
       : base,
     [
-      "Run unitycli tools run debug.pause.list to read the pause site that is holding the main thread.",
-      `Run unitycli tools run debug.pause.resume with pauseId ${pause.pauseId} to release the site and let the paused call continue.`,
+      "Run unitycli tools run debug.pause-list to read the pause site that is holding the main thread.",
+      `Run unitycli tools run debug.pause-resume with pauseId ${pause.pauseId} to release the site and let the paused call continue.`,
       "Read back the affected business state before deciding whether to submit a new request; this dispatch is never replayed automatically.",
     ],
     {
@@ -141,8 +141,8 @@ export function debugPausePartialOutcome(requestId: string, pause: MainThreadDeb
       ...(pause.timeoutKind ? { timeoutKind: pause.timeoutKind } : {}),
       ...(pause.remainingMs === undefined ? {} : { remainingMs: pause.remainingMs }),
       pauseFacts: boundaryFactsUnread ? "not-read-in-time" : "read",
-      pauseTool: "debug.pause.list",
-      resumeTool: "debug.pause.resume",
+      pauseTool: "debug.pause-list",
+      resumeTool: "debug.pause-resume",
     },
     { transient: false, retryAfterMs: 0 },
   );

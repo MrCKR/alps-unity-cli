@@ -71,7 +71,7 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException(
                     "E_VFX_GRAPH_PATH_REQUIRED",
                     "Pass an Assets/*.vfx path.",
-                    "Use unitycli tools run vfx.graph.info --input '{\"path\":\"Assets/VFX/Effect.vfx\"}'.");
+                    "Use unitycli tools run vfx.graph-info --input '{\"path\":\"Assets/VFX/Effect.vfx\"}'.");
             }
 
             if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || !path.EndsWith(".vfx", StringComparison.OrdinalIgnoreCase))

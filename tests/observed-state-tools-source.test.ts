@@ -10,8 +10,8 @@ test("observed animator and bake tools wait for stable readback", async () => {
   const [play, stop, bakeStart, bakeCancel] = await Promise.all([
     source("../unitypkg/Editor/Tools/animator/play.cs"),
     source("../unitypkg/Editor/Tools/animator/stop.cs"),
-    source("../unitypkg/Editor/Tools/lighting/bake/start.cs"),
-    source("../unitypkg/Editor/Tools/lighting/bake/cancel.cs")
+    source("../unitypkg/Editor/Tools/lighting/bake-start.cs"),
+    source("../unitypkg/Editor/Tools/lighting/bake-cancel.cs")
   ]);
 
   assert.match(play, /await ctx\.Wait\.UntilStable\([\s\S]*GetCurrentAnimatorStateInfo\(layer\)\.fullPathHash == expectedHash[\s\S]*TimeSpan\.FromMilliseconds\(ctx\.TimeoutMs\)[\s\S]*ct: ct\)/);
@@ -28,8 +28,8 @@ test("profiler and frame debugger return only verified session state", async () 
     source("../unitypkg/Editor/Tools/profiler/start.cs"),
     source("../unitypkg/Editor/Tools/profiler/stop.cs"),
     source("../unitypkg/Editor/Tools/profiler/pause.cs"),
-    source("../unitypkg/Editor/Tools/profiler/frame-debugger/enable.cs"),
-    source("../unitypkg/Editor/Tools/profiler/frame-debugger/disable.cs"),
+    source("../unitypkg/Editor/Tools/profiler/frame-debugger-enable.cs"),
+    source("../unitypkg/Editor/Tools/profiler/frame-debugger-disable.cs"),
     source("../unitypkg/Editor/Tools/profiler/ProfilerFrameDebuggerSupport.cs")
   ]);
 
@@ -64,11 +64,11 @@ test("editor mutations prove terminal state before returning", async () => {
 
 test("console, profiler, build settings, and Prefab Stage mutations use readback", async () => {
   const [consoleClear, profilerClear, buildState, buildAdd, buildRemove, stageOpen, stageSave, stageClose] = await Promise.all([
-    source("../unitypkg/Editor/Tools/debug/console/clear.cs"),
+    source("../unitypkg/Editor/Tools/debug/console-clear.cs"),
     source("../unitypkg/Editor/Tools/profiler/clear.cs"),
     source("../unitypkg/Editor/Tools/build/BuildSceneStateTool.cs"),
-    source("../unitypkg/Editor/Tools/build/scene/add.cs"),
-    source("../unitypkg/Editor/Tools/build/scene/remove.cs"),
+    source("../unitypkg/Editor/Tools/build/scene-add.cs"),
+    source("../unitypkg/Editor/Tools/build/scene-remove.cs"),
     source("../unitypkg/Editor/Tools/prefab/stage-open.cs"),
     source("../unitypkg/Editor/Tools/prefab/stage-save.cs"),
     source("../unitypkg/Editor/Tools/prefab/stage-close.cs")
@@ -107,7 +107,7 @@ test("oracle core mutations prevalidate inputs and return fresh proof", async ()
     source("../unitypkg/Editor/Tools/animation-clip/create.cs"),
     source("../unitypkg/Editor/Tools/animation-clip/update.cs"),
     source("../unitypkg/Editor/Tools/animation-clip/AnimationToolSupport.cs"),
-    source("../unitypkg/Editor/Tools/build/scene/add.cs")
+    source("../unitypkg/Editor/Tools/build/scene-add.cs")
   ]);
 
   assert.match(multiview, /var plans = new List<KeyValuePair<int, string>>\(\)[\s\S]*ctx\.CommitEffect\(\)[\s\S]*E_MULTIVIEW_ARTIFACT_MISSING/);

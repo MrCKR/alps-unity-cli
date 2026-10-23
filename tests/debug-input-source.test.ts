@@ -28,9 +28,9 @@ const WRITERS = ["key", "pointer", "release"];
 
 test("the four debug.input tools exist with the declared descriptor shape", async () => {
   for (const tool of TOOLS) {
-    const text = await source(inputToolsRoot, `${tool}.cs`);
+    const text = await source(inputToolsRoot, `../input-${tool}.cs`);
     assert.match(text, /IUnityCliTool<DebugInput\w+Request, DebugInput\w+Result>/, `${tool}.cs must implement the typed Tool interface`);
-    assert.match(text, new RegExp(`Name = "debug\\.input\\.${tool}"`), `${tool}.cs must declare its exact public name`);
+    assert.match(text, new RegExp(`Name = "debug\\.input-${tool}"`), `${tool}.cs must declare its exact public name`);
     assert.match(text, /Group = "debug"/);
     assert.match(text, /Target = "editor"/);
     assert.match(text, /PlayModeSupport = "supported"/);
@@ -40,10 +40,10 @@ test("the four debug.input tools exist with the declared descriptor shape", asyn
     assert.doesNotMatch(text, /MaxInput\w+ = \d/, `${tool}.cs must not restate an input limit`);
   }
   // info 是纯读取；其余三个跨效果屏障并声明副作用。
-  const info = await source(inputToolsRoot, "info.cs");
-  assert.doesNotMatch(info, /SideEffects =/, "debug.input.info is a pure read and must declare no side effect");
-  assert.doesNotMatch(info, /ctx\.CommitEffect\(\)/, "debug.input.info must not cross an effect barrier");
-  assert.match(info, /ctx\.UseReadBudget\(/, "debug.input.info budgets its own read");
+  const info = await source(inputToolsRoot, "../input-info.cs");
+  assert.doesNotMatch(info, /SideEffects =/, "debug.input-info is a pure read and must declare no side effect");
+  assert.doesNotMatch(info, /ctx\.CommitEffect\(\)/, "debug.input-info must not cross an effect barrier");
+  assert.match(info, /ctx\.UseReadBudget\(/, "debug.input-info budgets its own read");
   // 每个 Tool 一个职责：提交请求里不得出现 action 路由器字段。
   const dtos = await source(inputToolsRoot, "DebugInputDtos.cs");
   assert.doesNotMatch(requestBody(dtos, "DebugInputKeyRequest"), /Action/, "the key request must not route on an action field");
@@ -51,7 +51,7 @@ test("the four debug.input tools exist with the declared descriptor shape", asyn
   assert.match(requestBody(dtos, "DebugInputReleaseRequest"), /Scope \{ get; set; \}/, "release declares which owner input it releases");
   assert.match(dtos, /\[UnityCliRequired, UnityCliStringEnum\("screen-pixels", "game-view-normalized"\)\] public string TargetSpace \{ get; set; \}/, "a pointer submission always declares its coordinate space");
   for (const writer of WRITERS) {
-    const text = await source(inputToolsRoot, `${writer}.cs`);
+    const text = await source(inputToolsRoot, `../input-${writer}.cs`);
     assert.match(text, /SideEffects = new\[\] \{ "virtual-input-device" \}/, `${writer}.cs must declare the virtual device side effect`);
     assert.match(text, /ctx\.CommitEffect\(\);/, `${writer}.cs must cross the effect barrier after prevalidation`);
     assert.match(text, /Prepare(Key|Pointer|Release)\(request\)/, `${writer}.cs must prevalidate before the effect`);
@@ -115,10 +115,10 @@ test("the input owner reuses the one device backend probe, event store, schedule
   assert.doesNotMatch(host, /AddDevice\(/, "the backend API is only reached through the probed device contract");
   // 通用输入路径必须指名真实 Tool，不建立第二套输入模型。
   const routes = host.slice(host.indexOf("private static List<DebugInputRouteView> GenericRoutes()"));
-  assert.match(routes, /"debug\.method\.invoke"/, "the business entry path names its real Tool");
-  assert.match(routes, /"debug\.hook\.install"/, "the managed wrapper path names its real Tool");
-  assert.match(routes, /"debug\.code\.execute"/, "the arbitrary code path names its real Tool");
-  assert.match(routes, /"debug\.program\.run"/, "the program and delivery paths name their real Tool");
+  assert.match(routes, /"debug\.method-invoke"/, "the business entry path names its real Tool");
+  assert.match(routes, /"debug\.hook-install"/, "the managed wrapper path names its real Tool");
+  assert.match(routes, /"debug\.code-execute"/, "the arbitrary code path names its real Tool");
+  assert.match(routes, /"debug\.program-run"/, "the program and delivery paths name their real Tool");
   assert.match(routes, /no logical frame is required/, "the general paths must state that they are not tied to one logical frame");
 });
 
@@ -262,7 +262,7 @@ test("the input tools are registered with the generated contracts and the error 
   const contract = JSON.parse(await readFile(join(repoRoot, "contracts", "command-contract.json"), "utf8")) as { commands: Array<{ bridgeCommand: string; group: string }> };
   const names = new Set(contract.commands.map((entry) => entry.bridgeCommand));
   for (const tool of TOOLS) {
-    assert.ok(names.has(`debug.input.${tool}`), `debug.input.${tool} must be in the generated command contract`);
+    assert.ok(names.has(`debug.input-${tool}`), `debug.input-${tool} must be in the generated command contract`);
   }
   // 通用输入路径只能指名真实存在的 Tool；这条断言把路由表与 live catalog 绑在一起。
   const host = await source(debugRoot, "DebugInputHost.Report.cs");
@@ -273,8 +273,8 @@ test("the input tools are registered with the generated contracts and the error 
   }
   const completion = JSON.parse(await readFile(join(repoRoot, "contracts", "tool-completion-contract.json"), "utf8")) as { tools: Array<{ toolName: string; executionClass: string }> };
   for (const tool of TOOLS) {
-    const entry = completion.tools.find((candidate) => candidate.toolName === `debug.input.${tool}`);
-    assert.ok(entry, `debug.input.${tool} needs one completion contract`);
+    const entry = completion.tools.find((candidate) => candidate.toolName === `debug.input-${tool}`);
+    assert.ok(entry, `debug.input-${tool} needs one completion contract`);
     assert.equal(entry?.executionClass, "observed-state", "the input family reports observed device state");
   }
   const output = await readFile(join(repoRoot, "src/output.ts"), "utf8");

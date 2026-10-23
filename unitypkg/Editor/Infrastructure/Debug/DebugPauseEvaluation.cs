@@ -117,7 +117,7 @@ namespace UnityCli
                     "E_DEBUG_PROGRAM_ENTRY_INVALID",
                     "No installed program with that programId exists in the current Editor session.",
                     new Dictionary<string, object> { { "programId", entry.ProgramId }, { "entry", entry.Entry }, { "pauseId", site.PauseId } },
-                    new[] { "Run tools run debug.program.list to read the installed programs.", "Install the entry with debug.program.install before using it at a pause site." });
+                    new[] { "Run tools run debug.program-list to read the installed programs.", "Install the entry with debug.program-install before using it at a pause site." });
             }
             var bindings = info.Program == null ? null : info.Program.Bindings;
             var bound = bindings != null && bindings.Any(binding => binding.Attached
@@ -139,7 +139,7 @@ namespace UnityCli
                     },
                     new[]
                     {
-                        "Run tools run debug.program.info to read the declared bindings and their attached state.",
+                        "Run tools run debug.program-info to read the declared bindings and their attached state.",
                         "Replace the program with a binding whose entry, phase and exact target match this pause site."
                     });
             var context = new UnityCliHookContext(site.Invocation);
@@ -161,7 +161,7 @@ namespace UnityCli
                     "E_DEBUG_PAUSE_STALE",
                     "The pause site left the paused state before this evaluation started, so no code was compiled or run.",
                     new Dictionary<string, object> { { "stage", "before-compile" } },
-                    new[] { "Run tools run debug.pause.list to read the sites that are paused right now." });
+                    new[] { "Run tools run debug.pause-list to read the sites that are paused right now." });
             var acquireBudget = TimeSpan.FromMilliseconds(DebugLimits.PauseCompilerAcquireMs);
             if (!DebugCompilerOwner.TryBeginOwnershipWithin(DebugCompilerLane.PauseService, acquireBudget))
                 throw new BridgeCommandException(
@@ -172,7 +172,7 @@ namespace UnityCli
             try
             {
                 var wrapped = UnityCliBridge.WrapCodeSource(source);
-                compileKey = DebugCompilerOwner.CandidateIdentity("debug.pause.evaluate", wrapped, string.Empty);
+                compileKey = DebugCompilerOwner.CandidateIdentity("debug.pause-evaluate", wrapped, string.Empty);
                 var admission = DebugCompilerOwner.TryAdmitCandidate(compileKey, 0L);
                 if (!admission.Admitted) throw BudgetExhausted(admission);
                 var deadlineMs = DebugEventClocks.MonotonicMilliseconds + DebugLimits.PauseOperationTimeoutMs;
@@ -210,7 +210,7 @@ namespace UnityCli
                             "E_DEBUG_PAUSE_STALE",
                             "The pause site was released while this evaluation was compiling, so the compile was cancelled and no code ran.",
                             new Dictionary<string, object> { { "stage", "compile" }, { "cancelled", true } },
-                            new[] { "Read debug.pause.list to confirm the site state, then submit the evaluation again if a site is still paused." });
+                            new[] { "Read debug.pause-list to confirm the site state, then submit the evaluation again if a site is still paused." });
                     throw CompileBudgetExceeded("compile-output");
                 }
                 if (!compilation.Success)
@@ -253,7 +253,7 @@ namespace UnityCli
                         "E_CODE_RUNTIME_EXCEPTION",
                         "The on-site evaluation threw: " + inner.GetType().Name + ".",
                         new Dictionary<string, object> { { "type", inner.GetType().FullName ?? inner.GetType().Name }, { "message", inner.Message ?? string.Empty } },
-                        new[] { "Read debug.pause.inspect to see the paused state before submitting a corrected evaluation." });
+                        new[] { "Read debug.pause-inspect to see the paused state before submitting a corrected evaluation." });
                 }
             }
             finally
@@ -297,9 +297,9 @@ namespace UnityCli
                 },
                 new[]
                 {
-                    "Run debug.pause.list to confirm the site is still paused and inspectable; a compile-budget overrun never releases a pause site.",
-                    "Warm the single shared compiler on the non-pause path first: run debug.code.execute with the same source, then submit debug.pause.evaluate again.",
-                    "Or release the site with debug.pause.resume and evaluate the same source outside the pause path."
+                    "Run debug.pause-list to confirm the site is still paused and inspectable; a compile-budget overrun never releases a pause site.",
+                    "Warm the single shared compiler on the non-pause path first: run debug.code-execute with the same source, then submit debug.pause-evaluate again.",
+                    "Or release the site with debug.pause-resume and evaluate the same source outside the pause path."
                 });
         }
 

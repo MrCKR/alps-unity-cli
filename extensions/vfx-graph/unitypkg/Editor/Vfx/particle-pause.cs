@@ -10,7 +10,7 @@ namespace UnityCli
 
         public ToolDescriptor Describe() => new()
         {
-            Name = "vfx.particle.pause", Summary = "Pause a ParticleSystem.",
+            Name = "vfx.particle-pause", Summary = "Pause a ParticleSystem.",
             Description = "Pause the existing ParticleSystem, optionally including child systems.",
             Group = "vfx",SideEffects = new[] { "particle-playback-edit" },
             Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 60000,
@@ -23,15 +23,15 @@ namespace UnityCli
 
         public async System.Threading.Tasks.ValueTask<VfxParticleActionResult> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            var particleSystem = VfxActionToolSupport.RequireParticle(request.Target, "vfx.particle.pause");
+            var particleSystem = VfxActionToolSupport.RequireParticle(request.Target, "vfx.particle-pause");
             var withChildren = request.WithChildren ?? true;
             var gameObjectId = particleSystem.gameObject.GetInstanceID();
             ctx.CommitEffect();
 
-            particleSystem = VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle.pause");
+            particleSystem = VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle-pause");
             particleSystem.Pause(withChildren);
-            await VfxActionToolSupport.RequireParticleState(particleSystem, withChildren, system => system.isPaused, "vfx.particle.pause", ctx, ct);
-            return VfxActionToolSupport.BuildParticleResult(VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle.pause"), "vfx.particle.pause", ctx.LogPath);
+            await VfxActionToolSupport.RequireParticleState(particleSystem, withChildren, system => system.isPaused, "vfx.particle-pause", ctx, ct);
+            return VfxActionToolSupport.BuildParticleResult(VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle-pause"), "vfx.particle-pause", ctx.LogPath);
         }
     }
 }

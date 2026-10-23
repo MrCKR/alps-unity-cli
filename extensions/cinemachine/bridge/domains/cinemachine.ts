@@ -11,11 +11,11 @@ export const cinemachineBridgeSpecs: BridgeCommandSpec[] = markToolsOnly([
   { group: "cinemachine", command: "body", bridgeCommand: "catalog.editor.run", toolName: "cinemachine.body", buildArgs: cinemachineBodyArgs },
   { group: "cinemachine", command: "aim", bridgeCommand: "catalog.editor.run", toolName: "cinemachine.aim", buildArgs: cinemachineAimArgs },
   { group: "cinemachine", command: "noise", bridgeCommand: "catalog.editor.run", toolName: "cinemachine.noise", buildArgs: cinemachineNoiseArgs },
-  { group: "cinemachine", command: "brain.ensure", bridgeCommand: "catalog.editor.run", toolName: "cinemachine.brain.ensure", buildArgs: cinemachineTargetOnlyArgs },
-  { group: "cinemachine", command: "brain.status", bridgeCommand: "catalog.editor.run", toolName: "cinemachine.brain.status", buildArgs: cinemachineTargetOnlyArgs },
-  { group: "cinemachine", command: "extension.list", bridgeCommand: "catalog.editor.run", toolName: "cinemachine.extension.list", buildArgs: cinemachineTargetOnlyArgs },
-  { group: "cinemachine", command: "extension.add", bridgeCommand: "catalog.editor.run", toolName: "cinemachine.extension.add", buildArgs: cinemachineExtensionTypeArgs },
-  { group: "cinemachine", command: "extension.remove", bridgeCommand: "catalog.editor.run", toolName: "cinemachine.extension.remove", buildArgs: cinemachineExtensionTypeArgs }
+  { group: "cinemachine", command: "brain-ensure", bridgeCommand: "catalog.editor.run", toolName: "cinemachine.brain-ensure", buildArgs: cinemachineTargetOnlyArgs },
+  { group: "cinemachine", command: "brain-status", bridgeCommand: "catalog.editor.run", toolName: "cinemachine.brain-status", buildArgs: cinemachineTargetOnlyArgs },
+  { group: "cinemachine", command: "extension-list", bridgeCommand: "catalog.editor.run", toolName: "cinemachine.extension-list", buildArgs: cinemachineTargetOnlyArgs },
+  { group: "cinemachine", command: "extension-add", bridgeCommand: "catalog.editor.run", toolName: "cinemachine.extension-add", buildArgs: cinemachineExtensionTypeArgs },
+  { group: "cinemachine", command: "extension-remove", bridgeCommand: "catalog.editor.run", toolName: "cinemachine.extension-remove", buildArgs: cinemachineExtensionTypeArgs }
 ]);
 
 function markToolsOnly(specs: BridgeCommandSpec[]): BridgeCommandSpec[] {

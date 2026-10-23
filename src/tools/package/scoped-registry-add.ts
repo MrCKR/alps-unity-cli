@@ -19,7 +19,7 @@ export interface PackageScopedRegistryAddResult {
 }
 
 export default defineTool<PackageScopedRegistryAddRequest, PackageScopedRegistryAddResult>({
-  name: "package.scoped-registry.add",
+  name: "package.scoped-registry-add",
   summary: "Add or replace a scoped registry in the project manifest.",
   description: "Add or replace a scoped registry in Packages/manifest.json. Supports --dry-run.",
   group: "package",
@@ -30,7 +30,7 @@ export default defineTool<PackageScopedRegistryAddRequest, PackageScopedRegistry
   handler: "offline",
   supportStatus: "cli-only",
   examples: [
-    { description: "Add a scoped registry", argv: ["tools", "run", "package.scoped-registry.add", "--input", "{\"name\":\"Acme\",\"url\":\"https://registry.acme.test\",\"scope\":\"com.acme\"}"] }
+    { description: "Add a scoped registry", argv: ["tools", "run", "package.scoped-registry-add", "--input", "{\"name\":\"Acme\",\"url\":\"https://registry.acme.test\",\"scope\":\"com.acme\"}"] }
   ],
   async execute(request, context) {
     const projectPath = resolve(request.project ?? context.projectPath);

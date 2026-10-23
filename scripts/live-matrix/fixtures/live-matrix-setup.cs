@@ -182,7 +182,7 @@ public static object Run(string argsJson)
 
     UnityEditor.SceneManagement.EditorSceneManager.SaveScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene(), fixtureScenePath);
 
-    // debug.code.execute 通过这一未保存的场景变更提供 request-specific completion proof；调用方随后恢复为 0。
+    // debug.code-execute 通过这一未保存的场景变更提供 request-specific completion proof；调用方随后恢复为 0。
     mainCamera.transform.position = new Vector3(31337f, 0f, 0f);
     UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(mainCamera.scene);
     return new Dictionary<string, object>

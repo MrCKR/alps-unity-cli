@@ -72,7 +72,7 @@ metadata:
 - 修改影响 init/install 的 TypeScript CLI 后，先完成必要 build，再同步到 Dev 项目。
 - 同步后等待 Unity import、compile、domain reload 完成，并通过 `editor.state` 或等价只读检查确认 Editor 非 busy。
 - Dev 迭代默认**不重启**：把改动文件直接写入 `./Dev/UnityProject/Packages/<pkg>/`，然后 `editor.refresh`（必要时一次 `editor.compile`），等编译结束后直接调用。Unity 会自行 import/compile，重启从来不是生效条件。
-- `init package` 是另一条路径：目标项目有运行中的 Editor 时直接拒绝（`E_INIT_EDITOR_RUNNING`），只有加 `--close-editor` 才会先正常关闭该项目再安装。关闭是 CLI 的写入保护前置条件，不是 Unity 的要求；安装后自行启动即可，不需要为“生效”而重启。只在首次安装或需要按官方安装器收敛时使用。
+- `init package` 是另一条路径：目标项目有运行中的 Editor 时就直接就地安装，不关闭 Editor；只有发布阶段返回 `PACKAGE_DIRECTORY_LOCKED`（真实目录占用）时，才先正常关闭该项目再加 `--close-editor` 重跑。安装后自行启动即可，不需要为“生效”而重启。只在首次安装或需要按官方安装器收敛时使用。
 - 无论用哪条路径，装进去的字节是否等于 canonical 都用 `npm run verify:installed -- --project <项目路径>` 逐文件 sha256 比对确认（读 `contracts/package-files.json`，输出 missing/mismatched），不靠重启确认。
 
 Dev 调用矩阵：
@@ -121,7 +121,7 @@ Dev 调用矩阵：
 - capability gate 使用单领域真实任务，观察能否发现正确能力。
 - task gate 使用跨能力真实目标，观察能否自主组合。
 - perturbation gate 把并发、reload、Prefab Stage 或 UI cache 写成任务环境或约束，不拆成测试脚本步骤。
-- blocker gate 在已由主 Agent 建立 modal 环境中给出自然任务。陌生 AI 从原错误的 blocker 自主读取 `editor.dialogs`，并可用 `editor.dialog.click` 点击任意当前可见 modal 的 enabled button；第一次错误规则仍适用，但不得因 modal 陌生而禁止点击。主 Agent 仍负责真实状态和证据。
+- blocker gate 在已由主 Agent 建立 modal 环境中给出自然任务。陌生 AI 从原错误的 blocker 自主读取 `editor.dialogs`，并可用 `editor.dialog-click` 点击任意当前可见 modal 的 enabled button；第一次错误规则仍适用，但不得因 modal 陌生而禁止点击。主 Agent 仍负责真实状态和证据。
 - 受影响行为类别的完整覆盖由主 Agent 的定向矩阵承担，不要求一个弱模型重复矩阵或验证无关能力。
 
 主 Agent 只能提供：

@@ -107,7 +107,7 @@ test("test.run converts a blocker observed after acceptance to execution timeout
       assert.equal(error.retryAfterMs, 0);
       assert.deepEqual(error.details?.blockers, [blocker]);
       assert.match(error.message, /Third Party Dialog/);
-      assert.deepEqual(error.nextActions, ["Run unitycli tools run editor.state to check whether the Editor is still transitioning and wait until it reports ready.", "Run unitycli tools run editor.dialogs to inspect the current modal dialog.", "Run unitycli tools run editor.dialog.click with a current dialogId and exact button label."]);
+      assert.deepEqual(error.nextActions, ["Run unitycli tools run editor.state to check whether the Editor is still transitioning and wait until it reports ready.", "Run unitycli tools run editor.dialogs to inspect the current modal dialog.", "Run unitycli tools run editor.dialog-click with a current dialogId and exact button label."]);
       return true;
     });
   } finally { await rm(f.root, { recursive: true, force: true }); }

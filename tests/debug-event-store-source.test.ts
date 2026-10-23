@@ -220,12 +220,12 @@ test("the append critical section performs only bookkeeping", async () => {
   assert.doesNotMatch(shared, /Thread\.Sleep/);
 });
 
-test("debug.events.read is the only managed debug event reader", async () => {
-  const reader = await source(new URL("Editor/Tools/debug/", unitypkg), "events/read.cs");
-  const consoleRead = await source(new URL("Editor/Tools/debug/", unitypkg), "console/read.cs");
+test("debug.events-read is the only managed debug event reader", async () => {
+  const reader = await source(new URL("Editor/Tools/debug/", unitypkg), "events-read.cs");
+  const consoleRead = await source(new URL("Editor/Tools/debug/", unitypkg), "console-read.cs");
 
   assert.match(reader, /IUnityCliTool<DebugEventsRequest, DebugEventsResult>/);
-  assert.match(reader, /Name = "debug\.events\.read"/);
+  assert.match(reader, /Name = "debug\.events-read"/);
   assert.match(reader, /DestructiveHint = false/);
   assert.match(reader, /PlayModeSupport = "supported"/);
   assert.doesNotMatch(reader, /DestructiveHint = true|SupportsDryRun = true|SideEffects =/);
@@ -238,8 +238,8 @@ test("debug.events.read is the only managed debug event reader", async () => {
     const text = await source(new URL("Editor/", unitypkg), file);
     if (/DebugEventStore\.ReadEvents\(/.test(text)) readers.push(file);
   }
-  // T-14：主线程暂停时 debug.events.read 也必须可达，因此除了 read Tool 之外，只有暂停控制通道可以调用同一读取入口。
-  assert.deepEqual(readers, ["Infrastructure/Debug/DebugPauseControl.cs", "Tools/debug/events/read.cs"], "only the read Tool and the pause control channel may call the single store read path");
+  // T-14：主线程暂停时 debug.events-read 也必须可达，因此除了 read Tool 之外，只有暂停控制通道可以调用同一读取入口。
+  assert.deepEqual(readers, ["Infrastructure/Debug/DebugPauseControl.cs", "Tools/debug/events-read.cs"], "only the read Tool and the pause control channel may call the single store read path");
   const store = await source(debugRoot, "DebugEventStore.cs");
   assert.equal((store.match(/internal static DebugEventsResult ReadEvents\(/g) ?? []).length, 1, "the store must own exactly one read entry point");
 
@@ -290,8 +290,8 @@ test("the unified read DTO exposes the required unified fields and keeps hook fi
 });
 
 test("the read Tool self-describes its scope and its difference from the console reader", async () => {
-  const reader = await source(new URL("Editor/Tools/debug/", unitypkg), "events/read.cs");
-  for (const phrase of ["hook", "lifecycle", "program", "log", "check", "pause", "input", "debug.console.read", "not for console text", "E_HOOK_EVENT_CURSOR_EXPIRED", "E_CONTINUATION_STALE", "waitMs"]) {
+  const reader = await source(new URL("Editor/Tools/debug/", unitypkg), "events-read.cs");
+  for (const phrase of ["hook", "lifecycle", "program", "log", "check", "pause", "input", "debug.console-read", "not for console text", "E_HOOK_EVENT_CURSOR_EXPIRED", "E_CONTINUATION_STALE", "waitMs"]) {
     assert.ok(reader.includes(phrase), `describe must state ${phrase}`);
   }
   assert.match(reader, /DebugLimits\.EventsDefaultLimit/);

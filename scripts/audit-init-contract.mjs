@@ -12,9 +12,9 @@ const handlers = (await Promise.all(["package.ts", "init-help.ts", "init-discove
 const failures = [];
 const expectedSubcommands = ["help", "discover", "package", "skill"];
 const removedOptions = ["pkg-only", "skill-only", "unity"];
-if (contract.version !== 2 || contract.topLevel !== "init" || contract.schema !== "schemas/init.schema.json") failures.push("init contract identity must be version 2 and reference schemas/init.schema.json");
+if (contract.version !== 3 || contract.topLevel !== "init" || contract.schema !== "schemas/init.schema.json") failures.push("init contract identity must be version 3 and reference schemas/init.schema.json");
 if (JSON.stringify(Object.keys(contract.subcommands)) !== JSON.stringify(expectedSubcommands)) failures.push("init contract subcommands must be help, discover, package, skill in order");
-if (JSON.stringify(contract.subcommands.package.options) !== JSON.stringify(["project", "close-editor", "hot", "check", "timeout-ms"])) failures.push("init package options mismatch");
+if (JSON.stringify(contract.subcommands.package.options) !== JSON.stringify(["project", "close-editor", "check", "timeout-ms"])) failures.push("init package options mismatch");
 if (JSON.stringify(contract.subcommands.skill.options) !== JSON.stringify(["agent", "scope", "workspace", "target", "check", "timeout-ms"])) failures.push("init skill options mismatch");
 if (JSON.stringify(contract.subcommands.skill.requiredAnyOf) !== JSON.stringify([["target"], ["agent", "scope"]])) failures.push("init skill required input modes mismatch");
 if (JSON.stringify(contract.subcommands.skill.agents) !== JSON.stringify([".agents", "claude"])) failures.push("init skill agent enum mismatch");
@@ -31,6 +31,7 @@ for (const removed of removedOptions) {
 for (const symbol of ["handleInitHelp", "handleInitDiscover", "handleInitPackage", "handleInitSkill"]) if (!handlers.includes(symbol)) failures.push(`init dispatcher is missing ${symbol}`);
 if (/"(?:pkg-only|skill-only|unity)"\s*:|--(?:pkg-only|skill-only|unity)\b/.test(JSON.stringify({ contract, schema }))) failures.push("public init contract/schema contains a removed option");
 if (!handlers.includes("--close-editor") || !handlers.includes("--target")) failures.push("init handlers must expose the approved Editor-close and explicit Skill target controls");
+if (handlers.includes("--hot") || cli.includes("--hot") || handlers.includes("E_INIT_EDITOR_RUNNING")) failures.push("init must install in place while the Editor is open and keep no Editor-close precondition");
 const result = { ok: failures.length === 0, contract: relative(repoRoot, contractPath).replaceAll("\\", "/"), schema: relative(repoRoot, schemaPath).replaceAll("\\", "/"), subcommands: expectedSubcommands, forbiddenOptionsChecked: removedOptions.length, failures };
 console.log(JSON.stringify(result, null, 2));
 if (failures.length) process.exitCode = 1;

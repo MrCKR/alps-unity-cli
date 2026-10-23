@@ -3,14 +3,14 @@ import type { ToolHandler, ToolMetadata, ToolSupportStatus } from "./types.js";
 
 const OFFLINE_TOOL_PREFIXES = ["docs.", "type-inspection."];
 const OFFLINE_TOOL_NAMES = new Set([
-  "editor.dialog.click",
+  "editor.dialog-click",
   "package.bridge-remove",
   "package.deploy",
-  "package.registry.clear",
-  "package.registry.set",
+  "package.registry-clear",
+  "package.registry-set",
   "package.restore",
-  "package.scoped-registry.add",
-  "package.scoped-registry.remove"
+  "package.scoped-registry-add",
+  "package.scoped-registry-remove"
 ]);
 const HYBRID_TOOL_NAMES = new Set([
   "package.install",

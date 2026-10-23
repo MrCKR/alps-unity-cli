@@ -43,7 +43,7 @@ namespace UnityCli
     public sealed class UnityCliCompletionProbe
     {
         [UnityCliRequired]
-        [UnityCliStringEnum("scene.gameobject", "scene.gameobject.component")]
+        [UnityCliStringEnum("scene.gameobject", "scene.gameobject-component")]
         public string ReadTool { get; set; }
         [UnityCliRequired, UnityCliAnyJson]
         public object Input { get; set; }

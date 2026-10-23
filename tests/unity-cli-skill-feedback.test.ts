@@ -114,7 +114,7 @@ test("feedback recorder accepts dotted tool names without misjudging them as hos
   try {
     const { stdout } = await runFeedback(skillRoot, [
       "-Category", "ambiguity",
-      "-Summary", "scene.gameobject.components returned two component interpretations.",
+      "-Summary", "scene.gameobject-components returned two component interpretations.",
       "-Phase", "describe",
     ]);
     const result = JSON.parse(stdout) as { ok: boolean };

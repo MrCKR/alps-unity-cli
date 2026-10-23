@@ -10,7 +10,7 @@ namespace UnityCli
 
         public ToolDescriptor Describe() => new()
         {
-            Name = "vfx.particle.clear", Summary = "Clear live ParticleSystem particles.",
+            Name = "vfx.particle-clear", Summary = "Clear live ParticleSystem particles.",
             Description = "Clear live particles from the existing ParticleSystem, optionally including child systems.",
             Group = "vfx",SideEffects = new[] { "particle-playback-edit" },
             Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 60000,
@@ -23,16 +23,16 @@ namespace UnityCli
 
         public async System.Threading.Tasks.ValueTask<VfxParticleActionResult> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            var particleSystem = VfxActionToolSupport.RequireParticle(request.Target, "vfx.particle.clear");
+            var particleSystem = VfxActionToolSupport.RequireParticle(request.Target, "vfx.particle-clear");
             var withChildren = request.WithChildren ?? true;
             var gameObjectId = particleSystem.gameObject.GetInstanceID();
             ctx.CommitEffect();
 
-            particleSystem = VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle.clear");
+            particleSystem = VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle-clear");
             particleSystem.Clear(withChildren);
-            await VfxActionToolSupport.RequireParticleState(particleSystem, withChildren, system => system.particleCount == 0, "vfx.particle.clear", ctx, ct);
-            var observed = VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle.clear");
-            return VfxActionToolSupport.BuildParticleResult(observed, "vfx.particle.clear", ctx.LogPath);
+            await VfxActionToolSupport.RequireParticleState(particleSystem, withChildren, system => system.particleCount == 0, "vfx.particle-clear", ctx, ct);
+            var observed = VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle-clear");
+            return VfxActionToolSupport.BuildParticleResult(observed, "vfx.particle-clear", ctx.LogPath);
         }
     }
 }

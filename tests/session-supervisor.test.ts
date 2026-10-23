@@ -896,7 +896,7 @@ test("session-affecting root recovers a lost response through exact consumed adm
   const sentConsumed: boolean[] = [];
   const admission: RootAdmissionLease = {
     requestId: "req_posted_listener_change",
-    command: "editor.play-mode.start",
+    command: "editor.play-mode-start",
     rootFingerprint: "f".repeat(64),
     completionContractIdentity: "observed-state-v1",
     target: "editor",
@@ -932,7 +932,7 @@ test("session-affecting root recovers a lost response through exact consumed adm
   const response = await supervisor.execute({
     requestId: admission.requestId,
     command: "catalog.editor.run",
-    input: { name: "editor.play-mode.start", input: {} },
+    input: { name: "editor.play-mode-start", input: {} },
     mutation: true,
     absoluteDeadlineMs: 7_000,
     rootAdmission: admission,
@@ -945,8 +945,8 @@ test("session-affecting root recovers a lost response through exact consumed adm
 test("post-dispatch listener recovery rejects generic tools, process changes, and catalog drift", async () => {
   const cases = [
     { name: "generic-tool", command: "project-settings.info", replacement: selection("ready", 2) },
-    { name: "process-change", command: "editor.play-mode.start", replacement: selection("ready", 2, "editor", SESSION_ID, { processId: 202 }) },
-    { name: "catalog-drift", command: "editor.play-mode.start", replacement: selection("ready", 2, "editor", SESSION_ID, { toolCatalogFingerprint: "d".repeat(64) }) },
+    { name: "process-change", command: "editor.play-mode-start", replacement: selection("ready", 2, "editor", SESSION_ID, { processId: 202 }) },
+    { name: "catalog-drift", command: "editor.play-mode-start", replacement: selection("ready", 2, "editor", SESSION_ID, { toolCatalogFingerprint: "d".repeat(64) }) },
   ];
   for (const item of cases) {
     let now = 2_000;

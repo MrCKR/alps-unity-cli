@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace UnityCli
 {
     /// <summary>
-    /// debug.events.read 的公开输入契约。
+    /// debug.events-read 的公开输入契约。
     ///
     /// 所有筛选字段都为空表示读取当前尾部；cursor 是 sequence 的排他下界，与规范化筛选和 Editor Session 绑定。
     /// sourceId 与 kind 是开放字符串：新增调试来源或种类时只追加文档化取值，不需要改变 schema。
@@ -199,7 +199,7 @@ namespace UnityCli
     }
 
     /// <summary>
-    /// debug.events.read 的公开输出契约。
+    /// debug.events-read 的公开输出契约。
     /// 分页与覆盖率字段如实描述保留窗口：缺口、丢弃与截断永远不会被伪装成完整观察。
     /// </summary>
     public sealed class DebugEventsResult

@@ -4,7 +4,7 @@ import test from "node:test";
 
 const read = (path: string): string => readFileSync(path, "utf8");
 const scheduler = read("unitypkg/Editor/Infrastructure/UnityCliWaiter.cs");
-const autotick = read("unitypkg/Editor/Tools/editor/autotick/set.cs");
+const autotick = read("unitypkg/Editor/Tools/editor/autotick-set.cs");
 const focus = read("unitypkg/Editor/Tools/editor/focus.cs");
 const focusSupport = read("unitypkg/Editor/Tools/editor/EditorWindowFocusToolSupport.cs");
 const search = read("unitypkg/Editor/Tools/editor/search.cs");
@@ -16,8 +16,8 @@ const cancel = read("src/tools/test/cancel.ts");
 const testCoordinator = read("unitypkg/Editor/Infrastructure/UnityCliTestRunCoordinator.cs");
 const completion = JSON.parse(read("contracts/tool-completion-contract.json")) as { tools: Array<{ toolName: string }> };
 
-test("editor.autotick.set只通过中央scheduler持有session状态", () => {
-  assert.match(autotick, /Name = "editor\.autotick\.set"/);
+test("editor.autotick-set只通过中央scheduler持有session状态", () => {
+  assert.match(autotick, /Name = "editor\.autotick-set"/);
   assert.match(autotick, /SupportsDryRun = true/);
   assert.match(autotick, /SideEffects = new\[\] \{ "editor-tick-rate" \}/);
   assert.equal((autotick.match(/ctx\.CommitEffect\(\);/g) ?? []).length, 1);
@@ -25,7 +25,7 @@ test("editor.autotick.set只通过中央scheduler持有session状态", () => {
   assert.match(autotick, /UnityCliWaitScheduler\.ConfigureAutoTick/);
   assert.match(autotick, /UnityCliWaitScheduler\.ReadAutoTickState/);
   assert.doesNotMatch(autotick, /EditorApplication\.update|File\.|EditorPrefs|SessionState/);
-  assert.equal(completion.tools.filter((entry) => entry.toolName === "editor.autotick.set").length, 1);
+  assert.equal(completion.tools.filter((entry) => entry.toolName === "editor.autotick-set").length, 1);
 });
 
 test("autotick由唯一Bridge主循环推进并在reload时清空", () => {
@@ -103,6 +103,6 @@ test("test.cancel只取消coordinator拥有的exact TestJobData GUID", () => {
 });
 
 test("五个Editor Utility Tool在唯一completion contract各出现一次", () => {
-  for (const name of ["editor.autotick.set", "editor.focus", "editor.search", "screenshot.editor-element", "test.cancel"])
+  for (const name of ["editor.autotick-set", "editor.focus", "editor.search", "screenshot.editor-element", "test.cancel"])
     assert.equal(completion.tools.filter((entry) => entry.toolName === name).length, 1, name);
 });

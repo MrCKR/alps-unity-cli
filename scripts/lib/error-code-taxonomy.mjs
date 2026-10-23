@@ -127,7 +127,7 @@ export const FACT_SEMANTICS = {
   CHANGED: ["true", false], READONLY: ["false", false], WRITABLE: ["false", false],
   STALE: ["false", true], BUSY: ["false", true], RUNNING: ["false", true],
   ACTIVE: ["false", false], OPEN: ["false", false], PENDING: ["true", true],
-  CANCELLED: ["true", false], BLOCKED: ["false", false], EXPIRED: ["false", false],
+  CANCELLED: ["true", false], BLOCKED: ["false", false], EXPIRED: ["false", false], DISABLED: ["false", false],
   LIMIT_EXCEEDED: ["false", false], BUDGET_EXHAUSTED: ["false", false],
   TIMEOUT: ["unknown", false], FAILED: ["unknown", false], UNKNOWN: ["unknown", false],
   ALREADY_CONSUMED: ["false", false], ALREADY_SATISFIED: ["false", false],

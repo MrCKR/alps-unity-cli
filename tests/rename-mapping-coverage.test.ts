@@ -11,13 +11,13 @@ import { existsSync } from "node:fs";
  * 都必须（1）出现在当前 command contract，（2）有对应的 bridge spec 路由，
  * （3）登记了 completion contract；（4）csharp_handler=present 的工具有对应 C# 源文件。
  */
-const mappingFiles = ["specs/catalog-rename-mapping-0.5.0.json", "specs/catalog-rename-mapping-0.7.0.json"];
+const mappingFiles = ["specs/catalog-rename-mapping-0.5.0.json", "specs/catalog-rename-mapping-0.7.0.json", "specs/catalog-rename-mapping-0.9.0.json"];
 const renames = mappingFiles
-  .flatMap((file) => (JSON.parse(readFileSync(file, "utf8")) as { mappings: Array<{ old: string; new: string }> }).mappings)
+  .flatMap((file) => (JSON.parse(readFileSync(file, "utf8")) as { mappings: Array<{ old: string; new: string; final?: string }> }).mappings)
   .filter((m) => m.old !== m.new);
-const renameTargets = new Map(renames.map(({ old: oldName, new: newName }) => [oldName, newName] as const));
+const renameTargets = new Map(renames.map(({ old: oldName, new: newName, final }) => [oldName, final ?? newName] as const));
 
-/** 早期映射的 new 名可能被后续映射再次改名，因此断言必须沿映射链走到当前名。 */
+/** 早期映射的 new 名可能被后续映射再次改名；final 列已沿链冻结到当前名，缺失时回退到链式解析。 */
 function finalToolName(name: string): string {
   const visited = new Set<string>();
   let current = name;
@@ -29,7 +29,7 @@ function finalToolName(name: string): string {
 }
 
 test("rename mapping covers renamed entries with canonical contract, bridge spec and completion registration", () => {
-  assert.equal(renames.length, 116);
+  assert.equal(renames.length, 297);
   // 通用 catalog transport 是所有 bridge 工具的兑底路由；无专用 spec 的工具仍可经 --input 调用。
   const genericRun = bridgeCommandRegistry.lookupBridgeCommand("catalog.editor.run");
   assert.ok(genericRun, "generic catalog.editor.run transport must exist");
@@ -84,6 +84,7 @@ test("old catalog identities are absent from the current contract and bridge reg
 const RESIDUE_ALLOWED = (rel: string) =>
   rel === "specs/catalog-rename-mapping-0.5.0.json" ||
   rel === "specs/catalog-rename-mapping-0.7.0.json" ||
+  rel === "specs/catalog-rename-mapping-0.9.0.json" ||
   rel === "tests/rename-mapping-coverage.test.ts" ||
   rel.startsWith(".issues");
 
@@ -109,7 +110,7 @@ const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$
 
 /** 按行聚合命中，产出 file:line [token] 行文本 形式的可操作失败信息。 */
 function scanResidue(files: string[], pattern: RegExp): string[] {
-  // 新公开名可能以旧名结尾（例如 debug.console.read 以 console.read 结尾），且内部 transport 仍与 command 段同名，
+  // 新公开名可能以旧名结尾（例如 debug.console-read 以 console.read 结尾），且内部 transport 仍与 command 段同名，
   // 所以扫描前必须先把当前 Tool 身份整体屏蔽，否则会把合法的当前身份误报成旧名残留。
   const identities = currentToolIdentities();
   const failures: string[] = [];
@@ -131,13 +132,17 @@ function scanResidue(files: string[], pattern: RegExp): string[] {
   return failures;
 }
 
-/** 当前公开 Tool 身份清单：完整名、group.command 与 command 段都必须参与屏蔽。 */
+/** 当前公开 Tool 身份清单：完整名、group.command 与 command 段都必须参与屏蔽；内部 transport 名也属于当前身份。 */
 function currentToolIdentities(): string[] {
   const identities = new Set<string>();
   for (const entry of commandContracts()) {
     identities.add(entry.bridgeCommand);
     identities.add(`${entry.group}.${entry.command}`);
     identities.add(entry.command);
+  }
+  for (const spec of bridgeCommandRegistry.specs()) {
+    identities.add(spec.bridgeCommand);
+    if (spec.toolName) identities.add(spec.toolName);
   }
   return [...identities].filter((value) => value.length > 0).sort((left, right) => right.length - left.length);
 }

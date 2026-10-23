@@ -5,13 +5,13 @@ export const renderingBridgeSpecs: BridgeCommandSpec[] = [
   { group: "rendering", command: "quality", bridgeCommand: "catalog.editor.run", toolName: "rendering.quality", buildArgs: renderingArgs, destructiveHint: true },
   { group: "rendering", command: "scene-debug", bridgeCommand: "catalog.editor.run", toolName: "rendering.scene-debug", buildArgs: renderingArgs },
   { group: "rendering", command: "stats", bridgeCommand: "catalog.editor.run", toolName: "rendering.stats", buildArgs: renderingArgs },
-  { group: "rendering", command: "pipeline.settings", bridgeCommand: "catalog.editor.run", toolName: "rendering.pipeline.settings", buildArgs: renderingArgs, destructiveHint: true },
-  { group: "rendering", command: "pipeline.info", bridgeCommand: "catalog.editor.run", toolName: "rendering.pipeline.info", buildArgs: renderingArgs }
+  { group: "rendering", command: "pipeline-settings", bridgeCommand: "catalog.editor.run", toolName: "rendering.pipeline-settings", buildArgs: renderingArgs, destructiveHint: true },
+  { group: "rendering", command: "pipeline-info", bridgeCommand: "catalog.editor.run", toolName: "rendering.pipeline-info", buildArgs: renderingArgs }
 ];
 
 function renderingArgs({ command, flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   const s = structuredInput(flags);
-  if (command === "rendering.stats" || command === "rendering.pipeline.info") {
+  if (command === "rendering.stats" || command === "rendering.pipeline-info") {
     return queryArgs(flags);
   }
   if (command === "rendering.scene-debug") {
@@ -20,7 +20,7 @@ function renderingArgs({ command, flags }: Parameters<BridgeCommandSpec["buildAr
       drawMode: stringFlag(flags, "draw-mode") ?? stringField(s, "drawMode")
     });
   }
-  if (command === "rendering.pipeline.settings") {
+  if (command === "rendering.pipeline-settings") {
     return compactArgs({ renderPipeline: stringFlag(flags, "render-pipeline") ?? stringField(s, "renderPipeline") });
   }
   // rendering.quality

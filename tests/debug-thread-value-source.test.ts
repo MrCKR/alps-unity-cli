@@ -33,9 +33,9 @@ function memberBody(text: string, name: string): string {
 
 test("the three M2 value and thread tools declare their exact public route and risk", async () => {
   const expectations = [
-    { file: "thread/list.cs", name: "debug.thread.list", sideEffects: null },
-    { file: "value/read.cs", name: "debug.value.read", sideEffects: null },
-    { file: "value/write.cs", name: "debug.value.write", sideEffects: 'SideEffects = new[] { "runtime-object-modify" }' },
+    { file: "thread-list.cs", name: "debug.thread-list", sideEffects: null },
+    { file: "value-read.cs", name: "debug.value-read", sideEffects: null },
+    { file: "value-write.cs", name: "debug.value-write", sideEffects: 'SideEffects = new[] { "runtime-object-modify" }' },
   ] as const;
   for (const expectation of expectations) {
     const text = await source(debugTools, expectation.file);
@@ -54,12 +54,12 @@ test("the three M2 value and thread tools declare their exact public route and r
     }
   }
 
-  const reader = await source(debugTools, "value/read.cs");
-  const writer = await source(debugTools, "value/write.cs");
-  const threadList = await source(debugTools, "thread/list.cs");
-  assert.doesNotMatch(reader, /ctx\.CommitEffect\(\)/, "debug.value.read is a pure read and must not cross the effect barrier");
-  assert.doesNotMatch(threadList, /ctx\.CommitEffect\(\)/, "debug.thread.list is a pure read and must not cross the effect barrier");
-  assert.match(writer, /ctx\.CommitEffect\(\);/, "debug.value.write must cross the single effect barrier");
+  const reader = await source(debugTools, "value-read.cs");
+  const writer = await source(debugTools, "value-write.cs");
+  const threadList = await source(debugTools, "thread-list.cs");
+  assert.doesNotMatch(reader, /ctx\.CommitEffect\(\)/, "debug.value-read is a pure read and must not cross the effect barrier");
+  assert.doesNotMatch(threadList, /ctx\.CommitEffect\(\)/, "debug.thread-list is a pure read and must not cross the effect barrier");
+  assert.match(writer, /ctx\.CommitEffect\(\);/, "debug.value-write must cross the single effect barrier");
   assert.match(writer, /DebugValueSupport\.PrepareWrite\(request/, "all write validation must run before the barrier");
   assert.match(writer, /DebugValueSupport\.ApplyWrite\(plan, request\)/, "the write effect must run after the barrier");
   for (const text of [reader, writer, threadList]) {
@@ -181,7 +181,7 @@ test("the debug domain still declares every limit in exactly one place", async (
   }
   assert.match(limits, /internal static string ThreadSummary\(\)/);
   assert.match(limits, /internal static string ValueSummary\(\)/);
-  for (const file of ["thread/list.cs", "value/read.cs", "value/write.cs"]) {
+  for (const file of ["thread-list.cs", "value-read.cs", "value-write.cs"]) {
     const text = await source(debugTools, file);
     assert.doesNotMatch(text, /MaxHandlesPerSession = 256|MaxHandlesGlobal = 1024|MaxValuePathLength = 16/, `${file} must not restate a limit`);
   }
@@ -204,8 +204,8 @@ test("the value read declares a derived request budget and charges one getter pe
   assert.match(limits, /ValueReadClocksWithoutPublish \* ValueReadClockMembers\s*\n?\s*\+ ValueReadHandleBudgetMembers/, "the fixed per-pass member count must be derived from the DTO member counts");
   assert.match(limits, /return ValueReadSerializations \* membersPerPass \+ ValueReadBudgetReserveGetters;/, "the derived budget must be passes times members plus a fixed reserve");
 
-  const reader = await source(debugTools, "value/read.cs");
-  assert.match(reader, /ctx\.UseReadBudget\(new UnityCliReadBudgetInput \{ MaxGetters = DebugLimits\.ValueReadGetters\(\) \}\)/, "debug.value.read must declare its derived read budget");
+  const reader = await source(debugTools, "value-read.cs");
+  assert.match(reader, /ctx\.UseReadBudget\(new UnityCliReadBudgetInput \{ MaxGetters = DebugLimits\.ValueReadGetters\(\) \}\)/, "debug.value-read must declare its derived read budget");
 
   const support = await source(debugRoot, "DebugValueSupport.cs");
   const projection = await source(debugRoot, "DebugValueProjection.cs");
@@ -224,20 +224,20 @@ test("the value read declares a derived request budget and charges one getter pe
   assert.doesNotMatch(memberScan, /TryConsumeGetter/, "scanning a whole type's members must not charge getters");
 });
 
-test("debug.method.find reports the declaring assembly so hook installation needs no guess", async () => {
+test("debug.method-find reports the declaring assembly so hook installation needs no guess", async () => {
   const reflection = await source(new URL("Editor/Infrastructure/", unitypkg), "UnityCliReflection.cs");
   assert.match(reflection, /public string AssemblyName \{ get; set; \}/);
   assert.match(reflection, /AssemblyName = assemblyName/);
   assert.match(reflection, /method\.DeclaringType\.Assembly\.GetName\(\)\.Name/);
   assert.match(reflection, /TryReserveSerializedUtf8\(assemblyName\)/, "the new member must consume the shared reflection budget");
-  const find = await source(debugTools, "method/find.cs");
+  const find = await source(debugTools, "method-find.cs");
   assert.match(find, /assemblyName of the declaring type|assemblyName/);
-  assert.match(find, /debug\.hook\.install/);
+  assert.match(find, /debug\.hook-install/);
 });
 
 test("the write path decides writability and the guard before the single effect barrier", async () => {
   const support = await source(debugRoot, "DebugValueSupport.cs");
-  const writer = await source(debugTools, "value/write.cs");
+  const writer = await source(debugTools, "value-write.cs");
   const limits = await source(debugRoot, "DebugLimits.cs");
 
   const prepareIndex = writer.indexOf("DebugValueSupport.PrepareWrite(request, ctx.UseReadBudget())");
@@ -302,9 +302,9 @@ test("the new stable error codes are registered once", async () => {
 test("every new tool is covered by the completion contract with its exact source", async () => {
   const contract = JSON.parse(await readFile(join(repoRoot, "contracts", "tool-completion-contract.json"), "utf8"));
   const expected: Record<string, string> = {
-    "debug.thread.list": "unitypkg/Editor/Tools/debug/thread/list.cs",
-    "debug.value.read": "unitypkg/Editor/Tools/debug/value/read.cs",
-    "debug.value.write": "unitypkg/Editor/Tools/debug/value/write.cs",
+    "debug.thread-list": "unitypkg/Editor/Tools/debug/thread-list.cs",
+    "debug.value-read": "unitypkg/Editor/Tools/debug/value-read.cs",
+    "debug.value-write": "unitypkg/Editor/Tools/debug/value-write.cs",
   };
   for (const [toolName, sourcePath] of Object.entries(expected)) {
     const entry = contract.tools.find((item: { toolName: string }) => item.toolName === toolName);
@@ -318,7 +318,7 @@ test("every new tool is covered by the completion contract with its exact source
 
 test("the value write path keeps the struct write-back and guard semantics in the source", async () => {
   const support = await source(debugRoot, "DebugValueSupport.cs");
-  const write = await source(debugTools, "value/write.cs");
+  const write = await source(debugTools, "value-write.cs");
   assert.match(support, /TryWritePlanValue\(/);
   assert.match(support, /array\.SetValue\(child, segment\.ArrayIndex\)/);
   assert.match(support, /plan\.RootStaticField\.SetValue\(null, child\)/);
@@ -331,7 +331,7 @@ test("the value write path keeps the struct write-back and guard semantics in th
 
 test("a published named clock can be released and the tests restore the shared clock state", async () => {
   // 回归护栏：命名逻辑时钟表是同一 domain 内共享的。如果发布者停止后无法释放，或测试不在
-  // 每个用例后清空，测试数据会继续出现在真实的 debug.value.read 结果里并占用有限名额。
+  // 每个用例后清空，测试数据会继续出现在真实的 debug.value-read 结果里并占用有限名额。
   const clocks = await source(debugRoot, "DebugClockProvenance.cs");
   assert.match(clocks, /internal static bool Release\(string name\)/);
   assert.match(clocks, /internal static void Clear\(\)/);

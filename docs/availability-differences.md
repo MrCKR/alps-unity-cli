@@ -16,7 +16,7 @@ catalog只包含必须由已打开Unity Editor或development Player提供的项�
 |------|------------------|
 | `ready` | 返回当前实例完整Tool catalog；session/listener与近期主线程pulse均已证明 |
 | `transitioning` | supervisor在同一deadline内等待lifecycle与listener generation交接 |
-| `blocked` | 普通catalog/Tool返回blocker error；exact `editor.state` / `editor.dialogs` / `editor.dialog.click`保留无业务准入的本地观察与恢复路径。`editor.state` 在两种独立证据下返回该状态：独立观察到的 Windows modal（`blocker.type="dialog"`），或当前 live pause publication 证明的故意主线程暂停（`blocker.type="debug-pause"`） |
+| `blocked` | 普通catalog/Tool返回blocker error；exact `editor.state` / `editor.dialogs` / `editor.dialog-click`保留无业务准入的本地观察与恢复路径。`editor.state` 在两种独立证据下返回该状态：独立观察到的 Windows modal（`blocker.type="dialog"`），或当前 live pause publication 证明的故意主线程暂停（`blocker.type="debug-pause"`） |
 | `unresponsive` | transport存在但主线程不可响应；返回`E_UNITY_UNRESPONSIVE` |
 | `unverifiable` | ownership证据不完整；返回`E_INSTANCE_UNVERIFIABLE`，不得误报duplicate |
 | `offline` | 不返回capability catalog；返回`E_INSTANCE_NOT_RUNNING` |
@@ -24,7 +24,7 @@ catalog只包含必须由已打开Unity Editor或development Player提供的项�
 
 没有 selector 且 CWD 不在 Unity 项目中时返回 `E_INSTANCE_REQUIRED`。静态 snapshot 不作为公开 fallback。只有三个exact Editor观察名称、六个域专用durable status名称及`tools describe`对它们的精确学习入口可使用冻结本地descriptor；status仍执行一次选定实例上的SafeStatus读取，相邻名称、alias、group、handler和其他offline Tool仍按Live catalog与普通准入失败。dialogs只在Windows可用。
 
-主线程暂停期间的可达能力是冻结名单，而不是回退清单：`tools group/list/search`、`tools describe`、两个公开入口、`debug.pause.list/wait`、`debug.pause.inspect/evaluate/resume`、`debug.events.read`、`debug.thread.list`、`debug.hook.list/info`、`debug.session.list/info`、`debug.program.list/info`、`internal.editor.state.snapshot` 与命名了 `pauseId` 的 `debug.value.read/write` 仍在发起请求的线程上直接服务，并继续使用同一个 live catalog descriptor；没有发布 catalog 时如实报告不可用，不回退到静态清单。其他业务 mutation 在任何 effect 之前返回 `E_DEBUG_MAIN_THREAD_PAUSED`。
+主线程暂停期间的可达能力是冻结名单，而不是回退清单：`tools group/list/search`、`tools describe`、两个公开入口、`debug.pause-list/wait`、`debug.pause-inspect/evaluate/resume`、`debug.events-read`、`debug.thread-list`、`debug.hook-list/info`、`debug.session-list/info`、`debug.program-list/info`、`internal.editor.state.snapshot` 与命名了 `pauseId` 的 `debug.value-read/write` 仍在发起请求的线程上直接服务，并继续使用同一个 live catalog descriptor；没有发布 catalog 时如实报告不可用，不回退到静态清单。其他业务 mutation 在任何 effect 之前返回 `E_DEBUG_MAIN_THREAD_PAUSED`。
 
 健康探针在 `mainThread.debugPause` 上单独发布当前主线程暂停；它不修改主线程 pulse。因此“transport 可达”“pulse 新鲜”和“主线程被故意暂停”不能互相替代：pulse 停止且有该 publication 时状态为 `blocked`，只有 pulse 停止而没有该 publication 时仍为 `unresponsive`，绝不用旧文件或 worker 现场推断因果。
 
@@ -68,7 +68,7 @@ Editor 与 Runtime 能力在两种模式中都保持可发现。`available`、`u
 
 进入 PlayMode 的标准步骤：
 
-1. `unitycli tools run editor.play-mode.start --input '{}'`
+1. `unitycli tools run editor.play-mode-start --input '{}'`
 2. `unitycli tools run editor.state --input '{}'`
 3. 重新 `tools describe <player-runtime 工具名>` 或直接按 `nextActions` 调用
 
@@ -80,7 +80,7 @@ Unity API版本门禁不从major版本猜测。Tool仍在当前实例catalog中�
 
 `screenshot.editor-element`只在Unity6000.7+可执行，因为它唯一使用该版本公开的UI Toolkit `VisualElement.CaptureToRenderTexture`。更早版本仍可discover/describe，但actual与framework dry-run都在render、artifact write和effect barrier之前返回`E_EDITOR_ELEMENT_CAPTURE_UNAVAILABLE`。
 
-`editor.autotick.set`会在当前Editor没有可调用的`EditorApplication.SignalTick`时返回`E_EDITOR_AUTOTICK_UNAVAILABLE`，不会注册替代update owner或持久化fallback。
+`editor.autotick-set`会在当前Editor没有可调用的`EditorApplication.SignalTick`时返回`E_EDITOR_AUTOTICK_UNAVAILABLE`，不会注册替代update owner或持久化fallback。
 
 ## Domain Reload
 

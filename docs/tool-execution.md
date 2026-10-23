@@ -54,13 +54,13 @@ unitycli tools run screenshot.from-camera --input '{}'
 
 准入等待超过`T`时返回`E_UNITY_BUSY`、`transient:true`和`retryAfterMs:100`。该错误明确证明本次业务Bridge请求未发送、effect未开始，可以稍后提交一个新root。放行后的timeout、断连或终态不明仍返回`E_EXECUTION_TIMEOUT`，表示outcome unknown，必须先观察业务状态。
 
-统一catalog在Editor和Runtime同时在线时，会在每个参与公开结果的target session分别准入；任一在线target未获准时不返回跨池的部分catalog。exact `editor.state`、`editor.dialogs`、`editor.dialog.click`和六个域专用durable status Tool是固定例外：它们使用冻结的本地descriptor完成相同contract、availability、schema、结果与envelope校验。三个Editor观察Tool不取得业务admission；域status取得独立只读root admission后向选定实例发送一次域绑定SafeStatus读取，但不取得mutation lease；其他offline Tool、相邻名称、group或handler不会获得该例外。
+统一catalog在Editor和Runtime同时在线时，会在每个参与公开结果的target session分别准入；任一在线target未获准时不返回跨池的部分catalog。exact `editor.state`、`editor.dialogs`、`editor.dialog-click`和六个域专用durable status Tool是固定例外：它们使用冻结的本地descriptor完成相同contract、availability、schema、结果与envelope校验。三个Editor观察Tool不取得业务admission；域status取得独立只读root admission后向选定实例发送一次域绑定SafeStatus读取，但不取得mutation lease；其他offline Tool、相邻名称、group或handler不会获得该例外。
 
 ## Bridge 执行约束
 
 Bridge-backed Tool由Unity Editor主线程执行。业务请求发送前，session supervisor会在准入deadline内等待首次ready记录、compile、import、domain reload和listener generation交接；只有能证明目标Unity正在运行时才等待，证明未运行时立即返回。准入放行后只创建一次execution absolute deadline，token重取、status、rebind和terminal recovery不得刷新预算。读取可在新generation重新执行完整读取；mutation只有在`editorSessionId`未改变时才可用完全相同的request bytes续接durable terminal。
 
-首次mutation POST后若Editor session改变，CLI禁止向新session再次POST，并返回`E_EXECUTION_TIMEOUT`、`outcome:unknown`。其他超时或终态前断连同样表示没有可信终态；调用方应先用业务读取或`editor.state`收集证据，再决定是否提交全新请求。同一Editor session内的exact terminal由`Library\UnityCli\terminal-cache.json`保存：完整信封最多100条且不超过8 MiB，被挤出窗口的identity只写入重投历史，并只在原调用的execution deadline之后5分钟内保留。域专用的终态账本（如`navmesh-bake-terminal-ledger`）使用同一规则：条目按原调用的execution deadline保留，过期条目在读取时剥离，因此账本不是session预算。重投历史按时间自裁剪，不需要也不应该以重启Editor作为恢复手段；超出上限时准入前返回`E_UNITY_BUSY`与`details.reason="terminal-replay-history-capacity"`或`"navmesh-terminal-ledger-capacity"`，到期后自动恢复。重投一个终态已被挤出的identity返回`E_EXECUTION_TIMEOUT`与`details.replay="blocked"`，永不复执行effect。`asset.refresh.status`、`build.player.status`、`editor.play-mode.status`、`package.install.status`、`package.remove.status`和`test.run.status`可在同一Editor session内仅凭原root `requestId`读取active phase或exact terminal；digest只由Bridge内部校验，status不获取mutation lease、不刷新deadline且不重放effect。`editor.state`使用frozen本地descriptor绕过被阻断的Live catalog和strict ordinary selector，再读取Registry/Health v3、内存主线程pulse、Bridge和Windows modal证据；它唯一可发出一次无admission的private `internal.editor.state.snapshot` observeNow POST。两个dialog recovery Tool与域status Tool保持只读观察lane，其他Tool不建立静态fallback。
+首次mutation POST后若Editor session改变，CLI禁止向新session再次POST，并返回`E_EXECUTION_TIMEOUT`、`outcome:unknown`。其他超时或终态前断连同样表示没有可信终态；调用方应先用业务读取或`editor.state`收集证据，再决定是否提交全新请求。同一Editor session内的exact terminal由`Library\UnityCli\terminal-cache.json`保存：完整信封最多100条且不超过8 MiB，被挤出窗口的identity只写入重投历史，并只在原调用的execution deadline之后5分钟内保留。域专用的终态账本（如`navmesh-bake-terminal-ledger`）使用同一规则：条目按原调用的execution deadline保留，过期条目在读取时剥离，因此账本不是session预算。重投历史按时间自裁剪，不需要也不应该以重启Editor作为恢复手段；超出上限时准入前返回`E_UNITY_BUSY`与`details.reason="terminal-replay-history-capacity"`或`"navmesh-terminal-ledger-capacity"`，到期后自动恢复。重投一个终态已被挤出的identity返回`E_EXECUTION_TIMEOUT`与`details.replay="blocked"`，永不复执行effect。`asset.refresh-status`、`build.player-status`、`editor.play-mode-status`、`package.install-status`、`package.remove-status`和`test.run-status`可在同一Editor session内仅凭原root `requestId`读取active phase或exact terminal；digest只由Bridge内部校验，status不获取mutation lease、不刷新deadline且不重放effect。`editor.state`使用frozen本地descriptor绕过被阻断的Live catalog和strict ordinary selector，再读取Registry/Health v3、内存主线程pulse、Bridge和Windows modal证据；它唯一可发出一次无admission的private `internal.editor.state.snapshot` observeNow POST。两个dialog recovery Tool与域status Tool保持只读观察lane，其他Tool不建立静态fallback。
 
 一次调用的selector、Bridge、Windows观察和错误blocker补充都消费适用的同一absolute deadline；10秒诊断上限只能缩短它，剩余时间为零时不再观察，主错误保持不变。本地Tool的公开deadline先到后只返回一个固定`E_EXECUTION_TIMEOUT` envelope；迟到Promise不能改变terminal或重放effect，且首次effect barrier已关闭。每次settlement的精确清理只处理未消费lease，并与stdout共用现有最多1秒退出宽限；Unity已消费root仍由WorkItem、coordinator或recovery owner收敛。
 
@@ -80,7 +80,7 @@ accepted、queued、phase、run ID 和 listener 字段仅属于内部 coordinato
 
 ### Memory snapshots
 
-`profiler.memory-snapshot.take` 只写 `Library/UnityCli/memory-snapshots/<name>.snap`。`path` 必须是简单 `.snap` 文件名，单文件上限4 GiB；catalog保留最新100个且总量不超过8 GiB。capture先写同根pending文件，callback成功后串行publication；timeout、cancel、reload、write fault和late callback共享唯一终态并清理orphan。`profiler.memory-snapshot.list`只分页读取该有界目录，不接受任意搜索路径。
+`profiler.memory-snapshot-take` 只写 `Library/UnityCli/memory-snapshots/<name>.snap`。`path` 必须是简单 `.snap` 文件名，单文件上限4 GiB；catalog保留最新100个且总量不超过8 GiB。capture先写同根pending文件，callback成功后串行publication；timeout、cancel、reload、write fault和late callback共享唯一终态并清理orphan。`profiler.memory-snapshot-list`只分页读取该有界目录，不接受任意搜索路径。
 
 ## 实例 Tool 完整性
 
@@ -107,7 +107,7 @@ unitycli tools run asset.delete --input '{"path":"Assets/Temp.mat"}'
 通用规则：
 
 - discovery 的 `tools group list`、`tools search` 和省略name的`command`列表默认每页20项、最大100项；继续读取时将`pageInfo.nextCursor`原值传回CLI `--cursor`。
-- `debug.console.read`、`scene.hierarchy`、`game-object.find`、`profiler.hierarchy`、`profiler.frame-debugger.events`、`profiler.memory-snapshot.list`、`debug.type.schema` 和 `debug.method.find` 使用 opaque string `nextCursor`。游标绑定原始位置、selector 与 Unity/assembly generation；Frame Debugger 游标还绑定 Editor listener、CLI enable/disable generation、事件数与捕获首尾签名。游标必须原样传回，改变 selector、generation 或捕获后返回 `E_CONTINUATION_STALE`。`truncated=true` 表示还有原始位置；不能把当前页数量当作总数。
+- `debug.console-read`、`scene.hierarchy`、`game-object.find`、`profiler.hierarchy`、`profiler.frame-debugger-events`、`profiler.memory-snapshot-list`、`debug.type-schema` 和 `debug.method-find` 使用 opaque string `nextCursor`。游标绑定原始位置、selector 与 Unity/assembly generation；Frame Debugger 游标还绑定 Editor listener、CLI enable/disable generation、事件数与捕获首尾签名。游标必须原样传回，改变 selector、generation 或捕获后返回 `E_CONTINUATION_STALE`。`truncated=true` 表示还有原始位置；不能把当前页数量当作总数。
 - 深度序列化工具（`serialized-object.read`、`asset.get-data`、`component.get`）优先传 `paths` 或 `viewQuery`。`maxDepth` 为 `0..16`，`maxArrayItems` 为 `1..1000`，`paths` 最多128条并保持输入顺序；cycle/depth 在展开前裁决，所有路径共享同一预算，非 `IList` enumerable 不会预 materialize。`truncated` 与 `nextPath` 表示被截断子树。
 - 上述 Unity 主线程读取默认共用 `10000` scanned records、`4096` nodes、`2048` getters、`4096` reflection calls、`250ms` monotonic main-thread work 和 `1 MiB` serialized UTF-8。`budget` 可收紧或提高到公开上限 `100000`、`20000`、`10000`、`20000`、`2000ms`、`8 MiB`；零、负数或超限值在读取/effect前返回 `E_SCHEMA_INVALID` 或 `E_REQUEST_BUDGET_INVALID`。
 - 文本源码工具（如 `shader.read`）使用 `offset` 和 `maxBytes` 分段读取。输出 `truncated=true` 时，下一次把 `nextOffset` 作为新的 `offset`。
@@ -142,7 +142,7 @@ unitycli tools run shader.read --input '{"path":"Assets/Shaders/Probe.shader","m
 | 错误码 | 原因 | 恢复方式 |
 |--------|------|---------|
 | `E_TOOL_TARGET_NOT_FOUND` | 名称不属于当前实例完整 Tool 目录 | 运行 `tools search <k1|k2|...>` 发现相关 Tool，再用 `tools describe` 检查 requiresPackages 和 available |
-| `E_RUNTIME_UNAVAILABLE` | Runtime 工具但非 Play Mode | 先执行 `tools run editor.play-mode.start`，transient 可重试 |
+| `E_RUNTIME_UNAVAILABLE` | Runtime 工具但非 Play Mode | 先执行 `tools run editor.play-mode-start`，transient 可重试 |
 | `E_SCHEMA_INVALID` | 输入缺少 inputSchema.required 字段 | 查看 `tools describe` 的 inputSchema |
 | `E_DRY_RUN_UNSUPPORTED` | 工具不支持 dry-run | 去除可选 `--dry-run` 后直接调用 |
 | `E_INSTANCE_CONFLICT` | 至少两个verified live process claim属于同一canonical project | 关闭重复Editor，只保留目标session |
@@ -153,7 +153,7 @@ unitycli tools run shader.read --input '{"path":"Assets/Shaders/Probe.shader","m
 | `E_EXECUTION_TIMEOUT` | 调用在终态前超时、断连或触发cross-session mutation fence | 没有可信终态；先观察业务状态，再作全新提交决策 |
 | `E_UNITY_TRANSITION_TIMEOUT` | lifecycle transition 未在 absolute deadline 内稳定 | 检查 `editor.state` 的 progress/blockers |
 
-弹窗 blocker 在原错误的 `details.blockers` 中结构化返回。其 DTO 包含 `type`、`dialogId`、`title`、`message`、`buttons`、`requiresUserAction`、`source` 和 `confidence`。使用只读 `tools run editor.dialogs` 获取当前 dialogId、`observedAt`、modal 状态和按钮；无弹窗时返回空数组，Windows 读取失败返回 `E_DIALOG_OBSERVATION_FAILED`。再以 `tools run editor.dialog.click` 精确传入 dialogId 与规范化 button label。该 Tool 会重新验证选中 Unity 的 PID/processStartedAt、dialogId 和唯一 enabled button，并证明原 dialog 已消失或不再 modal；不匹配分别返回 stale、not-found 或 ambiguous 错误，无法证明点击结果返回 `E_DIALOG_CLICK_UNPROVEN`。任意当前可见 modal 的任意 enabled button 都可点击，不设预定义按钮列表、确认或人工处理门。
+弹窗 blocker 在原错误的 `details.blockers` 中结构化返回。其 DTO 包含 `type`、`dialogId`、`title`、`message`、`buttons`、`requiresUserAction`、`source` 和 `confidence`。使用只读 `tools run editor.dialogs` 获取当前 dialogId、`observedAt`、modal 状态和按钮；无弹窗时返回空数组，Windows 读取失败返回 `E_DIALOG_OBSERVATION_FAILED`。再以 `tools run editor.dialog-click` 精确传入 dialogId 与规范化 button label。该 Tool 会重新验证选中 Unity 的 PID/processStartedAt、dialogId 和唯一 enabled button，并证明原 dialog 已消失或不再 modal；不匹配分别返回 stale、not-found 或 ambiguous 错误，无法证明点击结果返回 `E_DIALOG_CLICK_UNPROVEN`。任意当前可见 modal 的任意 enabled button 都可点击，不设预定义按钮列表、确认或人工处理门。
 
 ## Object 与 Component 修改
 
@@ -169,12 +169,12 @@ unitycli tools run component.modify --input '{"path":"Player","component":"Rigid
 unitycli tools run serialized-object.patch --input '{"path":"Player","pathPatches":[{"path":"m_Name","op":"replace","value":"PlayerModified"}]}'
 ```
 
-## debug.method.invoke
+## debug.method-invoke
 
-`debug.method.invoke` 不做调用范围限制（public/private/static/instance、任意 namespace/assembly、Editor/Runtime），且 `destructiveHint: true`。先用 `debug.method.find` 获取签名；存在同名 overload 时，将选中签名的 `parameterType` 数组作为 `parameterTypes`。公开调用即授权：
+`debug.method-invoke` 不做调用范围限制（public/private/static/instance、任意 namespace/assembly、Editor/Runtime），且 `destructiveHint: true`。先用 `debug.method-find` 获取签名；存在同名 overload 时，将选中签名的 `parameterType` 数组作为 `parameterTypes`。公开调用即授权：
 
 ```powershell
-unitycli tools run debug.method.invoke --input '{
+unitycli tools run debug.method-invoke --input '{
   "typeName":"UnityEngine.Transform",
   "methodName":"Translate",
   "parameterTypes":["UnityEngine.Vector3","UnityEngine.Space"],

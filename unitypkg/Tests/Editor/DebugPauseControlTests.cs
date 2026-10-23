@@ -43,18 +43,18 @@ namespace UnityCli.Tests
                 Assert.That(DebugPauseControl.IsReachable(command, string.Empty, null), Is.True, command + " must be served from the live publication during a pause");
             foreach (var tool in new[]
             {
-                "debug.pause.list", "debug.pause.wait", "debug.pause.inspect", "debug.pause.evaluate", "debug.pause.resume",
-                "debug.events.read", "debug.thread.list",
-                "debug.session.info", "debug.session.list", "debug.program.info", "debug.program.list",
-                "debug.hook.info", "debug.hook.list"
+                "debug.pause-list", "debug.pause-wait", "debug.pause-inspect", "debug.pause-evaluate", "debug.pause-resume",
+                "debug.events-read", "debug.thread-list",
+                "debug.session-info", "debug.session-list", "debug.program-info", "debug.program-list",
+                "debug.hook-info", "debug.hook-list"
             })
                 Assert.That(DebugPauseControl.IsReachable("catalog.editor.run", tool, "{}"), Is.True, tool + " must be reachable during a main-thread pause");
 
             // 普通业务 mutation 与未命名 pauseId 的值操作都不在名单里，因此必须走统一拒绝路径。
-            foreach (var tool in new[] { "debug.hook.install", "debug.hook.remove", "debug.session.create", "debug.session.stop", "debug.program.run", "debug.code.execute", "debug.console.clear", "editor.compile", "debug.value.read", "debug.value.write" })
+            foreach (var tool in new[] { "debug.hook-install", "debug.hook-remove", "debug.session-create", "debug.session-stop", "debug.program-run", "debug.code-execute", "debug.console-clear", "editor.compile", "debug.value-read", "debug.value-write" })
                 Assert.That(DebugPauseControl.IsReachable("catalog.editor.run", tool, "{}"), Is.False, tool + " must not be served during a main-thread pause");
-            Assert.That(DebugPauseControl.IsReachable("catalog.editor.run", "debug.value.read", "{\"pauseId\":\"pause-1\"}"), Is.True, "a value operation that names a pauseId routes to that site");
-            Assert.That(DebugPauseControl.IsReachable("catalog.editor.run", "debug.value.write", "{\"pauseId\":\"pause-1\"}"), Is.True);
+            Assert.That(DebugPauseControl.IsReachable("catalog.editor.run", "debug.value-read", "{\"pauseId\":\"pause-1\"}"), Is.True, "a value operation that names a pauseId routes to that site");
+            Assert.That(DebugPauseControl.IsReachable("catalog.editor.run", "debug.value-write", "{\"pauseId\":\"pause-1\"}"), Is.True);
             Assert.That(DebugPauseControl.IsReachable("catalog.editor.health", string.Empty, null), Is.True);
             Assert.That(DebugPauseControl.IsReachable("catalog.editor.run", string.Empty, null), Is.False, "an unreadable inner name is not a reachable capability");
         }
@@ -63,11 +63,11 @@ namespace UnityCli.Tests
         public void NestedToolNameOnlyReadsTheDeclaredOuterName()
         {
             // CLI 提交的是 { name, input }：Tool 名只能来自外层 name 字段。
-            Assert.That(DebugPauseControl.NestedToolName(WrappedRequest("debug.pause.list", "{}")), Is.EqualTo("debug.pause.list"));
-            Assert.That(DebugPauseControl.NestedToolName(WrappedRequest("debug.pause.list", "{\"name\":\"debug.events.read\"}")), Is.EqualTo("debug.pause.list"),
+            Assert.That(DebugPauseControl.NestedToolName(WrappedRequest("debug.pause-list", "{}")), Is.EqualTo("debug.pause-list"));
+            Assert.That(DebugPauseControl.NestedToolName(WrappedRequest("debug.pause-list", "{\"name\":\"debug.events-read\"}")), Is.EqualTo("debug.pause-list"),
                 "the inner business args can never supply the Tool name");
             Assert.That(DebugPauseControl.NestedToolName(WrappedRequest(string.Empty, "{}")), Is.EqualTo(string.Empty), "an empty name has no inner capability");
-            Assert.That(DebugPauseControl.NestedToolName(PlainRequest("catalog.editor.health", "{\"name\":\"debug.pause.list\"}")), Is.EqualTo(string.Empty), "only catalog.editor.run carries an inner Tool name");
+            Assert.That(DebugPauseControl.NestedToolName(PlainRequest("catalog.editor.health", "{\"name\":\"debug.pause-list\"}")), Is.EqualTo(string.Empty), "only catalog.editor.run carries an inner Tool name");
             Assert.That(DebugPauseControl.NestedToolName(null), Is.EqualTo(string.Empty));
             Assert.That(DebugPauseControl.NestedInputJson(PlainRequest("catalog.editor.health", "{}")), Is.Null, "a command without a wrapped payload has no inner input");
         }
@@ -77,7 +77,7 @@ namespace UnityCli.Tests
         {
             // F-20 回归覆盖：闸门不再从内层业务参数里找 Tool 名，因此这里必须从真实请求形状出发，
             // 走闸门实际使用的那一个入口，而不是手工把内层名称传给可达判定。
-            foreach (var tool in new[] { "debug.pause.list", "debug.events.read" })
+            foreach (var tool in new[] { "debug.pause-list", "debug.events-read" })
             {
                 string nestedTool;
                 Assert.That(DebugPauseControl.IsReachable(WrappedRequest(tool, "{}"), out nestedTool, out _), Is.True,
@@ -85,7 +85,7 @@ namespace UnityCli.Tests
                 Assert.That(nestedTool, Is.EqualTo(tool), "the resolved inner Tool name must come from the outer name field");
             }
 
-            foreach (var tool in new[] { "debug.hook.install", "debug.hook.remove", "debug.session.create", "debug.code.execute", "editor.compile" })
+            foreach (var tool in new[] { "debug.hook-install", "debug.hook-remove", "debug.session-create", "debug.code-execute", "editor.compile" })
             {
                 string nestedTool;
                 Assert.That(DebugPauseControl.IsReachable(WrappedRequest(tool, "{\"pauseId\":\"pause-1\"}"), out nestedTool, out _), Is.False,
@@ -94,7 +94,7 @@ namespace UnityCli.Tests
             }
 
             // 值操作只有内层 input 显式命名 pauseId 时才路由到该现场。
-            foreach (var tool in new[] { "debug.value.read", "debug.value.write" })
+            foreach (var tool in new[] { "debug.value-read", "debug.value-write" })
             {
                 string nestedInput;
                 Assert.That(DebugPauseControl.IsReachable(WrappedRequest(tool, "{}"), out _, out nestedInput), Is.False,
@@ -106,10 +106,10 @@ namespace UnityCli.Tests
 
             // 名单外的命令即使携带 { name, input } 也不能变成可达能力。
             string otherTool;
-            Assert.That(DebugPauseControl.IsReachable(WrappedRequest("debug.pause.list", "{}", "debug.code.execute"), out otherTool, out _), Is.False,
+            Assert.That(DebugPauseControl.IsReachable(WrappedRequest("debug.pause-list", "{}", "debug.code-execute"), out otherTool, out _), Is.False,
                 "a command outside the allowlist must not become reachable through its payload");
             Assert.That(otherTool, Is.EqualTo(string.Empty));
-            Assert.That(DebugPauseControl.IsReachable(WrappedRequest("debug.pause.list", "{}", "catalog.editor.health"), out otherTool, out _), Is.True,
+            Assert.That(DebugPauseControl.IsReachable(WrappedRequest("debug.pause-list", "{}", "catalog.editor.health"), out otherTool, out _), Is.True,
                 "a listed registry command stays reachable and needs no nested name");
             Assert.That(otherTool, Is.EqualTo(string.Empty));
         }
@@ -118,7 +118,7 @@ namespace UnityCli.Tests
         public void MainThreadPausedRejectionNamesTheActualStateAndTheReleaseRoute()
         {
             var pause = SampleMainThreadPause();
-            var failure = DebugPauseControl.MainThreadPaused("catalog.editor.run", "debug.hook.install", pause);
+            var failure = DebugPauseControl.MainThreadPaused("catalog.editor.run", "debug.hook-install", pause);
 
             Assert.That(failure.Code, Is.EqualTo(DebugPauseControl.RejectionCode));
             Assert.That(failure.Code, Is.EqualTo("E_DEBUG_MAIN_THREAD_PAUSED"));
@@ -127,13 +127,13 @@ namespace UnityCli.Tests
             Assert.That(failure.Message, Does.Not.Contain("compiling"), "a deliberate pause is not a compile gate");
             var details = (Dictionary<string, object>)failure.Details;
             Assert.That(details["pauseId"], Is.EqualTo("pause-7"));
-            Assert.That(details["toolName"], Is.EqualTo("debug.hook.install"));
+            Assert.That(details["toolName"], Is.EqualTo("debug.hook-install"));
             Assert.That(details["mainThread"], Is.EqualTo(true));
             Assert.That(details["timeoutKind"], Is.EqualTo("bounded"));
-            Assert.That(details["resumeTool"], Is.EqualTo("debug.pause.resume"));
-            Assert.That(details["pauseTool"], Is.EqualTo("debug.pause.list"));
-            Assert.That(failure.NextActions.Any(action => action.Contains("debug.pause.list", StringComparison.Ordinal)), Is.True);
-            Assert.That(failure.NextActions.Any(action => action.Contains("debug.pause.resume", StringComparison.Ordinal) && action.Contains("pause-7", StringComparison.Ordinal)), Is.True,
+            Assert.That(details["resumeTool"], Is.EqualTo("debug.pause-resume"));
+            Assert.That(details["pauseTool"], Is.EqualTo("debug.pause-list"));
+            Assert.That(failure.NextActions.Any(action => action.Contains("debug.pause-list", StringComparison.Ordinal)), Is.True);
+            Assert.That(failure.NextActions.Any(action => action.Contains("debug.pause-resume", StringComparison.Ordinal) && action.Contains("pause-7", StringComparison.Ordinal)), Is.True,
                 "the nextActions must route to the exact site");
         }
 
@@ -162,8 +162,8 @@ namespace UnityCli.Tests
             Assert.That(blocker["source"], Is.EqualTo("unity-debug-pause"));
             Assert.That(blocker["confidence"], Is.EqualTo("exact"));
             Assert.That(blocker["requiresUserAction"], Is.EqualTo(false), "a deliberate pause needs no user action");
-            Assert.That(blocker["resumeTool"], Is.EqualTo("debug.pause.resume"));
-            Assert.That(blocker["infoTool"], Is.EqualTo("debug.pause.list"));
+            Assert.That(blocker["resumeTool"], Is.EqualTo("debug.pause-resume"));
+            Assert.That(blocker["infoTool"], Is.EqualTo("debug.pause-list"));
             Assert.That(blocker["pauseId"], Is.EqualTo("pause-7"));
             Assert.That(blocker["mainThread"], Is.EqualTo(true));
             Assert.That(blocker["timeoutKind"], Is.EqualTo("bounded"));

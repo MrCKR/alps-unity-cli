@@ -63,7 +63,7 @@ namespace UnityCli
         /// <summary>按下后经过声明的毫秒数即请求释放。</summary>
         public const string HoldMs = "hold-ms";
 
-        /// <summary>保持到显式 debug.input.release、暂停、目标失效、session stop 或 Play 退出。</summary>
+        /// <summary>保持到显式 debug.input-release、暂停、目标失效、session stop 或 Play 退出。</summary>
         public const string UntilRelease = "until-release";
 
         public static bool IsDefined(string value)
@@ -254,19 +254,19 @@ namespace UnityCli
     /// </summary>
     public static class UnityCliDebugInputRouteKinds
     {
-        /// <summary>直接调用业务入口方法（debug.method.invoke）。</summary>
+        /// <summary>直接调用业务入口方法（debug.method-invoke）。</summary>
         public const string BusinessEntry = "business-entry";
 
         /// <summary>可拦截 managed wrapper 上的参数、结果或跳过原方法干预（debug.hook.*）。</summary>
         public const string ManagedWrapperInjection = "managed-wrapper-injection";
 
-        /// <summary>任意同步调试代码（debug.code.execute）。</summary>
+        /// <summary>任意同步调试代码（debug.code-execute）。</summary>
         public const string ArbitraryCode = "arbitrary-code";
 
-        /// <summary>程序 entry 在声明执行点上运行（debug.program.run）。</summary>
+        /// <summary>程序 entry 在声明执行点上运行（debug.program-run）。</summary>
         public const string ProgramEntry = "program-entry";
 
-        /// <summary>跨线程有界投递到目标线程安全点（debug.program.run 的 signal binding）。</summary>
+        /// <summary>跨线程有界投递到目标线程安全点（debug.program-run 的 signal binding）。</summary>
         public const string ThreadSafePointDelivery = "thread-safe-point-delivery";
     }
 }

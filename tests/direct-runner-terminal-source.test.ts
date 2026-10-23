@@ -23,8 +23,8 @@ test("C# no-effect completion is a closed request-specific Tool set", async () =
 
 test("Build target and scene no-ops produce approved request-specific terminals", async () => {
   const [platform, scene, dtos] = await Promise.all([
-    readFile("unitypkg/Editor/Tools/build/platform/set.cs", "utf8"),
-    readFile("unitypkg/Editor/Tools/build/scene/add.cs", "utf8"),
+    readFile("unitypkg/Editor/Tools/build/platform-set.cs", "utf8"),
+    readFile("unitypkg/Editor/Tools/build/scene-add.cs", "utf8"),
     readFile("unitypkg/Editor/Tools/build/BuildToolDtos.cs", "utf8")
   ]);
   assert.match(dtos, /BuildPlatformResult[^\n]*bool Changed[^\n]*string NoOpReason/);

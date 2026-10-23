@@ -43,7 +43,7 @@ test("lighting and prefab validate before committing and profile proof does not 
     readTool("Tools/lighting/light-probe-group.cs"),
     readTool("Tools/lighting/reflection-probe.cs"),
     readTool("Tools/prefab/modify.cs"),
-    readTool("Tools/build/profile/switch.cs")
+    readTool("Tools/build/profile-switch.cs")
   ]);
 
   assertBefore(lightProbe, "GraphicsToolSupport.ParseVector3Array", "ctx.CommitEffect();", "light probe vector validation");

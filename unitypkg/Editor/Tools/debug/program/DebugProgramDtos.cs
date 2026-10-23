@@ -25,7 +25,7 @@ namespace UnityCli
 
         [UnityCliRequired] public string Entry { get; set; }
 
-        /// <summary>exact 方法目标；与 debug.hook.install 使用同一 target 形状与同一解析器。</summary>
+        /// <summary>exact 方法目标；与 debug.hook-install 使用同一 target 形状与同一解析器。</summary>
         [UnityCliRequired] public MethodHookTargetSpec Target { get; set; }
     }
 

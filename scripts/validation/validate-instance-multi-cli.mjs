@@ -27,9 +27,9 @@ function envelope(result) {
 }
 
 const beforeValidationFiles = (await readdir(validationRoot)).sort();
-let result = await tool("debug.code.execute", `UnityEditor.SessionState.SetInt(${JSON.stringify(counterKey)}, 0); return 0;`);
+let result = await tool("debug.code-execute", `UnityEditor.SessionState.SetInt(${JSON.stringify(counterKey)}, 0); return 0;`);
 if (result.code !== 0 || envelope(result).ok !== true) throw new Error(`Counter setup failed: ${result.stdout}`);
-result = await tool("debug.code.execute", `var p=System.IO.Path.Combine(System.Environment.GetEnvironmentVariable("UNITYCLI_DATA_DIR"),"instances",${JSON.stringify(instanceId + ".json")});System.IO.File.Delete(p);return !System.IO.File.Exists(p);`);
+result = await tool("debug.code-execute", `var p=System.IO.Path.Combine(System.Environment.GetEnvironmentVariable("UNITYCLI_DATA_DIR"),"instances",${JSON.stringify(instanceId + ".json")});System.IO.File.Delete(p);return !System.IO.File.Exists(p);`);
 if (result.code !== 0 || envelope(result).ok !== true) throw new Error(`Registry removal fixture failed: ${result.stdout}`);
 
 const shortWait = run(["tools", "run", "project-settings.info", "--instance", instanceId, "--timeout-ms", "500"]);
@@ -41,7 +41,7 @@ for (const [index, item] of longResults.entries()) {
   if (item.code !== 0 || parsed.ok !== true || parsed.data.projectName !== "UnityProject") throw new Error(`Long waiter ${index} failed: ${item.stdout}`);
 }
 
-const increments = Array.from({ length: 4 }, () => tool("debug.code.execute", `var v=UnityEditor.SessionState.GetInt(${JSON.stringify(counterKey)},0);System.Threading.Thread.Sleep(100);UnityEditor.SessionState.SetInt(${JSON.stringify(counterKey)},v+1);return v+1;`, 60_000));
+const increments = Array.from({ length: 4 }, () => tool("debug.code-execute", `var v=UnityEditor.SessionState.GetInt(${JSON.stringify(counterKey)},0);System.Threading.Thread.Sleep(100);UnityEditor.SessionState.SetInt(${JSON.stringify(counterKey)},v+1);return v+1;`, 60_000));
 const reads = Array.from({ length: 4 }, () => run(["tools", "run", "project-settings.info", "--instance", instanceId, "--timeout-ms", "60000"]));
 const lists = Array.from({ length: 4 }, () => run(["instances", "list", "--all"]));
 const [incrementResults, readResults, listResults] = await Promise.all([Promise.all(increments), Promise.all(reads), Promise.all(lists)]);
@@ -52,10 +52,10 @@ for (const [index, item] of listResults.entries()) {
   if (item.code !== 0 || parsed.ok !== true || parsed.data.invalidRecordCount !== undefined || parsed.data.instances.length !== 1) throw new Error(`List ${index} failed: ${item.stdout}`);
 }
 
-const counter = await tool("debug.code.execute", `return UnityEditor.SessionState.GetInt(${JSON.stringify(counterKey)},-1);`);
+const counter = await tool("debug.code-execute", `return UnityEditor.SessionState.GetInt(${JSON.stringify(counterKey)},-1);`);
 const counterEnvelope = envelope(counter);
 if (counter.code !== 0 || counterEnvelope.ok !== true || counterEnvelope.data.runtime.returnValue !== 4) throw new Error(`Counter expected 4: ${counter.stdout}`);
-const cleanup = await tool("debug.code.execute", `UnityEditor.SessionState.EraseInt(${JSON.stringify(counterKey)});return true;`);
+const cleanup = await tool("debug.code-execute", `UnityEditor.SessionState.EraseInt(${JSON.stringify(counterKey)});return true;`);
 if (cleanup.code !== 0 || envelope(cleanup).ok !== true) throw new Error(`Counter cleanup failed: ${cleanup.stdout}`);
 
 const record = JSON.parse(await readFile(registryPath, "utf8"));

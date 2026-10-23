@@ -18,7 +18,7 @@ namespace UnityCli
         internal static MethodHookInstallPlan PrepareInstall(MethodHookInstallRequest request, string owner = null)
         {
             EnsureReady();
-            if (request == null) throw new BridgeCommandException("E_SCHEMA_INVALID", "debug.hook.install requires a request body.", "Pass target plus capture or callbacks.");
+            if (request == null) throw new BridgeCommandException("E_SCHEMA_INVALID", "debug.hook-install requires a request body.", "Pass target plus capture or callbacks.");
             var capture = NormalizeCapture(request.Capture);
             var callbacks = NormalizeCallbacks(request.Callbacks);
             if (!capture.HasBehaviour(callbacks))
@@ -104,8 +104,8 @@ namespace UnityCli
                     new Dictionary<string, object> { { "sessionId", listener.SessionId }, { "path", "$.listener.sessionId" } },
                     new[]
                     {
-                        "Run tools run debug.session.list to read the loaded session definitions.",
-                        "Run tools run debug.session.create to establish a new owner, then install the listener again."
+                        "Run tools run debug.session-list to read the loaded session definitions.",
+                        "Run tools run debug.session-create to establish a new owner, then install the listener again."
                     });
             }
             var state = info.Session == null ? string.Empty : info.Session.State;
@@ -122,8 +122,8 @@ namespace UnityCli
                 },
                 new[]
                 {
-                    "Run tools run debug.session.info to read the current state and cleanup detail.",
-                    "Run tools run debug.session.create to start a new session for this investigation."
+                    "Run tools run debug.session-info to read the current state and cleanup detail.",
+                    "Run tools run debug.session-create to start a new session for this investigation."
                 });
         }
 
@@ -143,8 +143,8 @@ namespace UnityCli
                 },
                 new[]
                 {
-                    "Run tools run debug.hook.remove for a listener you no longer need, then install it again.",
-                    "Run tools run debug.session.info on the owning session to read its planned injection budget."
+                    "Run tools run debug.hook-remove for a listener you no longer need, then install it again.",
+                    "Run tools run debug.session-info on the owning session to read its planned injection budget."
                 });
         }
 
@@ -169,9 +169,9 @@ namespace UnityCli
                 },
                 new[]
                 {
-                    "Run tools run debug.program.replace to change the program that owns this binding.",
-                    "Run tools run debug.program.stop or debug.program.remove to release the program-owned binding.",
-                    "Run tools run debug.program.list to read the programs of this Editor session."
+                    "Run tools run debug.program-replace to change the program that owns this binding.",
+                    "Run tools run debug.program-stop or debug.program-remove to release the program-owned binding.",
+                    "Run tools run debug.program-list to read the programs of this Editor session."
                 });
         }
 
@@ -231,7 +231,7 @@ namespace UnityCli
         /// <summary>effect barrier 之后建立 Attachment、原子保存并读回，然后发布新的不可变派发快照。</summary>
         internal static MethodHookInstallResult ApplyInstall(MethodHookInstallPlan plan, MethodHookPreparedCallbacks prepared)
         {
-            if (plan == null) throw new BridgeCommandException("E_SCHEMA_INVALID", "The install plan is unavailable.", "Submit debug.hook.install again.");
+            if (plan == null) throw new BridgeCommandException("E_SCHEMA_INVALID", "The install plan is unavailable.", "Submit debug.hook-install again.");
             var definition = new MethodHookDefinition
             {
                 HookId = "hook-" + Guid.NewGuid().ToString("N").Substring(0, 16),
@@ -968,7 +968,7 @@ namespace UnityCli
                 {
                     new MethodHookPlannedEffect
                     {
-                        Type = "debug.hook.install",
+                        Type = "debug.hook-install",
                         State = "planned",
                         Note = "Would compile callback source when present, create one definition, attach the owned Adapter to the exact target and publish this session's snapshot. Compilation success and business hits are not proven by this preview."
                     }
@@ -998,7 +998,7 @@ namespace UnityCli
                 {
                     new MethodHookPlannedEffect
                     {
-                        Type = "debug.hook.replace",
+                        Type = "debug.hook-replace",
                         HookId = definition.HookId,
                         State = MethodHookStateText.Of(definition.State),
                         Note = "Would compile the new callback source when present and swap this definition's capture and callback configuration without reinstalling the target patch."
@@ -1022,7 +1022,7 @@ namespace UnityCli
                 {
                     new MethodHookPlannedEffect
                     {
-                        Type = "debug.hook.enable",
+                        Type = "debug.hook-enable",
                         HookId = definition.HookId,
                         State = MethodHookStateText.Of(definition.State),
                         Note = plan.NoOp
@@ -1048,7 +1048,7 @@ namespace UnityCli
                 {
                     new MethodHookPlannedEffect
                     {
-                        Type = "debug.hook.disable",
+                        Type = "debug.hook-disable",
                         HookId = definition.HookId,
                         State = MethodHookStateText.Of(definition.State),
                         Note = plan.NoOp
@@ -1076,7 +1076,7 @@ namespace UnityCli
                 {
                     new MethodHookPlannedEffect
                     {
-                        Type = "debug.hook.remove",
+                        Type = "debug.hook-remove",
                         HookId = definition.HookId,
                         State = "planned",
                         Note = remaining == 0
