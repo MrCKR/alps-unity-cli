@@ -15,7 +15,7 @@ export type ProjectToolDiscovery = { ok: true; tools: ResolvedToolMetadata[]; mo
 
 const LIVE_DESCRIPTOR_FIELDS = new Set([
   "name", "summary", "description", "group", "source", "inputSchema", "outputSchema",
-  "destructiveHint", "sideEffects", "supportsDryRun", "permissions", "requiresPackages", "examples",
+  "destructiveHint", "sideEffects", "supportsDryRun", "permissions", "requiresPackages", "examples", "notes",
   "target", "availabilityScope", "playModeSupport", "contractProfile", "defaultTimeoutMs", "timeoutMs",
   "completionContract", "available", "unavailableReason",
 ]);
@@ -79,6 +79,7 @@ export function projectDescriptorToToolMetadata(value: unknown): ResolvedToolMet
     playModeSupport,
     timeoutMs: numberProp(descriptor, "defaultTimeoutMs") ?? numberProp(descriptor, "timeoutMs"),
     permissions: stringArrayProp(descriptor, "permissions"),
+    notes: stringArrayProp(descriptor, "notes"),
     requiresPackages: stringArrayProp(descriptor, "requiresPackages"),
     examples,
     target,
@@ -106,6 +107,7 @@ function projectDescriptorInvalidFields(value: unknown): string[] {
     ["playModeSupport", !!playModeSupportProp(descriptor, "playModeSupport")], ["target", !!toolTargetProp(descriptor, "target")],
     ["availabilityScope", !!availabilityScopeProp(descriptor, "availabilityScope")], ["completionContract", !!completionContractProp(descriptor, "completionContract")],
     ["contractProfile", !!contractProfile],
+    ["notes", !("notes" in descriptor) || !!stringArrayProp(descriptor, "notes")],
     ["examples", !!(name && inputSchema && toolExamplesProp(descriptor, "examples", name, inputSchema))],
   ];
   return [...new Set([...unknownFields, ...checks.filter(([, valid]) => !valid).map(([field]) => field), ...officialAttributeContractInvalidFields(descriptor)])];

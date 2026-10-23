@@ -641,9 +641,9 @@
     "TIMED_OUT"
   ],
   "counts": {
-    "files": 787,
-    "codes": 1008,
-    "classified": 1008,
+    "files": 788,
+    "codes": 1009,
+    "classified": 1009,
     "unclassified": 0,
     "dynamicConcatenationSites": 0
   },
@@ -10579,6 +10579,17 @@
     {
       "code": "E_TIMELINE_FRAME_RATE_INVALID",
       "fact": "INVALID",
+      "effectStarted": "false",
+      "transient": false,
+      "prefix": "TIMELINE",
+      "renameTo": null,
+      "emitters": [
+        "unitypkg/Editor/Tools/timeline/TimelineToolSupport.cs"
+      ]
+    },
+    {
+      "code": "E_TIMELINE_FRAME_RATE_UNSUPPORTED",
+      "fact": "UNSUPPORTED",
       "effectStarted": "false",
       "transient": false,
       "prefix": "TIMELINE",

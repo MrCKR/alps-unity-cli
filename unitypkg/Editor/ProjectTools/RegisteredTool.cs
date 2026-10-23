@@ -16,6 +16,7 @@ namespace UnityCli
         private readonly string[] sideEffects;
         private readonly string[] permissions;
         private readonly string[] requiresPackages;
+        private readonly string[] notes;
         private readonly string examplesJson;
 
         internal RegisteredTool(
@@ -46,6 +47,7 @@ namespace UnityCli
             SupportsDryRun = descriptor.SupportsDryRun;
             permissions = (descriptor.Permissions ?? Array.Empty<string>()).ToArray();
             requiresPackages = (descriptor.RequiresPackages ?? Array.Empty<string>()).ToArray();
+            notes = (descriptor.Notes ?? Array.Empty<string>()).ToArray();
             examplesJson = UnityCliSerializer.Serialize(
                 UnityCliSerializer.Parse(UnityCliSerializer.Serialize(descriptor.Examples ?? Array.Empty<ToolExample>())));
             Target = string.IsNullOrEmpty(descriptor.Target) ? "editor" : descriptor.Target;
@@ -75,6 +77,8 @@ namespace UnityCli
         public bool SupportsDryRun { get; }
         public IReadOnlyList<string> Permissions { get { return new ReadOnlyCollection<string>(permissions.ToArray()); } }
         public IReadOnlyList<string> RequiresPackages { get { return new ReadOnlyCollection<string>(requiresPackages.ToArray()); } }
+        /// <summary>机制细节与配额；只供 --fields notes 读取，不进入默认 describe。</summary>
+        public IReadOnlyList<string> Notes { get { return new ReadOnlyCollection<string>(notes.ToArray()); } }
         public string Target { get; }
         public string AvailabilityScope { get; }
         public string PlayModeSupport { get; }
@@ -111,6 +115,7 @@ namespace UnityCli
         private readonly string[] sideEffects;
         private readonly string[] permissions;
         private readonly string[] requiresPackages;
+        private readonly string[] notes;
         private readonly string examplesJson;
 
         internal RegisteredToolDescriptor(RegisteredTool tool)
@@ -127,6 +132,7 @@ namespace UnityCli
             SupportsDryRun = tool.SupportsDryRun;
             permissions = tool.Permissions.ToArray();
             requiresPackages = tool.RequiresPackages.ToArray();
+            notes = tool.Notes.ToArray();
             examplesJson = tool.ExamplesJson;
             Target = tool.Target;
             AvailabilityScope = tool.AvailabilityScope;
@@ -148,6 +154,7 @@ namespace UnityCli
         public bool SupportsDryRun { get; }
         public IReadOnlyList<string> Permissions { get { return new ReadOnlyCollection<string>(permissions.ToArray()); } }
         public IReadOnlyList<string> RequiresPackages { get { return new ReadOnlyCollection<string>(requiresPackages.ToArray()); } }
+        public IReadOnlyList<string> Notes { get { return new ReadOnlyCollection<string>(notes.ToArray()); } }
         public string Target { get; }
         public string AvailabilityScope { get; }
         public string PlayModeSupport { get; }
@@ -669,6 +676,7 @@ namespace UnityCli
                 || Utf8ByteCount(definition.OutputSchema) > 1024 * 1024
                 || Utf8ByteCount(definition.ExamplesJson) > 256 * 1024
                 || !BoundedStringList(definition.SideEffects, 128, 256)
+                || !BoundedStringList(definition.Notes, 64, 8192)
                 || !BoundedStringList(definition.Permissions, 128, 256)
                 || !BoundedStringList(definition.RequiresPackages, 128, 256))
                 throw new ArgumentException("Tool descriptor exceeds a UTF-8 catalog transport bound: " + definition.Name);

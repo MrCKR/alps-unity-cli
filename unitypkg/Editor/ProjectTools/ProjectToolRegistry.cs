@@ -1175,6 +1175,7 @@ namespace UnityCli
             if (!(bool)data["available"])
                 data["unavailableReason"] = ToolUnavailableReason(definition);
             if (definition.SideEffects.Count > 0) data["sideEffects"] = definition.SideEffects.ToArray();
+            if (definition.Notes.Count > 0) data["notes"] = definition.Notes.ToArray();
             if (definition.Permissions.Count > 0) data["permissions"] = definition.Permissions.ToArray();
             if (definition.RequiresPackages.Count > 0) data["requiresPackages"] = definition.RequiresPackages.ToArray();
             return data;

@@ -127,14 +127,22 @@ Tool summary 必须：
 
 ### Describe 输出
 
-`tools describe <tool>` 是单能力学习入口，必须自足。
+`tools describe <tool>` 是单能力学习入口，分两层交付：默认集合负责调用决策，`--fields` 按需读取细节。
+
+默认返回集合固定为：`name`、`description`、`params`、`hasNotes`、`destructiveHint`、`sideEffects`、`playModeSupport`、`supportsDryRun`、`target`、`available`、`requiresPackages`（仅不可用时附加 `unavailableReason`）。任何 Tool 不得缺项。
+
+- `--fields <name,...>` 整体替换默认集合，未知字段名返回 `E_SCHEMA_INVALID` 并列出合法字段；`--detail full` 等价于全字段。
+- `params` 是 schema 投影：顶层属性 `名字:类型`，必填加 `*`，`$ref` 取 `$defs` 名，嵌套不展开。
+- `inputSchema`、`examples`、`notes` 只能通过 `--fields` 读取。
 
 字段职责：
 
 - `summary` 与 `group`：只在 group list/search 发现阶段路由，不重复进入 describe。
-- `description`：调用阶段判断，包括边界、默认行为、相邻工具差异、副作用、PlayMode、安全确认、主要结果、输出控制和跨字段约束。
-- `inputSchema`：字段级输入契约；完整 `outputSchema` 留在内部 terminal 校验与 contract，不进入公开 describe。
-- `examples`：返回 `description`、结构化 `input` 和按需 `execution`，不重复固定 CLI argv。
+- `description`：调用阶段判断，包括边界、默认行为、相邻工具差异、副作用、PlayMode、安全确认、主要结果、输出控制和跨字段约束；预算见《Descriptor 预算与归属》。
+- `params`：调用形状，让 AI 无需读取完整 schema 也能构造输入。
+- `inputSchema`：按需读取的字段级输入契约；完整 `outputSchema` 留在内部 terminal 校验与 contract，不进入公开 describe。
+- `notes`：机制细节、配额与恢复流程；默认不返回，只能经 `--fields notes` 读取，内容预算见《Descriptor 预算与归属》。
+- `examples`：按需读取，返回 `description`、结构化 `input` 和按需 `execution`，不重复固定 CLI argv。
 - 风险与状态字段：公开返回 destructiveHint、非空 sideEffects、supportsDryRun、playModeSupport、target、非空依赖，以及仅不可用时的 available:false/unavailableReason。
 
 Describe 必须按需覆盖：
@@ -143,7 +151,6 @@ Describe 必须按需覆盖：
 - 必填输入、默认行为、互斥字段、字段优先级、路径或目标解析顺序。
 - 相邻工具选择，特别是 alias、兼容入口、fallback 和推荐主入口。
 - 持久化、副作用、PlayMode、session-affecting 与 `--dry-run` 语义。
-- 大输出的分页、截断、continuation、artifact path、`inlineBase64` 等控制。
 - 读取型 Tool 的只读边界，不得暗示刷新、修改或触发 Unity 状态变化。
 
 Describe 不得包含：
@@ -157,6 +164,35 @@ Describe 不得包含：
 - 陌生 AI 能否仅凭 describe 一次调用成功。
 - `tools search <k1|k2|...>` 是否会因 describe 文本误导到错误能力。
 - discovery summary、schema、examples、风险字段、Bridge 行为、错误 envelope 和文档是否一致。
+
+## Descriptor 预算与归属
+
+`describe` 的输出直接占用调用方上下文，并且会随对话轮次重复发送。预算与归属是硬规范。
+
+预算：
+
+- 单 Tool `description` ≤ 300 token（约 1,200 字符）；超过 150 token 记录 WARN。
+- 单 Tool `notes` 合计 ≤ 2,000 token。
+- 默认 describe 输出 ≤ 1,000 token；单域 `tools group list` ≤ 1,000 token。
+
+三层归属，判定问题是「删掉这句会不会导致调用失败或误读结果」：
+
+- 会：写进 `description`，包括前置条件、互斥或必填约束、成功证明什么、独有失败码、副作用、PlayMode 差异。
+- 不会但影响理解：写进 `notes`，包括配额数字、机制推导、线程或生命周期细节、失败后的完整恢复流程。
+- 全局不变量（调用授权、等待、错误恢复、输出格式）：留在本 Skill 正文，不写进 descriptor。
+
+约束：
+
+- `description` 与 `notes` 只写结论，不写叙事推理；禁止 `so`、`because`、`which means` 串起的因果长句。
+- 域内共用文本用 canonical 源码中的共享常量（`static readonly string[]`）引用，禁止在 descriptor 中复制正文。
+- descriptor 内禁止出现 Skill 路径、reference 路径或其他非产品路径：Skill 是安装投影，CLI 不得依赖它。
+- `inputSchema` 与 `examples` 不属于可持续压缩项：schema 是调用正确性契约，示例保持最小可用 1–2 条。
+
+扫描与门禁：
+
+- `node scripts/audit-descriptor-budget.mjs` 离线扫描全部 descriptor，输出 `description`、`notes`、超限清单与汇总。
+- `npm run release:check` 聚合架构、契约、Issue 台账、版本同步、发布凭据与描述预算，输出 `{pass, blockers, warnings}`。
+- 开发期预算结论只报 WARN，不阻断实现；发布前 blockers 必须为空，warnings 必须告知项目所有者。
 
 ## 自定义 C# 能力目录
 

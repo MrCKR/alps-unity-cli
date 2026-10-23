@@ -38,6 +38,8 @@ namespace UnityCli
             internal string Path;
             internal string Guid;
             internal string HashBefore;
+            internal PropertyInfo EditorSettingsProperty;
+            internal TimelineToolSupport.FrameRateMember FrameRateMember;
         }
 
         internal sealed class TrackRecord
@@ -277,23 +279,27 @@ namespace UnityCli
                 Guid = plan.Guid,
                 Name = fresh == null ? null : fresh.name,
                 Type = fresh == null ? null : fresh.GetType().FullName,
-                FrameRate = fresh == null ? 0d : TimelineToolSupport.ReadFrameRate(fresh, plan.TimelineType),
+                FrameRate = fresh == null ? 0d : TimelineToolSupport.ReadFrameRate(fresh, plan.EditorSettingsProperty, plan.FrameRateMember),
                 Duration = fresh == null ? 0d : TimelineToolSupport.ReadDoubleProperty(fresh, plan.TimelineType, "duration"),
                 TrackCount = tracks.Count,
                 SizeBytes = file.Exists ? file.Length : 0L
             };
         }
 
+        /// <summary>effect 前冻结 asset identity 与 frame-rate 成员；成员不可用时在写入前失败。</summary>
         private static AssetPlan ResolveTimeline(string reference)
         {
             var read = TimelineReadToolSupport.Prepare(reference, 0, 1, 32, 1);
+            var settings = TimelineToolSupport.RequireEditorSettingsProperty(read.TimelineType, read.Path);
             return new AssetPlan
             {
                 Asset = read.Asset,
                 TimelineType = read.TimelineType,
                 Path = read.Path,
                 Guid = read.Guid,
-                HashBefore = HashFile(read.Path)
+                HashBefore = HashFile(read.Path),
+                EditorSettingsProperty = settings,
+                FrameRateMember = TimelineToolSupport.RequireFrameRateMember(settings.PropertyType, read.TimelineType, read.Path)
             };
         }
 

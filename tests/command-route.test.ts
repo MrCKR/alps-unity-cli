@@ -97,8 +97,8 @@ test("command help复用精简Tool descriptor且不公开结果schema", async ()
   const result = await execute(["command", "UnityPipeline_eval", "--help"], runtimeFor([attributeEvalTool()], []) as never);
   assert.ok(result.ok, JSON.stringify(result));
   const tool = (result.data as { tool: Record<string, unknown> }).tool;
-  assert.ok(tool.inputSchema);
-  for (const field of ["outputSchema", "group", "permissions", "available", "contractProfile", "summary"])
+  assert.ok(Array.isArray(tool.params));
+  for (const field of ["outputSchema", "group", "permissions", "contractProfile", "summary", "inputSchema", "examples", "notes"])
     assert.equal(Object.hasOwn(tool, field), false, field);
 });
 

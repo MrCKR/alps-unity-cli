@@ -29,7 +29,7 @@ namespace UnityCli
         {
             Name = "timeline.create",
             Summary = "Create a TimelineAsset with a validated .playable path and frame rate, then prove its GUID and serialized artifact.",
-            Description = "Requires com.unity.timeline. frameRate defaults to 60 and must be finite in [0.000001,1000]. Existing Timeline assets require overwrite=true and retain their GUID; another asset type or orphan metadata at the path is always rejected. Dry-run validates the package API and complete create plan without writing assets.",
+            Description = "Requires com.unity.timeline. frameRate defaults to 60 and must be finite in [0.000001,1000]; it is written through editorSettings.frameRate (Timeline 1.5 and newer) or the legacy editorSettings.fps member on earlier versions, and the Tool fails with E_TIMELINE_FRAME_RATE_UNSUPPORTED when neither member is writable. The created asset keeps that member's precision. Existing Timeline assets require overwrite=true and retain their GUID; another asset type or orphan metadata at the path is always rejected. Dry-run validates the package API and complete create plan without writing assets.",
             Group = "timeline",
             DestructiveHint = true,
             SupportsDryRun = true,

@@ -18,7 +18,7 @@ import {
 import { failure, success } from "../output.js";
 import { ExtensionInstallerError } from "../extensions/installer.js";
 import type { CliResult } from "../types.js";
-import { publicToolDescriptor, resolveCatalogTool, type ToolCatalogRuntime } from "./catalog.js";
+import { publicToolDescriptor, PUBLIC_DESCRIPTOR_FIELDS, isPublicDescriptorField, resolveCatalogTool, type PublicDescriptorField, type ToolCatalogRuntime } from "./catalog.js";
 import { builtinToolMetadata, type ResolvedToolMetadata } from "./metadata/index.js";
 import { groupSummary } from "./tools/group-summaries.js";
 
@@ -171,13 +171,15 @@ export async function projectCatalogDescribe(
   absoluteDeadlineMs?: number,
 ): Promise<CliResult> {
   if (!name) return failure(requestId, "TOOLS_DESCRIBE_NAME_REQUIRED", "Pass a tool name: unitycli tools describe <tool>.", ["Run unitycli tools group to see tool groups."]);
+  const selection = describeSelection(flags, requestId);
+  if (selection.kind === "error") return selection.result;
   const resolved = await resolveCatalogTool(name, flags, runtime, requestId, absoluteDeadlineMs);
   if (!resolved.ok) return resolved;
   if (!resolved.tool) return failure(requestId, "E_TOOL_TARGET_NOT_FOUND", `Tool not found for target: ${name}.`, [
     "Run unitycli tools group to see tool groups.",
     "Run unitycli tools search <k1|k2|...> to find related tools.",
   ]);
-  const data = publicToolDescriptor(resolved.tool);
+  const data = publicToolDescriptor(resolved.tool, selection.fields);
   if (extensionIdForToolName(resolved.tool.name)) {
     try {
       const snapshot = await freezeExtensionAvailability(flags, runtime);
@@ -193,6 +195,36 @@ export async function projectCatalogDescribe(
     }
   }
   return success(requestId, data);
+}
+
+/** describe 字段选择结果；error 携带已构造的稳定 envelope。 */
+type DescribeSelection = { kind: "ok"; fields?: readonly PublicDescriptorField[] } | { kind: "error"; result: CliResult };
+
+/** 解析 describe 字段选择：--fields 整体替换默认集合，--detail full 等价于全字段。 */
+function describeSelection(flags: Record<string, string | boolean>, requestId: string): DescribeSelection {
+  const fieldsFlag = flags.fields;
+  const detailFlag = flags.detail;
+  if (fieldsFlag !== undefined && detailFlag !== undefined) {
+    return { kind: "error", result: failure(requestId, "E_SCHEMA_INVALID", "Pass either --fields or --detail, not both.", [
+      "Use --fields <name,...> for an exact field set, or --detail full for every public field.",
+    ], { option: "--fields", conflictingOption: "--detail" }) };
+  }
+  if (detailFlag !== undefined) {
+    if (detailFlag !== "full") {
+      return { kind: "error", result: failure(requestId, "E_SCHEMA_INVALID", "--detail accepts only 'full'.", ["Pass --detail full for every public field."], { path: "$.detail", expected: "full", actual: String(detailFlag) }) };
+    }
+    return { kind: "ok", fields: PUBLIC_DESCRIPTOR_FIELDS };
+  }
+  if (fieldsFlag === undefined) return { kind: "ok" };
+  const tokens = String(fieldsFlag).split(",").map((token) => token.trim()).filter(Boolean);
+  if (tokens.length === 0) {
+    return { kind: "error", result: failure(requestId, "E_SCHEMA_INVALID", "--fields requires at least one field name.", [`Use only: ${PUBLIC_DESCRIPTOR_FIELDS.join(", ")}.`], { path: "$.fields", expected: "non-empty field list" }) };
+  }
+  const unknown = tokens.filter((token) => !isPublicDescriptorField(token));
+  if (unknown.length > 0) {
+    return { kind: "error", result: failure(requestId, "E_SCHEMA_INVALID", `Unknown describe field: ${unknown.join(", ")}.`, [`Use only: ${PUBLIC_DESCRIPTOR_FIELDS.join(", ")}.`], { path: "$.fields", unknownFields: unknown }) };
+  }
+  return { kind: "ok", fields: [...new Set(tokens)] as PublicDescriptorField[] };
 }
 
 interface TargetSummaries {

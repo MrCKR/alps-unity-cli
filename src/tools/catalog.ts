@@ -178,6 +178,7 @@ function liveRegistrationIdentity(tool: ToolMetadata): Record<string, unknown> {
     sideEffects: tool.sideEffects ?? [],
     supportsDryRun: tool.supportsDryRun ?? false,
     permissions: tool.permissions ?? [],
+    notes: tool.notes ?? [],
     requiresPackages: tool.requiresPackages ?? [],
     examples: tool.examples ?? [],
     target: tool.target,
@@ -202,24 +203,103 @@ export function uniqueByName(tools: ToolMetadata[]): ToolMetadata[] {
   return [...result.values()];
 }
 
+/** 公开 describe 允许返回的字段闭集；--fields 只接受这些名字。 */
+export const PUBLIC_DESCRIPTOR_FIELDS = [
+  "name",
+  "description",
+  "params",
+  "hasNotes",
+  "destructiveHint",
+  "sideEffects",
+  "playModeSupport",
+  "supportsDryRun",
+  "target",
+  "available",
+  "unavailableReason",
+  "requiresPackages",
+  "inputSchema",
+  "examples",
+  "notes",
+] as const;
+
+export type PublicDescriptorField = (typeof PUBLIC_DESCRIPTOR_FIELDS)[number];
+
+/** 默认投影只含调用决策所需字段；参数细节与机制说明必须显式按需读取。 */
+const DEFAULT_PUBLIC_DESCRIPTOR_FIELDS: readonly PublicDescriptorField[] = [
+  "name",
+  "description",
+  "params",
+  "hasNotes",
+  "destructiveHint",
+  "sideEffects",
+  "playModeSupport",
+  "supportsDryRun",
+  "target",
+  "available",
+  "unavailableReason",
+  "requiresPackages",
+];
+
+/** 判断字段名是否属于公开 describe 闭集。 */
+export function isPublicDescriptorField(value: string): value is PublicDescriptorField {
+  return (PUBLIC_DESCRIPTOR_FIELDS as readonly string[]).includes(value);
+}
+
 /** 输出调用所需的精简 descriptor；完整结果 schema 只保留在内部 metadata。 */
-export function publicToolDescriptor(tool: ToolMetadata): Record<string, unknown> {
+export function publicToolDescriptor(tool: ToolMetadata, fields?: readonly PublicDescriptorField[]): Record<string, unknown> {
   if (!tool.outputSchema) throw new Error(`Tool ${tool.name} is missing outputSchema.`);
   const available = tool.available ?? true;
   if (!available && !tool.unavailableReason) throw new Error(`Unavailable Tool ${tool.name} is missing unavailableReason.`);
-  return {
+  const notes = tool.notes ?? [];
+  const all: Record<string, unknown> = {
     name: tool.name,
     description: tool.description,
-    inputSchema: tool.inputSchema,
+    params: projectDescriptorParams(tool.inputSchema),
+    hasNotes: notes.length > 0,
     destructiveHint: tool.destructiveHint,
-    ...(tool.sideEffects?.length ? { sideEffects: tool.sideEffects } : {}),
+    sideEffects: tool.sideEffects ?? [],
     playModeSupport: tool.playModeSupport ?? "supported",
     supportsDryRun: tool.supportsDryRun ?? false,
-    ...(tool.examples?.length ? { examples: tool.examples.map((example) => publicToolExample(tool.name, example)) } : {}),
     target: tool.target ?? "editor",
-    ...(!available ? { available: false, unavailableReason: tool.unavailableReason } : {}),
-    ...(tool.requiresPackages?.length ? { requiresPackages: tool.requiresPackages } : {})
+    available,
+    ...(!available ? { unavailableReason: tool.unavailableReason } : {}),
+    requiresPackages: tool.requiresPackages ?? [],
+    inputSchema: tool.inputSchema,
+    examples: (tool.examples ?? []).map((example) => publicToolExample(tool.name, example)),
+    notes,
   };
+  const result: Record<string, unknown> = {};
+  for (const field of fields ?? DEFAULT_PUBLIC_DESCRIPTOR_FIELDS) {
+    if (field in all) result[field] = all[field];
+  }
+  return result;
+}
+
+/** 把 inputSchema 压成 `名字:类型` 形状；必填加 `*`，嵌套结构不展开。 */
+export function projectDescriptorParams(inputSchema: Record<string, unknown> | undefined): string[] {
+  const properties = inputSchema?.properties;
+  if (!properties || typeof properties !== "object" || Array.isArray(properties)) return [];
+  const requiredValue = inputSchema?.required;
+  const required = new Set(Array.isArray(requiredValue) ? requiredValue.filter((item): item is string => typeof item === "string") : []);
+  return Object.entries(properties as Record<string, unknown>).map(([name, schema]) => `${name}:${projectSchemaType(schema)}${required.has(name) ? "*" : ""}`);
+}
+
+/** 取单个参数的类型标签；$ref 用 $defs 名，联合类型用 | 连接。 */
+function projectSchemaType(schema: unknown): string {
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) return "any";
+  const value = schema as Record<string, unknown>;
+  const reference = value.$ref;
+  if (typeof reference === "string") return reference.split("/").pop() || "any";
+  if (Array.isArray(value.enum)) return "enum";
+  if (Array.isArray(value.oneOf)) {
+    const types = [...new Set(value.oneOf.map((item) => projectSchemaType(item)))];
+    return types.length > 0 ? types.join("|") : "any";
+  }
+  const type = value.type;
+  if (Array.isArray(type)) return [...new Set(type.map((item) => String(item)))].join("|") || "any";
+  if (type === "array") return `${projectSchemaType(value.items)}[]`;
+  if (typeof type === "string") return type;
+  return "any";
 }
 
 /** 将内部 argv authoring 形态投影为无 CLI 语法重复的业务示例。 */

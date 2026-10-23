@@ -135,15 +135,19 @@ test("public custom Tool descriptor exposes only the compact invocation contract
   assert.ok(parsed);
   const published = publicToolDescriptor(parsed);
   assert.deepEqual(Object.keys(published).sort(), [
-    "description", "destructiveHint", "examples", "inputSchema", "name", "playModeSupport", "supportsDryRun", "target",
+    "available", "description", "destructiveHint", "hasNotes", "name", "params", "playModeSupport", "requiresPackages",
+    "sideEffects", "supportsDryRun", "target",
   ]);
-  for (const field of ["outputSchema", "group", "permissions", "available", "completionContract", "handler", "contractProfile"])
+  for (const field of ["outputSchema", "group", "permissions", "completionContract", "handler", "contractProfile", "inputSchema", "examples", "notes"])
     assert.equal(Object.hasOwn(published, field), false, field);
-  assert.deepEqual(published.examples, [{ description: "Echo hello.", input: { value: "hello" } }]);
+  const full = publicToolDescriptor(parsed, ["examples", "inputSchema", "notes"]);
+  assert.deepEqual(full.examples, [{ description: "Echo hello.", input: { value: "hello" } }]);
+  assert.deepEqual(full.notes, []);
+  assert.ok(full.inputSchema);
   assert.deepEqual(parsed.outputSchema, descriptor().outputSchema);
 });
 
-test("public descriptor derives execution controls and emits availability only when false", () => {
+test("public descriptor emits availability and keeps execution controls behind --fields", () => {
   const parsed = projectDescriptorToToolMetadata(descriptor({
     supportsDryRun: true,
     available: false,
@@ -157,7 +161,8 @@ test("public descriptor derives execution controls and emits availability only w
   const published = publicToolDescriptor(parsed);
   assert.equal(published.available, false);
   assert.equal(published.unavailableReason, "E_SAMPLE_UNAVAILABLE: Sample is not ready.");
-  assert.deepEqual(published.examples, [{
+  assert.equal(Object.hasOwn(published, "examples"), false);
+  assert.deepEqual(publicToolDescriptor(parsed, ["examples"]).examples, [{
     description: "Preview echo.",
     input: { value: "hello" },
     execution: { dryRun: true, timeoutMs: 2500 },
@@ -167,8 +172,8 @@ test("public descriptor derives execution controls and emits availability only w
 test("representative local and live descriptors use the compact field closure while internal schemas remain complete", () => {
   const tools = [...builtinToolMetadata(), sceneHierarchyTool(), probuilderPingTool()];
   const allowed = new Set([
-    "name", "description", "inputSchema", "destructiveHint", "sideEffects", "playModeSupport", "supportsDryRun",
-    "examples", "target", "available", "unavailableReason", "requiresPackages",
+    "name", "description", "params", "hasNotes", "inputSchema", "destructiveHint", "sideEffects", "playModeSupport", "supportsDryRun",
+    "examples", "notes", "target", "available", "unavailableReason", "requiresPackages",
   ]);
   let compactBytes = 0;
   let expandedBytes = 0;
@@ -177,8 +182,9 @@ test("representative local and live descriptors use the compact field closure wh
     const published = publicToolDescriptor(tool);
     for (const field of Object.keys(published)) assert.equal(allowed.has(field), true, `${tool.name}.${field}`);
     for (const field of ["outputSchema", "group", "permissions"]) assert.equal(Object.hasOwn(published, field), false, `${tool.name}.${field}`);
-    if ((tool.available ?? true) === true) assert.equal(Object.hasOwn(published, "available"), false, `${tool.name}.available`);
-    for (const example of (published.examples ?? []) as Array<Record<string, unknown>>) {
+    assert.equal(published.available !== undefined, true, `${tool.name}.available`);
+    assert.equal(Object.hasOwn(published, "inputSchema"), false, `${tool.name}.inputSchema`);
+    for (const example of (publicToolDescriptor(tool, ["examples"]).examples ?? []) as Array<Record<string, unknown>>) {
       assert.deepEqual(Object.keys(example).sort().filter((field) => !["description", "execution", "input"].includes(field)), [], `${tool.name}.examples`);
     }
     compactBytes += Buffer.byteLength(JSON.stringify(published), "utf8");

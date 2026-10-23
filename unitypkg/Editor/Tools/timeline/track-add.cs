@@ -32,7 +32,7 @@ namespace UnityCli
         {
             Name = "timeline.track-add",
             Summary = "Add one approved built-in Timeline track and prove its stable identity, exact type, name, and parent.",
-            Description = "Requires com.unity.timeline. timeline accepts an Assets/*.playable path or GUID. trackType is Animation, Audio, Activation, Control, Playable, Signal, or Marker. parentTrack selects one exact unique name; parentLocalId selects the stable decimal string returned by timeline.info, and the selectors are mutually exclusive. The complete type/parent/name plan is validated before dry-run or one asset-write/import effect.",
+            Description = "Requires com.unity.timeline. timeline accepts an Assets/*.playable path or GUID. trackType is Animation, Audio, Activation, Control, Playable, Signal, or Marker. parentTrack selects one exact unique name; parentLocalId selects the stable decimal string returned by timeline.info, and the selectors are mutually exclusive. The complete type/parent/name plan is validated before dry-run or one asset-write/import effect. Returned timeline.frameRate comes from the installed package's editorSettings.frameRate or legacy editorSettings.fps member.",
             Group = "timeline",
             DestructiveHint = true,
             SupportsDryRun = true,

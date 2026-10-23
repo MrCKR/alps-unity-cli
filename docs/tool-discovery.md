@@ -63,18 +63,23 @@ unitycli tools search 'project-summary|scene' --page-size 20 --cursor <nextCurso
 unitycli tools describe screenshot.from-camera
 ```
 
-公开字段：
+公开字段分两层：默认集合只含调用决策所需字段，其余字段必须用 `--fields` 或 `--detail full` 读取。
 
-| 字段 | 说明 |
-|------|------|
-| `name` / `description` | 精确名称、调用边界、默认行为与主要结果 |
-| `inputSchema` | 完整输入 JSON Schema；结果 schema 由内部 contract 校验，不进入 describe |
-| `destructiveHint` / `sideEffects` | 效果说明，不构成执行门；空 sideEffects 省略 |
-| `supportsDryRun` | 是否支持可选 `--dry-run` |
-| `target` / `playModeSupport` | Editor、Runtime 路由与 PlayMode 语义 |
-| `available:false` / `unavailableReason` | 仅当前不可执行时返回；字段缺失表示当前可用 |
-| `requiresPackages` | 非空 Unity Package 依赖 |
-| `examples` | `description`、结构化业务 `input` 与按需 `execution` |
+| 字段 | 层 | 说明 |
+|------|----|------|
+| `name` / `description` | 默认 | 精确名称、调用边界、默认行为与主要结果 |
+| `params` | 默认 | `名字:类型` 形状，必填加 `*`；可直接构造输入 |
+| `hasNotes` | 默认 | 为 true 时可用 `--fields notes` 读取机制细节 |
+| `destructiveHint` / `sideEffects` | 默认 | 效果说明，不构成执行门；无副作用时为 `[]` |
+| `supportsDryRun` | 默认 | 是否支持可选 `--dry-run` |
+| `target` / `playModeSupport` | 默认 | Editor、Runtime 路由与 PlayMode 语义 |
+| `available` / `unavailableReason` | 默认 | 当前是否可执行；`unavailableReason` 仅在 false 时出现 |
+| `requiresPackages` | 默认 | Unity Package 依赖，无依赖时为 `[]` |
+| `inputSchema` | 按需 | 完整输入 JSON Schema；结果 schema 仍不进入 describe |
+| `examples` | 按需 | `description`、结构化业务 `input` 与按需 `execution` |
+| `notes` | 按需 | 机制细节、配额与失败恢复流程 |
+
+`--fields <name,...>` 整体替换默认集合（不叠加），未知字段名返回 `E_SCHEMA_INVALID` 并列出合法字段；`--detail full` 等价于全字段。
 
 `group`和`summary`已在发现层使用，不在单 Tool describe重复；`source`、`outputSchema`、`permissions`、completion 和 handler 只保留在内部 metadata。
 
@@ -93,7 +98,7 @@ unitycli tools describe screenshot.from-camera
 1. 用 `instances list` 确认 canonical project identity，或切换到目标 Unity 项目 CWD。
 2. 用 `tools group` 读取当前实例目录。
 3. 用 `tools group list`、`tools search '<k1|k2|...>'` 缩小范围，并消费完所需的`pageInfo.nextCursor`页面。
-4. 用 `tools describe` 获取 schema、状态约束、副作用和示例。
+4. 用 `tools describe` 读取默认 descriptor，需要时用 `--fields inputSchema` 或 `--fields notes` 取细节。
 5. 用 `tools run` 调用同一名称。
 6. 安装 Package、安装 Extension、编译/domain reload 或 listener generation 替换后重新 discovery；仅切换 PlayMode 时读取更新后的 availability。
 

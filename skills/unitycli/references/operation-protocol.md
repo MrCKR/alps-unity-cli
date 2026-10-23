@@ -14,15 +14,22 @@
 
 ## Descriptor
 
-Tool descriptor 常用字段：
+Tool descriptor 分两层读取。默认 `tools describe <tool>` 只返回调用决策所需字段：`name`、`description`、`params`、`hasNotes`、`destructiveHint`、`sideEffects`、`playModeSupport`、`supportsDryRun`、`target`、`available`、`requiresPackages`，当前不可执行时附加 `unavailableReason`。
+
+- `--fields <name,...>`：只返回所选字段，默认集合整体替换；未知字段名返回 `E_SCHEMA_INVALID` 并列出合法字段名。
+- `--detail full`：返回全部公开字段。
+- `params`：`名字:类型` 形状，必填加 `*`，嵌套不展开；据此可构造输入而无需读取完整 schema。
+
+按需读取的细节字段：
 
 - `inputSchema`：当前输入契约；不要从名称猜字段。结果 schema 由内部 contract 校验，不在公开 describe 展开。
-- `available:false` / `unavailableReason`：仅当前实例不可执行时出现；缺失表示当前可用。
+- `notes`：机制细节、配额与恢复流程；`hasNotes:true` 表示可读取，默认不返回。
+- `examples[].input` / `examples[].execution`：结构化业务输入和按需 dry-run/timeout 控制。
+- `available:false` / `unavailableReason`：仅当前实例不可执行时出现。
 - `destructiveHint`、`sideEffects`、`supportsDryRun`：效果和可选预览，不是确认门。
 - `playModeSupport`：`supported`、`session-affecting`、`editor-only`、`runtime-only` 或 `unknown`。
 - `target`：Editor、Runtime 或两者。
 - `requiresPackages`：非空 Unity Package 或 Extension 依赖。
-- `examples[].input` / `examples[].execution`：结构化业务输入和按需 dry-run/timeout 控制。
 
 读取型Tool descriptor必须声明纯只读边界、schema、target、availability和PlayMode语义，不得触发import、compile、domain reload、PlayMode变化或文件写入。`command`只按同一`inputSchema`构造typed input，不改变descriptor语义。
 

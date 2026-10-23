@@ -50,6 +50,8 @@ export const CLI_ARGS_SPEC: CliArgsSpec = {
     "artifact-dir": "value",
     "page-size": "value",
     cursor: "value",
+    fields: "value",
+    detail: "value",
     runtime: "boolean",
     agent: "value",
     scope: "value",
@@ -167,6 +169,7 @@ function commandOptionNames(group: string | undefined, command: string | undefin
   if (group === "tools") {
     const common = [...global, "instance"];
     if (command === "run") return new Set([...common, "input", "input-file", "stdin", "dry-run", "timeout-ms", "artifact-dir", "runtime"]);
+    if (command === "describe") return new Set([...common, "fields", "detail"]);
     if (command === "search" || command === "group") return new Set([...common, "page-size", "cursor"]);
     return new Set(common);
   }
@@ -218,7 +221,7 @@ function help(version: string): Record<string, unknown> {
     commands: [
       "tools group [--instance <name|alias|projectPath>]",
       "tools group list <group> [--page-size <n>] [--cursor <nextCursor>] [--instance <name|alias|projectPath>]",
-      "tools describe <tool> [--instance <name|alias|projectPath>]",
+      "tools describe <tool> [--fields <name,...>] [--detail full] [--instance <name|alias|projectPath>]",
       "tools run <name> [--input <json>] [--input-file <path>] [--timeout-ms <n>] [--artifact-dir <path>] [--runtime] [--instance <name|alias|projectPath>]",
       "tools search <k1|k2|...> [--page-size <n>] [--cursor <nextCursor>] [--instance <name|alias|projectPath>]",
       "command [--project-path <path>] [--page-size <n>] [--cursor <nextCursor>] [<name> [--field <value>|<positional>...]]",
@@ -240,9 +243,11 @@ function help(version: string): Record<string, unknown> {
       "doctor [--instance <name|alias|projectPath>] [--project <path>]"
     ],
     options: [
-      "--pretty  Indent the JSON envelope; default stdout is compact single-line JSON."
+      "--pretty  Indent the JSON envelope; default stdout is compact single-line JSON.",
+      "--fields  tools describe only: return exactly these public fields and replace the default set.",
+      "--detail  tools describe only: pass 'full' to return every public field.",
     ],
-    note: "Top-level commands are: tools, command, extensions, init, target, instances, doctor. Unity capabilities share one Tool catalog: use `tools run <tool> --input <json>` or `command <name> <business-args>`. Live target resolution accepts only `--instance <name|alias|projectPath>`, `command --project-path <path>`, or the nearest Unity project root from CWD. When CWD is outside the selected Unity project, every `tools` discovery call requires `--instance <projectPath>`. `target` manages aliases only; endpoint, PID, active-target and single-instance fallback selection do not exist. Tool names returned by group list/search are exact; groups are filters and are never prepended. Named discovery lists (`tools group list`, `tools search`) default to 20 items, allow at most 100, and continue with `pageInfo.nextCursor`; the `tools group` directory is different and returns every group in one response without a cursor. Two verified live claims for one canonical project are never auto-picked: the call returns `E_INSTANCE_CONFLICT` with the duplicate-process recovery actions. Descriptor `examples[].input` is business JSON; optional `examples[].execution` carries dryRun and timeoutMs controls. Run `init help` for the self-contained AI installation protocol; Bridge and Skill installation are separate explicit effects. stdout is compact JSON unless `--pretty` is explicit. In PowerShell, wrap inline JSON and pipe-separated tools search keywords in single quotes."
+    note: "Top-level commands are: tools, command, extensions, init, target, instances, doctor. Unity capabilities share one Tool catalog: use `tools run <tool> --input <json>` or `command <name> <business-args>`. Live target resolution accepts only `--instance <name|alias|projectPath>`, `command --project-path <path>`, or the nearest Unity project root from CWD. When CWD is outside the selected Unity project, every `tools` discovery call requires `--instance <projectPath>`. `tools describe` returns the decision fields by default (name, description, params, hasNotes, destructiveHint, sideEffects, playModeSupport, supportsDryRun, target, available, requiresPackages); read any other public field with `--fields <name,...>` or `--detail full`, including inputSchema, examples and notes. `target` manages aliases only; endpoint, PID, active-target and single-instance fallback selection do not exist. Tool names returned by group list/search are exact; groups are filters and are never prepended. Named discovery lists (`tools group list`, `tools search`) default to 20 items, allow at most 100, and continue with `pageInfo.nextCursor`; the `tools group` directory is different and returns every group in one response without a cursor. Two verified live claims for one canonical project are never auto-picked: the call returns `E_INSTANCE_CONFLICT` with the duplicate-process recovery actions. Descriptor `examples[].input` is business JSON; optional `examples[].execution` carries dryRun and timeoutMs controls. Run `init help` for the self-contained AI installation protocol; Bridge and Skill installation are separate explicit effects. stdout is compact JSON unless `--pretty` is explicit. In PowerShell, wrap inline JSON and pipe-separated tools search keywords in single quotes."
   };
 }
 export function isCliEntryPoint(metaUrl: string, argvPath: string | undefined): boolean {

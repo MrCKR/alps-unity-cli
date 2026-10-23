@@ -40,7 +40,9 @@
     "matrix:live": "node scripts/run-final-live-matrix.mjs",
     "test:matrix-runner": "node --test scripts/run-final-live-matrix.test.mjs",
     "matrix:live:dist": "node scripts/run-final-live-matrix.mjs --cli node --cli-arg dist/cli.js",
-    "verify:installed": "node scripts/verify-installed-package.mjs"
+    "verify:installed": "node scripts/verify-installed-package.mjs",
+    "descriptor:budget": "node scripts/audit-descriptor-budget.mjs",
+    "release:check": "node scripts/release-check.mjs"
   },
   "engines": {
     "node": ">=20.0.0"

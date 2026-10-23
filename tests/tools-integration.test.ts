@@ -83,8 +83,9 @@ test("tools group, search, and describe use one connected instance catalog", asy
   assert.ok(search.ok);
   assert.ok(describe.ok);
   assert.equal((describe.data as { name: string }).name, "scene.hierarchy");
-  assert.ok((describe.data as { inputSchema?: unknown }).inputSchema);
-  for (const field of ["outputSchema", "group", "permissions", "available", "contractProfile", "summary"])
+  assert.equal(Object.hasOwn(describe.data as object, "inputSchema"), false);
+  assert.ok(Array.isArray((describe.data as { params?: unknown }).params));
+  for (const field of ["outputSchema", "group", "permissions", "contractProfile", "summary", "examples", "notes"])
     assert.equal(Object.hasOwn(describe.data as object, field), false, field);
 });
 
@@ -531,7 +532,7 @@ test("target both keeps default editor availability when runtime is not ready", 
   } as never);
 
   assert.ok(result.ok, JSON.stringify(result));
-  assert.equal(Object.hasOwn(result.data as object, "available"), false);
+  assert.equal((result.data as { available?: unknown }).available, true);
   assert.equal(Object.hasOwn(result.data as object, "unavailableReason"), false);
 });
 

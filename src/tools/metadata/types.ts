@@ -47,6 +47,8 @@ export interface ToolMetadata {
   supportsDryRun?: boolean;
   timeoutMs?: number;
   permissions?: string[];
+  /** 机制细节、配额与恢复流程；默认不进入公开 describe，只能经 --fields notes 读取。 */
+  notes?: string[];
   examples?: ToolExample[];
   /** Internal execution route override. Omit when the route can be inferred from the bridge registry or tool name. */
   handler?: ToolHandler;

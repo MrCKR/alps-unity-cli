@@ -77,7 +77,8 @@ function rejectUnknownToolFlags(
   const pagedDiscovery = command === "search" || command === "group" && positional[0] === "list";
   const allowed = command === "run"
     ? [...common, "input", "input-file", "stdin", "dry-run", "timeout-ms", "artifact-dir", "runtime"]
-    : pagedDiscovery ? [...common, "page-size", "cursor"] : common;
+    : command === "describe" ? [...common, "fields", "detail"]
+      : pagedDiscovery ? [...common, "page-size", "cursor"] : common;
   const unknown = Object.keys(flags).find((flag) => !allowed.includes(flag));
   if (!unknown) return undefined;
   return failure(requestId, "E_SHELL_OPTION_UNKNOWN", `Unknown option for tools ${command ?? ""}: --${unknown}.`, [

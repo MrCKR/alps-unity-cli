@@ -30,6 +30,8 @@ namespace UnityCli
             internal int PageSize;
             internal int MaxDepth;
             internal int MaxClipsPerTrack;
+            internal PropertyInfo EditorSettingsProperty;
+            internal TimelineToolSupport.FrameRateMember FrameRateMember;
         }
 
         private sealed class TrackNode
@@ -66,6 +68,7 @@ namespace UnityCli
                 throw Error("E_TIMELINE_PAGE_INVALID", "maxDepth must be within [0,32].", path, guid);
             if (resolvedClips < 1 || resolvedClips > MaxClipsPerTrackLimit)
                 throw Error("E_TIMELINE_PAGE_INVALID", "maxClipsPerTrack must be within [1,500].", path, guid);
+            var settings = TimelineToolSupport.RequireEditorSettingsProperty(timelineType, path);
             return new ReadPlan
             {
                 Asset = asset,
@@ -75,7 +78,9 @@ namespace UnityCli
                 Cursor = resolvedCursor,
                 PageSize = resolvedPageSize,
                 MaxDepth = resolvedDepth,
-                MaxClipsPerTrack = resolvedClips
+                MaxClipsPerTrack = resolvedClips,
+                EditorSettingsProperty = settings,
+                FrameRateMember = TimelineToolSupport.RequireFrameRateMember(settings.PropertyType, timelineType, path)
             };
         }
 
@@ -107,6 +112,7 @@ namespace UnityCli
             return new TimelineInfoResult
             {
                 Identity = timelineIdentity,
+                FrameRate = TimelineToolSupport.ReadFrameRate(plan.Asset, plan.EditorSettingsProperty, plan.FrameRateMember),
                 Tracks = tracks,
                 PageInfo = new PageInfo
                 {
@@ -302,12 +308,6 @@ namespace UnityCli
             return true;
         }
 
-        private static double ReadFrameRate(UnityEngine.Object timeline)
-        {
-            var settings = ReadRequiredMember(timeline, "editorSettings");
-            return Convert.ToDouble(ReadRequiredMember(settings, "frameRate"), CultureInfo.InvariantCulture);
-        }
-
         private static double ReadDouble(object target, string name)
         {
             return Convert.ToDouble(ReadRequiredMember(target, name), CultureInfo.InvariantCulture);
@@ -379,6 +379,7 @@ namespace UnityCli
     public sealed class TimelineInfoResult
     {
         public TimelineObjectIdentity Identity { get; set; }
+        public double FrameRate { get; set; }
         public List<TimelineTrackInfo> Tracks { get; set; }
         public PageInfo PageInfo { get; set; }
         public bool DepthTruncated { get; set; }

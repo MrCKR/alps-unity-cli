@@ -22,6 +22,8 @@ export interface ToolDefinition<TReq = unknown, TRes = unknown> {
   supportsDryRun?: boolean;
   timeoutMs?: number;
   permissions?: string[];
+  /** 机制细节、配额与恢复流程；默认不进入公开 describe，只能经 --fields notes 读取。 */
+  notes?: string[];
   /** 执行路由:bridge/bridge-runtime/offline/hybrid。 */
   handler?: ToolHandler;
   supportStatus?: import("./metadata/types.js").ToolSupportStatus;
@@ -118,6 +120,7 @@ export function defineToolMetadata(): ToolMetadata[] {
       supportsDryRun: d.supportsDryRun,
       timeoutMs: d.timeoutMs,
       permissions: d.permissions,
+      notes: d.notes,
       examples: d.examples,
       handler: d.handler,
       supportStatus: d.supportStatus,

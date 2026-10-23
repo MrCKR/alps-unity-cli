@@ -34,7 +34,7 @@ namespace UnityCli
         {
             Name = "timeline.clip-add",
             Summary = "Add one Timeline clip and prove its track, timing, playable asset, source binding, and serialized artifact.",
-            Description = "Requires com.unity.timeline. timeline and asset accept an Assets path or GUID. Select exactly one target with track (unique exact name) or trackLocalId (stable decimal string from timeline.info). start must be finite and >= 0; duration must be finite and > 0 within the installed Timeline range. Animation tracks require an AnimationClip asset and Audio tracks require an AudioClip; other approved built-in tracks must expose CreateDefaultClip. The complete target/source/API/timing plan is validated before dry-run or one asset-write/import effect.",
+            Description = "Requires com.unity.timeline. timeline and asset accept an Assets path or GUID. Select exactly one target with track (unique exact name) or trackLocalId (stable decimal string from timeline.info). start must be finite and >= 0; duration must be finite and > 0 within the installed Timeline range. Animation tracks require an AnimationClip asset and Audio tracks require an AudioClip; other approved built-in tracks must expose CreateDefaultClip. The complete target/source/API/timing plan is validated before dry-run or one asset-write/import effect. Returned timeline.frameRate comes from the installed package's editorSettings.frameRate or legacy editorSettings.fps member.",
             Group = "timeline",
             DestructiveHint = true,
             SupportsDryRun = true,

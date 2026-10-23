@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.10.0",
-  "sourceHash": "88f136f0bb9ee70c076ef5ad7b950d9b72ed75cd6138b0a0aaa9eb21d9e82800",
+  "sourceHash": "c570f53cb022b0565894fa765da01df757d1641579d0244eacda1456cd6f9beb",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -591,8 +591,8 @@
     },
     {
       "path": "Editor/ProjectTools/IUnityCliTool.cs",
-      "size": 6945,
-      "sha256": "18f5a20ac07d874fabbd0f1ac255b8fedbcd50bf5acf73804f314f3d12d7501d"
+      "size": 7124,
+      "sha256": "cd81b94b24d96ba08f32ce25734148440cad1428d5fe9c670f8c26a53f12c887"
     },
     {
       "path": "Editor/ProjectTools/OfficialAttributeToolRegistry.cs",
@@ -601,8 +601,8 @@
     },
     {
       "path": "Editor/ProjectTools/ProjectToolRegistry.cs",
-      "size": 78195,
-      "sha256": "76f2b6225f333268262e2df2bc146b3d8ba21a7aec46092b5443b4f56e818646"
+      "size": 78283,
+      "sha256": "f68601d2f20724913544ee4fe38d95571027e96a8a8d78525125787ef5ce1df6"
     },
     {
       "path": "Editor/ProjectTools/ProjectToolSchemaValidator.cs",
@@ -611,8 +611,8 @@
     },
     {
       "path": "Editor/ProjectTools/RegisteredTool.cs",
-      "size": 41704,
-      "sha256": "b20addf16d83858bfa83e9fda094d7cf0d83e6507426ef57c2994829fcc6223a"
+      "size": 42305,
+      "sha256": "d472debba7691ceb8d48701f9eddc2fa11692bfcb869ad939fa53da87fc5f959"
     },
     {
       "path": "Editor/ProjectTools/UnityCliProjectToolContext.cs",
@@ -1010,6 +1010,11 @@
       "sha256": "c55697d072e434e1fcbbc8f48433474702ff05ff8d84804edf94d44f8319803e"
     },
     {
+      "path": "Editor/Tools/debug/DebugDomainNotes.cs",
+      "size": 30857,
+      "sha256": "29720299bc758419e7543780ea37ab11407482613d26049fef8a56b76d799449"
+    },
+    {
       "path": "Editor/Tools/debug/code/DebugCodeFlowDtos.cs",
       "size": 16589,
       "sha256": "85c5b6fbf4bf88a507faf2e9401b51fe637dd7f282dab432c1c18531982951ea"
@@ -1021,8 +1026,8 @@
     },
     {
       "path": "Editor/Tools/debug/console-read.cs",
-      "size": 4437,
-      "sha256": "c9028e8045995794e4cd9aa0c9fe7e9af8d92822f755e705efe2e8f5d4c5b8b3"
+      "size": 3754,
+      "sha256": "7255ce5d4c631bc559be725932b4d30c068167a10c19b19d77fd01e68b083c8a"
     },
     {
       "path": "Editor/Tools/debug/events-read.cs",
@@ -1041,13 +1046,13 @@
     },
     {
       "path": "Editor/Tools/debug/hook-info.cs",
-      "size": 3467,
-      "sha256": "23ac852d1c3f681fd61cab96fd9c3cf2df174111a9d72ca8bfd7fd08c8aa6d10"
+      "size": 2627,
+      "sha256": "47958aa6032b95746478dbdc1b7ef6bba717ee9569bfd85af8100578a6cb1533"
     },
     {
       "path": "Editor/Tools/debug/hook-install.cs",
-      "size": 14652,
-      "sha256": "f8697fd17e4ea07a07e5caac3101f4c2ac3ff9b8a2bae10d170e899b141a3e3c"
+      "size": 6962,
+      "sha256": "b5f7cab88a6f33a356b4eab3d36fc04ef2a785a239eedf53ec6c5d6704635481"
     },
     {
       "path": "Editor/Tools/debug/hook-list.cs",
@@ -1056,8 +1061,8 @@
     },
     {
       "path": "Editor/Tools/debug/hook-remove.cs",
-      "size": 3856,
-      "sha256": "9e03042dacbbe38cffcb006858bb579e83b869d38762e26d47f12d6cee13b156"
+      "size": 3119,
+      "sha256": "c5823de3e8c0732dfc9c17b0fe8eef3ddb582ff42aaaff0b26bf3105a836bfa6"
     },
     {
       "path": "Editor/Tools/debug/hook-replace.cs",
@@ -1071,23 +1076,23 @@
     },
     {
       "path": "Editor/Tools/debug/input-info.cs",
-      "size": 6383,
-      "sha256": "9bd80ac6572065b60b983821907b7b4d75294bfc293a6b70bbd82933e1c5f3e3"
+      "size": 4003,
+      "sha256": "bc5d3511a319acab94ed4184a47a9a22afc14af41b7685948e3547f625757da7"
     },
     {
       "path": "Editor/Tools/debug/input-key.cs",
-      "size": 6645,
-      "sha256": "31f02501c58d84457850a4dd458afb03546fd6ef9815ea713acae0106f823635"
+      "size": 3561,
+      "sha256": "5ea9d829d107a45df7cba97aad251b26dd79b812c2e1cc93b9104be9b01a4abd"
     },
     {
       "path": "Editor/Tools/debug/input-pointer.cs",
-      "size": 7416,
-      "sha256": "2965897e90fc783df36815539f7b57694046cc4ca2e654cf821c31afd0a50807"
+      "size": 3914,
+      "sha256": "6e1737c032f0967d106ead34c9a6a77fd81dfa848b5eac8642a3232a35d16808"
     },
     {
       "path": "Editor/Tools/debug/input-release.cs",
-      "size": 4448,
-      "sha256": "43c64ad8860b1ce50a621487ebdddeaf1b974acf6c49b3206da04f7d0b918775"
+      "size": 3200,
+      "sha256": "be91fc7988e804ab0c9f03da24beade81f22af16888d88f16cf28786080c11db"
     },
     {
       "path": "Editor/Tools/debug/input/DebugInputDtos.cs",
@@ -1106,28 +1111,28 @@
     },
     {
       "path": "Editor/Tools/debug/pause-evaluate.cs",
-      "size": 8040,
-      "sha256": "e8948ceaf85c5ee552d716bcbe4ddbb487a2ef3b29593432b0ab7e7cd3082efe"
+      "size": 5527,
+      "sha256": "281949bea87b8664c84eb8b2f502d9865d25ffb04b7d7a9bdef9bc6604fc7c77"
     },
     {
       "path": "Editor/Tools/debug/pause-inspect.cs",
-      "size": 6663,
-      "sha256": "30c4cc0c4cfcd438439ab9d0349f5cd5c9ba6a9b83ec5d10585810d58687d9ae"
+      "size": 5216,
+      "sha256": "9a1082064a03661026f86845a416e80262bd8a0a3896a171c3f03f8c418388b6"
     },
     {
       "path": "Editor/Tools/debug/pause-list.cs",
-      "size": 5332,
-      "sha256": "cd039aedef4f20f950e39e7a7050ad5ba4d0bcbd398759eabd13537aa8fe9296"
+      "size": 3662,
+      "sha256": "d05e011cb16d63261ddc50451e827790e065db44d692c163b0aaed9eb099de0f"
     },
     {
       "path": "Editor/Tools/debug/pause-resume.cs",
-      "size": 5855,
-      "sha256": "69b77e4374a003b452a7b15520b3a56c8972e59a98cd51b63b591940a275127f"
+      "size": 4338,
+      "sha256": "2399e59cc0d081772cbbdd5f1a06f0c674c52276afa8e25990d8ff04b9e9ac95"
     },
     {
       "path": "Editor/Tools/debug/pause-wait.cs",
-      "size": 5762,
-      "sha256": "dc56e3597d08aed2b12b1bc6d2adf644ceee8b7eabeed46db0ce2273d96ae4e0"
+      "size": 4746,
+      "sha256": "26f289bbd13072cdcf5f1218101c4c489bc9012585b267de49e91ceab614ff0a"
     },
     {
       "path": "Editor/Tools/debug/pause/DebugPauseDtos.cs",
@@ -1136,8 +1141,8 @@
     },
     {
       "path": "Editor/Tools/debug/program-info.cs",
-      "size": 2830,
-      "sha256": "b06b2158758220af4c89e1216fc104ae150ba839d03eddb0fdefc27d0c4c06f8"
+      "size": 2695,
+      "sha256": "747fe879257dda4faaf2a01e2384d23b25f60493a7e01d0bef4927c3a4e4c39f"
     },
     {
       "path": "Editor/Tools/debug/program-install.cs",
@@ -1151,28 +1156,28 @@
     },
     {
       "path": "Editor/Tools/debug/program-remove.cs",
-      "size": 3031,
-      "sha256": "7552252cbab45eee84da4e82c307df498da908a6d637c424d0731a0c0ce6ecf7"
+      "size": 2947,
+      "sha256": "6571adf74fc86bacce27bbc207fbb88719ad8893aa25536566a0c870d617ba76"
     },
     {
       "path": "Editor/Tools/debug/program-replace.cs",
-      "size": 5361,
-      "sha256": "26c098cf876ef9a3877dd6add8f3641d66b9ae5a4c9c4c063223723f3a5e7b32"
+      "size": 3948,
+      "sha256": "39a43c692d8ef4b435df7961a9fec5f84cb663071b73b4f55fd748deb4681a87"
     },
     {
       "path": "Editor/Tools/debug/program-run.cs",
-      "size": 10286,
-      "sha256": "dcabb1f2658987a970881f29898ec60d3ba17bbbcdee537144ad46f54e301f8b"
+      "size": 3797,
+      "sha256": "2acd578dc53c17a6bc7fe0c5bccd8f8fc72182c6084c6a3c51ae2f19f8986262"
     },
     {
       "path": "Editor/Tools/debug/program-stop.cs",
-      "size": 3182,
-      "sha256": "bdcd34478e1faeb0da69901581d505b019692e66e306436917eb2287f7fe54a0"
+      "size": 2844,
+      "sha256": "2e95ca2024a52688f9c66872641add9a0a3ca5f98b91950e9417508d89e4c247"
     },
     {
       "path": "Editor/Tools/debug/program-wait.cs",
-      "size": 4093,
-      "sha256": "864afa2c17cd952a5bbcce212d61c3840319d1654677c54c876abd9dfdec38ac"
+      "size": 3050,
+      "sha256": "6f0d2d0b1e7037d513e01d1a1470e07881affe591050f9567d6d284daeb175ee"
     },
     {
       "path": "Editor/Tools/debug/program/DebugProgramDtos.cs",
@@ -1181,33 +1186,33 @@
     },
     {
       "path": "Editor/Tools/debug/run-begin.cs",
-      "size": 10420,
-      "sha256": "096647b2966549b913cc173f6c44d8ac85568948925c6468da499ddd0c7e6bb3"
+      "size": 5046,
+      "sha256": "edd018391674dd4b74a2bd5d1766f7ef263dcf65f3c65adf5e09bf7b637a1e02"
     },
     {
       "path": "Editor/Tools/debug/run-compare.cs",
-      "size": 9396,
-      "sha256": "7a6c774ef8320d7943c036c6a3a0d1c7bba7b552227cbbfc86ec75707a04f1a3"
+      "size": 4528,
+      "sha256": "ed551635ebf27829872cbccf65d5cc82d3403c796c560103233e98578e58f846"
     },
     {
       "path": "Editor/Tools/debug/run-end.cs",
-      "size": 6031,
-      "sha256": "1582e2fe6e3c6d65caeb2dfd333a669fb4ad586a08d2c9a30b6fd287c4e7120c"
+      "size": 3246,
+      "sha256": "4d604672df8da37a89cb306184e917cc2a25d7e65c9539a71546acdfc9e7f338"
     },
     {
       "path": "Editor/Tools/debug/run-info.cs",
-      "size": 5387,
-      "sha256": "91874c3c96e7c5f1b0223956aebfdf97fe9c5207593e8ad5470e54d17296f273"
+      "size": 3091,
+      "sha256": "7fca7f94890812dbd7e54dfc6656bd95b8fb5bfe211ebe4e84b3fc70372460bd"
     },
     {
       "path": "Editor/Tools/debug/run-list.cs",
-      "size": 4825,
-      "sha256": "cfb2faa5b09a7313e3292d332be81a77e64fc2a30b668ce6395d0cb6c54ad489"
+      "size": 3460,
+      "sha256": "51a0100b7c204d3721145439822216cc2e045a6acd17d5f60dfc99e28916d211"
     },
     {
       "path": "Editor/Tools/debug/run-wait.cs",
-      "size": 4074,
-      "sha256": "5a52a75578d91a5c774bba06852764681c8549513cde98f1f9c6673467e82683"
+      "size": 3290,
+      "sha256": "aa41f630fd064c1f36c627bb0fcb2a7c5acc456a15a7b8263fab677886c38dc3"
     },
     {
       "path": "Editor/Tools/debug/run/DebugRunDtos.cs",
@@ -1216,13 +1221,13 @@
     },
     {
       "path": "Editor/Tools/debug/session-create.cs",
-      "size": 5522,
-      "sha256": "0b7221c5cb7bd2c91b3315c2731afd2642b508ab792a4868827fa0e50c090d24"
+      "size": 3685,
+      "sha256": "1d62edde8543b1b7e014f266274a297bada173cd33f4bec24b5dcbd4808b3f96"
     },
     {
       "path": "Editor/Tools/debug/session-export.cs",
-      "size": 4673,
-      "sha256": "c3407d75763e2c9d3d651d3d396e241748b8b69850402559709d58caef327fac"
+      "size": 3037,
+      "sha256": "1534d1675dedc685bb29bec88fbdba5b6407d58872b280688269226712efd632"
     },
     {
       "path": "Editor/Tools/debug/session-import.cs",
@@ -1231,8 +1236,8 @@
     },
     {
       "path": "Editor/Tools/debug/session-info.cs",
-      "size": 3243,
-      "sha256": "0334933d4a16570548588e74377430b5533181085172f9494c5731a3ed8950bb"
+      "size": 3045,
+      "sha256": "2755cbed83b54f3399b6321ac296adcd1afdb638af66b24723dfa4e907c68872"
     },
     {
       "path": "Editor/Tools/debug/session-list.cs",
@@ -1241,13 +1246,13 @@
     },
     {
       "path": "Editor/Tools/debug/session-remove.cs",
-      "size": 2918,
-      "sha256": "fbd503c56e6355ca19a333480408f54d6f292a951f33f3ee5dc574c8ac30e56a"
+      "size": 2632,
+      "sha256": "139727e8ac15812861a6e477cba14633b2f39d60fed572836b04f664c877f42c"
     },
     {
       "path": "Editor/Tools/debug/session-stop.cs",
-      "size": 4847,
-      "sha256": "eb1cdbe173049f51db8708d7e81d7b96fb39007e65e9e60c96f2e40a109f2b0b"
+      "size": 2752,
+      "sha256": "c9ca227e1352e81cdf46da27f07895f8439e1e9c307ecc4c661de476a2977fdd"
     },
     {
       "path": "Editor/Tools/debug/session/DebugRecipeDtos.cs",
@@ -1281,8 +1286,8 @@
     },
     {
       "path": "Editor/Tools/debug/value-write.cs",
-      "size": 9494,
-      "sha256": "50bd92c3500feaee7c1d7bb94f60c50396119b8f8ab1b67e1f177ca7ac627cc5"
+      "size": 5942,
+      "sha256": "9dcaf305f4401523f4011333403a00fe09730c5c3328e5995e46135eb4f9f264"
     },
     {
       "path": "Editor/Tools/debug/value/DebugValueDtos.cs",
@@ -1336,8 +1341,8 @@
     },
     {
       "path": "Editor/Tools/editor/menu-execute.cs",
-      "size": 6562,
-      "sha256": "3c0484d0056e246e4e7ea2d84867822e4951c7386be1d4589bece5ed04f47339"
+      "size": 6024,
+      "sha256": "046a5aef50d2b73617d0d3f38ee7409e2217499813ff647cdefe82dea971c3be"
     },
     {
       "path": "Editor/Tools/editor/menu-list.cs",
@@ -2246,38 +2251,38 @@
     },
     {
       "path": "Editor/Tools/timeline/TimelineMutationToolSupport.cs",
-      "size": 37831,
-      "sha256": "3b4f51322bfb51b5126516d5c68a36d430eba02737b004e8c74bdcab3af05862"
+      "size": 38412,
+      "sha256": "d323af76e9f67d62e6fbeead9ded3e7cfe2451f0fce3786ba0a36e57adfd0888"
     },
     {
       "path": "Editor/Tools/timeline/TimelineReadToolSupport.cs",
-      "size": 20803,
-      "sha256": "26700e037a7333eb1a73910a41be9f50cb36df8eca937d76e428f52f47ebb92c"
+      "size": 21098,
+      "sha256": "cb44633f75a89d6a9783b3360656a839d77290a7d8e2e18f9784604b8809cbcf"
     },
     {
       "path": "Editor/Tools/timeline/TimelineToolSupport.cs",
-      "size": 10470,
-      "sha256": "9fb6d7f4b395a955083627dd960cf2ddd216827841886fa5cd8fd5dab1675f5c"
+      "size": 16372,
+      "sha256": "7f676ca0caea20a72836f7ebc2111b276079a328b17878d1f8245ecc9cc5e923"
     },
     {
       "path": "Editor/Tools/timeline/clip-add.cs",
-      "size": 4905,
-      "sha256": "f03a9673c6f6c0d8e3d386c54c5e6cd9d951b2595f6d7478d3834e89f8ffa5b4"
+      "size": 5030,
+      "sha256": "0543e986a8396609f8d70c8d9eefcda7fe02c983cc20bcc06fa061e9e381e38c"
     },
     {
       "path": "Editor/Tools/timeline/create.cs",
-      "size": 4124,
-      "sha256": "b33e5886abf083b97b5e5a2ff3501e7453c6413ba37263a81572705d89a1ef34"
+      "size": 4397,
+      "sha256": "8b5273300513d55174040b48237dd49f98ff616eddf1e832fdcef1b76adc28fa"
     },
     {
       "path": "Editor/Tools/timeline/info.cs",
-      "size": 3218,
-      "sha256": "647b1c924c962cb02e300702010604c90e772bab1259e6a3814c44039f52e64a"
+      "size": 3364,
+      "sha256": "00c26a08f395cba64a113beb790fc1902b2f71fbf75fd849c74b195ae7e5b0fd"
     },
     {
       "path": "Editor/Tools/timeline/track-add.cs",
-      "size": 4633,
-      "sha256": "39702debf79b4e9c0d7caacdace6348e3ac74a95913527415753b31f98d67e25"
+      "size": 4758,
+      "sha256": "d7188d4605837d835d9dc35110c6c3ea2e60086d3efa922a90d8a23300f51e5b"
     },
     {
       "path": "Editor/Tools/ui/UiToolSupport.cs",
@@ -2613,6 +2618,11 @@
       "path": "Tests/Editor/DebugThreadValueTests.cs",
       "size": 38558,
       "sha256": "ab7db3839b949f1acdd2f58f073520f3b9a1816e73435db0ce56f63d660ca6e6"
+    },
+    {
+      "path": "Tests/Editor/TimelineFrameRateMemberTests.cs",
+      "size": 4468,
+      "sha256": "f50bf48e5eef55acf31a9973492b34cd1225746685062522c16b57571089aeca"
     },
     {
       "path": "Tests/Editor/UnityCli.Editor.Tests.asmdef",

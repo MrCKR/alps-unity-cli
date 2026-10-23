@@ -42,10 +42,12 @@ metadata:
 ## 发布前置门禁（全部满足才发布）
 
 1. 发布所含增删改及其直接影响面的自动化测试全部通过，并记录测试命令与变更覆盖关系；不得默认运行无关的全仓测试。允许的唯一失败必须是在 `.issues/completed/` 已登记的 pre-existing 项。
-2. `node .pi/skills/unity-cli-issue-lifecycle/scripts/validate-issues.mjs` 输出 `failures: []`。
+2. `npm run release:check` 输出 `pass: true`，即 blockers 为空；其 warnings 清单必须在发布前逐条告知项目所有者并记录确认。
 3. 涉及工具/契约变更时，所有生成产物已从 canonical Tool 源码重新生成，并且二次生成无差异。
 4. 涉及 skill 版本时，`skill-factory/unitycli/manifest.json` 与 `package.json` 一致。
 5. 发布前 `npm whoami` 确认已登录 npm。
+
+`release:check` 聚合架构审计、命令契约、descriptor 预算、Issue 台账、版本同步与 npm 凭据；单独运行 `node scripts/audit-descriptor-budget.mjs` 可查看完整描述预算表。
 
 ## 发布流程（严格顺序）
 

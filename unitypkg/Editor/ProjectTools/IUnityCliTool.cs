@@ -97,6 +97,8 @@ namespace UnityCli
         public int DefaultTimeoutMs { get; set; }
         public int MaxTimeoutMs { get; set; }
         public string[] Permissions { get; set; }
+        /// <summary>机制细节、配额与恢复流程；默认不进入公开 describe，只供 --fields notes 读取。</summary>
+        public string[] Notes { get; set; }
         public string[] RequiresPackages { get; set; }
         public ToolExample[] Examples { get; set; }
         public ToolCompletionDescriptor Completion { get; set; }

@@ -31,7 +31,27 @@ test("timeline.create remains compile-time independent from Unity Timeline", () 
   assert.match(support, /Type\.GetType\(TimelineAssetTypeName, false\)/);
   assert.match(support, /ScriptableObject\.CreateInstance\(plan\.TimelineType\)/);
   assert.match(support, /GetProperty\("editorSettings"/);
-  assert.match(support, /GetProperty\("frameRate"/);
+  assert.match(support, /FrameRateMemberNames = \{ "frameRate", "fps" \}/);
+});
+
+test("timeline frame-rate dispatch prefers frameRate and falls back to legacy fps", () => {
+  assert.match(support, /internal sealed class FrameRateMember/);
+  assert.match(support, /internal static PropertyInfo RequireEditorSettingsProperty\(Type timelineType, string path\)/);
+  assert.match(support, /internal static FrameRateMember RequireFrameRateMember\(Type settingsType, Type timelineType, string path\)/);
+  assert.match(support, /internal double Persist\(double value\)/);
+  assert.match(support, /E_TIMELINE_FRAME_RATE_UNSUPPORTED/);
+  assert.match(support, /packageVersion/);
+  assert.match(support, /foundMembers/);
+  assert.doesNotMatch(support, /ReadFrameRate\(object timeline, Type timelineType\)/);
+  assert.doesNotMatch(readSupport, /private static double ReadFrameRate\(UnityEngine\.Object timeline\)/);
+  assert.match(readSupport, /FrameRate = TimelineToolSupport\.ReadFrameRate\(plan\.Asset, plan\.EditorSettingsProperty, plan\.FrameRateMember\)/);
+  assert.match(readSupport, /public double FrameRate \{ get; set; \}/);
+  assert.match(infoTool, /legacy editorSettings\.fps member/);
+  assert.match(mutationSupport, /FrameRateMember = TimelineToolSupport\.RequireFrameRateMember\(/);
+  assert.match(mutationSupport, /TimelineToolSupport\.ReadFrameRate\(fresh, plan\.EditorSettingsProperty, plan\.FrameRateMember\)/);
+  assert.match(tool, /legacy editorSettings\.fps member/);
+  assert.match(support, /Pass frameRate within \[0\.000001,1000\]/);
+  assert.doesNotMatch(support, /verify com\.unity\.timeline is installed before retrying/);
 });
 
 test("timeline.create validates the full plan before one effect barrier", () => {
@@ -46,7 +66,7 @@ test("timeline.create validates the full plan before one effect barrier", () => 
   assert.match(support, /E_TIMELINE_OUTPUT_TYPE_CONFLICT/);
   assert.match(support, /E_TIMELINE_OUTPUT_META_EXISTS/);
   assert.match(support, /E_TIMELINE_OUTPUT_EXISTS/);
-  assert.match(support, /frameRate < 0\.000001d \|\| frameRate > 1000d/);
+  assert.match(support, /requested < 0\.000001d \|\| requested > 1000d/);
   assert.match(support, /E_TIMELINE_FRAME_RATE_INVALID/);
   assert.match(support, /EndsWith\("\.playable"/);
 });
@@ -57,7 +77,7 @@ test("timeline.create proves fresh path GUID type frame-rate and serialized file
   assert.match(support, /AssetDatabase\.GUIDToAssetPath\(guid\)/);
   assert.match(support, /plan\.Existing && !string\.Equals\(guid, plan\.ExistingGuid/);
   assert.match(support, /plan\.TimelineType\.IsInstanceOfType\(asset\)/);
-  assert.match(support, /Math\.Abs\(frameRate - plan\.FrameRate\)/);
+  assert.match(support, /SameFrameRate\(frameRate, plan\.FrameRate, plan\.FrameRateMember\.IsSinglePrecision\)/);
   assert.match(support, /!file\.Exists \|\| file\.Length <= 0L/);
   assert.match(support, /E_TIMELINE_CREATE_PROOF_FAILED/);
 });
