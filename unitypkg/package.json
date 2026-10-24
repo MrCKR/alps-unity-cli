@@ -1,6 +1,6 @@
 {
   "name": "com.alpsckr.unitycli",
-  "version": "0.10.5",
+  "version": "0.10.6",
   "displayName": "UnityCLI",
   "description": "Editor package used by UnityCLI commands.",
   "unity": "2022.3",

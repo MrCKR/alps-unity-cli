@@ -3,7 +3,7 @@
 Status: governed local package
 Owner: alps-unity-cli maintainers
 Review cadence: per-release
-Reviewed: 2026-10-24 for release 0.10.5
+Reviewed: 2026-10-24 for release 0.10.6
 
 ## Scope
 
