@@ -87,3 +87,18 @@ test("strict completion audit must pass", () => {
   });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
 });
+
+// TS 运行时把 Tool 名称直接当作 bridge command 发送时，Bridge 只能按名称解析完成契约；
+// 这些名称漏进生成表会让公开 Tool 永远被准入拒绝，所以从真实发送者推导并逐一核对。
+test("every bridge command the TS runtime dispatches by Tool name resolves a C# completion contract", async () => {
+  const generated = await readFile(join(process.cwd(), "unitypkg", "Editor", "Generated", "UnityCliToolCompletionRegistry.g.cs"), "utf8");
+  const generatedNames = new Set([...generated.matchAll(/new UnityCliToolCompletionContract\("([^"]+)"/g)].map((match) => match[1]));
+  const toolNames = new Set(GENERATED_TOOL_COMPLETION_CONTRACTS.map((entry) => entry.toolName));
+  const dispatched = new Set<string>();
+  for (const source of ["src/runtime-code.ts", "src/runtime-flow.ts"]) {
+    const text = await readFile(join(process.cwd(), source), "utf8");
+    for (const match of text.matchAll(/"([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)"/g)) if (toolNames.has(match[1])) dispatched.add(match[1]);
+  }
+  assert.ok(dispatched.size > 0, "no self-dispatched bridge command was derived from the TS runtime sources");
+  assert.deepEqual([...dispatched].filter((name) => !generatedNames.has(name)).sort(), []);
+});

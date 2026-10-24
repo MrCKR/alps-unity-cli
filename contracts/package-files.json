@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.10.3",
-  "sourceHash": "98332a1eb84f22dc67823bca24cc643ced3c7b1a67a4092bd4418d391a11807c",
+  "sourceHash": "fb82db8671a847eb01ba8965c9fb74eded31719dde5153ba6e5719fda4a318b0",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -66,8 +66,8 @@
     },
     {
       "path": "Editor/Generated/UnityCliToolCompletionRegistry.g.cs",
-      "size": 188158,
-      "sha256": "438f19444b161a7fd4b22ce989c45740af0496fb612a96c2c4b8edb33119ca27"
+      "size": 189350,
+      "sha256": "c9f187a9c91d7b4de1a6e8fbacee9b1900c62656e3c1e427798b8cfa73087325"
     },
     {
       "path": "Editor/Infrastructure/CodeExecFlowSupport.cs",

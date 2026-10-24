@@ -39,8 +39,25 @@ for (let index = 0; index < packageRoots.length; index += 1)
   if (!packageRoots[index]) failures.push(`TS-owned package.${packageOperations[index]} completion contract is required by the private C# coordinator`);
 if (failures.length > 0) throw new Error(failures.join("\n"));
 
-// 原生注册但由 TS 拥有 descriptor 的命令需要在 C# 侧也能解析完成契约（与 debug.code-execute 同形）。
-const tsLocalNativeContracts = normalized.filter((entry) => entry.descriptorOwner === "ts-local" && /^debug\.code\.flow\./.test(entry.toolName));
+// 以自身名称直接发送 bridge command 的 ts-local Tool，C# 准入只能按名称解析完成契约（与 debug.code-execute 同形）。
+// 这份集合从真实发送者推导，不按名称形态猜测；已在 C# 侧有专属常量的 Tool 通过去重排除。
+const bridgeDispatchSourceFiles = ["src/runtime-code.ts", "src/runtime-flow.ts"];
+const dedicatedContractNames = new Set([editorCompile, codeExec, buildRun, editorRefresh, testRun, ...packageRoots].map((entry) => entry.toolName));
+const bridgeDispatchedToolNames = [...new Set(bridgeDispatchSourceFiles.flatMap((source) =>
+  [...fs.readFileSync(path.join(root, source), "utf8").matchAll(/"([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)"/g)].map((match) => match[1])
+))].filter((name) => contractByName.has(name)).sort();
+const tsLocalNativeContracts = bridgeDispatchedToolNames
+  .filter((name) => !dedicatedContractNames.has(name))
+  .map((name) => {
+    const entry = normalized.find((item) => item.toolName === name);
+    if (entry.descriptorOwner !== "ts-local")
+      throw new Error(`bridge command ${name} is dispatched by the TS runtime but its descriptor owner is ${entry.descriptorOwner}`);
+    if (csharpEntries.includes(entry))
+      throw new Error(`bridge command ${name} is dispatched by the TS runtime and already emitted by the C# Tool inventory`);
+    return entry;
+  });
+if (tsLocalNativeContracts.length === 0)
+  throw new Error("no self-dispatched ts-local bridge command completion contract was resolved");
 
 const tsOutput = path.join(root, "src", "tools", ".generated-completion-registry.ts");
 const csharpOutput = path.join(root, "unitypkg", "Editor", "Generated", "UnityCliToolCompletionRegistry.g.cs");
