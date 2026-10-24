@@ -501,6 +501,7 @@ export interface PackageBridgeInstallRuntime {
   absoluteDeadlineMs?: number;
   publishRetryDelayMs?: number;
   renameDirectory?: typeof rename;
+  renameFile?: typeof rename;
 }
 
 /** 在任何 init filesystem effect 前验证并冻结 canonical Bridge 源、目标与哈希。 */
@@ -685,7 +686,8 @@ async function ensurePackageBridgeLocked(projectPath: string, prepared?: UnityCl
   const targetExists = await directoryExists(targetPath);
   // 包目录不存在时 metadata 只是孤立残留；普通 init 可用当前完整投影替换它。
   const existing = targetExists ? await readOptionalInstallMetadata(installMetadataPath) : undefined;
-  if (existing) await readVerifiedManagedFileList(fileManifestPath, existing.managedFilesSha256);
+  // 受管清单是覆盖与陈旧文件删除的唯一依据：非法、越界或不可读的清单必须在任何写入前失败关闭。
+  const previousManagedFiles = existing ? await readManagedFileList(fileManifestPath) : undefined;
   if (existing && existing.packageName === bridgePackageName && existing.installMode === "copy"
     && existing.packageVersion === packageManifest.version && existing.sourceHash === sourceHash && existing.projectHash === projectHash
     && existing.managedFilesSha256 === expectedManagedFilesSha256 && existing.cliCompatibilityRange === cliCompatibilityRange
@@ -706,8 +708,27 @@ async function ensurePackageBridgeLocked(projectPath: string, prepared?: UnityCl
     };
   }
 
-  if (abandonedPreviousCount > 0)
+  if (abandonedPreviousCount > 0 && !(targetExists && existing && previousManagedFiles))
     throw new PackageManagerError("INIT_ROLLBACK_REQUIRED", "An abandoned Bridge publish backup cannot be discarded because the current installation is not fully proven.", ["Inspect the current package and its .previous sibling before retrying init."]);
+
+  // 正常升级：在现有目录内按文件收敛，只替换字节不同的受管文件；不 rename 包目录，因此不依赖 Editor 释放句柄。
+  if (targetExists && existing && previousManagedFiles) {
+    return await publishPackageInPlace({
+      sourcePath,
+      targetPath,
+      sourceHash,
+      projectHash,
+      packageVersion: packageManifest.version,
+      expectedManagedFiles,
+      expectedManagedFilesSha256,
+      previousManagedFiles,
+      manifestPath: paths.manifestPath,
+      installMetadataPath,
+      fileManifestPath,
+      deadlineMs: publishDeadlineMs,
+      runtime
+    });
+  }
 
   // 完整投影先写入同级 staging 目录，再以 rename 发布；不会暴露半复制的 Bridge 包。
   const publishNonce = randomUUID();
@@ -725,7 +746,7 @@ async function ensurePackageBridgeLocked(projectPath: string, prepared?: UnityCl
       throw new PackageManagerError("INIT_PLAN_STALE", "Bridge package target changed before staging; no package was published.");
     if ((!existing && freshExisting) || (existing && (!freshExisting || !sameInstallMetadata(existing, freshExisting))))
       throw new PackageManagerError("PACKAGE_FILE_MANIFEST_INVALID", "Bridge install metadata changed before managed cleanup; no package was published.");
-    const freshExistingManagedFiles = freshExisting ? await readVerifiedManagedFileList(fileManifestPath, freshExisting.managedFilesSha256) : [];
+    const freshExistingManagedFiles = freshExisting ? await readManagedFileList(fileManifestPath) : [];
     await mkdir(stagingPath, { recursive: false });
     if (freshTargetExists) await copyDirRecursive(targetPath, stagingPath, targetPath, []);
     await removeStaleManagedFiles(stagingPath, freshExistingManagedFiles);
@@ -805,8 +826,8 @@ async function ensurePackageBridgeLocked(projectPath: string, prepared?: UnityCl
       const code = String((error as NodeJS.ErrnoException).code ?? "EPERM");
       throw new PackageManagerError(
         "PACKAGE_DIRECTORY_LOCKED",
-        `Windows kept the existing UnityCLI package directory open while replacement was attempted (${code}).`,
-        ["Report the exact locked package directory and that the previous package state was restored.", "Ask once whether this exact Unity project may be closed normally; close it only after approval and rerun the same `init package` command with `--close-editor`.", "Never force-terminate Unity and never delete part of the package directory by hand."],
+        `Windows kept the UnityCLI package directory open while it was replaced (${code}). The previous package state was restored.`,
+        ["Report this exact package directory and that the previous package state was restored.", "Rerun the same `init package` command after that directory handle is released; the next attempt repairs in place before any directory replacement.", "Never close, restart, or force-terminate Unity to force this replacement, and never delete part of the package directory by hand."],
         { operation: "replace-existing-package", nativeCode: code },
       );
     }
@@ -903,6 +924,153 @@ async function renamePackageDirectory(source: string, target: string, absoluteDe
 function isTransientRenameError(error: unknown): boolean {
   const code = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code) : "";
   return code === "EPERM" || code === "EBUSY" || code === "EACCES";
+}
+
+/** 就地发布的临时文件固定前缀：崩溃残留可在下一次发布开头按前缀回收。 */
+const inPlaceTemporaryPrefix = ".unitycli-tmp-";
+
+interface InPlacePublishContext {
+  sourcePath: string;
+  targetPath: string;
+  sourceHash: string;
+  projectHash: string;
+  packageVersion: string;
+  expectedManagedFiles: string[];
+  expectedManagedFilesSha256: string;
+  previousManagedFiles: string[];
+  manifestPath: string;
+  installMetadataPath: string;
+  fileManifestPath: string;
+  deadlineMs: number;
+  runtime: PackageBridgeInstallRuntime;
+}
+
+/**
+ * 就地收敛已安装的 Bridge。只写字节不同的受管文件，逐文件退避重试，最后原子写清单与元数据并回读证明。
+ * 不 rename 包目录：Unity 持有包内句柄时仍可完成更新，只有单个被占用的文件会失败并被精确报告。
+ */
+async function publishPackageInPlace(context: InPlacePublishContext): Promise<UnityCliPackageInstall> {
+  await sweepInPlaceTemporaryFiles(context.targetPath);
+  const canonicalIdentities = new Set(context.expectedManagedFiles.map((file) => file.toLowerCase()));
+  const staleFiles = context.previousManagedFiles.filter((file) => !canonicalIdentities.has(file.toLowerCase()));
+  const blockedFiles: Array<{ file: string; nativeCode: string }> = [];
+  let replacedFiles = 0;
+  let removedFiles = 0;
+
+  // 先删陈旧受管文件再覆盖：新投影不需要它们，提前释放目录体积。
+  for (const relPath of staleFiles) {
+    try {
+      await removeManagedFileInPlace(context.targetPath, relPath, context.deadlineMs, context.runtime);
+      removedFiles += 1;
+    } catch (error) {
+      blockedFiles.push({ file: relPath, nativeCode: nativeErrorCode(error) });
+    }
+  }
+  for (const relPath of context.expectedManagedFiles) {
+    const source = await readFile(join(context.sourcePath, relPath));
+    const current = await readFile(resolveManagedFilePath(context.targetPath, relPath)).catch(() => undefined);
+    if (current && current.equals(source)) continue;
+    try {
+      await replaceManagedFileInPlace(context.targetPath, relPath, source, context.deadlineMs, context.runtime);
+      replacedFiles += 1;
+    } catch (error) {
+      blockedFiles.push({ file: relPath, nativeCode: nativeErrorCode(error) });
+    }
+  }
+  // 部分文件被占用时不写元数据：终态保持未证明（`--check` 报 damaged），下一次同一命令继续收敛。
+  if (blockedFiles.length > 0)
+    throw new PackageManagerError(
+      "PACKAGE_FILE_LOCKED",
+      `Windows kept ${blockedFiles.length} UnityCLI package file(s) open during the in-place update (${blockedFiles[0].nativeCode}).`,
+      ["Rerun the same `init package` command to converge the remaining files.", "If the same exact files are reported again, report their paths; do not delete, move, or rename package files by hand."],
+      { operation: "replace-in-place", blockedFiles, replacedFiles, removedFiles, deadlineMs: context.deadlineMs, nativeCode: blockedFiles[0].nativeCode },
+      true,
+      250,
+    );
+
+  await writeFileManifest(context.fileManifestPath, context.expectedManagedFiles);
+  const installTime = new Date().toISOString();
+  const metadata: UnityCliInstallMetadata = {
+    packageName: bridgePackageName,
+    packageVersion: context.packageVersion,
+    sourceHash: context.sourceHash,
+    managedFilesSha256: context.expectedManagedFilesSha256,
+    projectHash: context.projectHash,
+    installMode: "copy",
+    installTime,
+    cliCompatibilityRange
+  };
+  await writeInstallMetadata(context.installMetadataPath, metadata);
+  const observed = await readInstallMetadata(context.installMetadataPath);
+  if (!sameInstallMetadata(metadata, observed) || !await managedPackageFilesMatch(context.sourcePath, context.targetPath, context.fileManifestPath))
+    throw new PackageManagerError("INIT_CHECK_FAILED", "Bridge package in-place update could not be proven from fresh filesystem readback.", ["Inspect Packages/com.alpsckr.unitycli and run init again."]);
+  await cleanupPublishedPackageSiblings(context.targetPath);
+  return {
+    manifestPath: context.manifestPath,
+    bridgePath: context.targetPath,
+    dependencyName: bridgePackageName,
+    packageVersion: context.packageVersion,
+    sourceHash: context.sourceHash,
+    projectHash: context.projectHash,
+    installMode: "copy",
+    installTime: observed.installTime,
+    cliCompatibilityRange,
+    installMetadataPath: context.installMetadataPath,
+    fileManifestPath: context.fileManifestPath
+  };
+}
+
+function nativeErrorCode(error: unknown): string {
+  const code = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code) : "";
+  return code || "UNKNOWN";
+}
+
+/** 只回收本发布器前缀的残留临时文件，数量受单次崩溃窗口约束。 */
+async function sweepInPlaceTemporaryFiles(targetPath: string): Promise<void> {
+  const visit = async (dir: string): Promise<void> => {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory()) { await visit(fullPath); continue; }
+      if (entry.isFile() && entry.name.startsWith(inPlaceTemporaryPrefix)) await rm(fullPath, { force: true });
+    }
+  };
+  await visit(targetPath);
+}
+
+/** 单文件操作可能撞上 Unity 或扫描器的瞬时占用；只在该文件上退避重试。 */
+async function retryFileOperation(action: () => Promise<void>, absoluteDeadlineMs: number, runtime: PackageBridgeInstallRuntime): Promise<void> {
+  let retryDelayMs = Math.max(1, runtime.publishRetryDelayMs ?? 25);
+  while (true) {
+    try {
+      await action();
+      return;
+    } catch (error) {
+      if (!isTransientRenameError(error) || Date.now() + retryDelayMs >= absoluteDeadlineMs) throw error;
+      await delay(retryDelayMs);
+      retryDelayMs = Math.min(250, retryDelayMs * 2);
+    }
+  }
+}
+
+async function replaceManagedFileInPlace(targetPath: string, relPath: string, bytes: Buffer, absoluteDeadlineMs: number, runtime: PackageBridgeInstallRuntime): Promise<void> {
+  const fullPath = resolveManagedFilePath(targetPath, relPath);
+  await mkdir(dirname(fullPath), { recursive: true });
+  const temporaryPath = join(dirname(fullPath), `${inPlaceTemporaryPrefix}${process.pid}-${randomUUID()}`);
+  const renameFile = runtime.renameFile ?? rename;
+  try {
+    const handle = await open(temporaryPath, "wx", 0o600);
+    try { await handle.writeFile(bytes); await handle.sync(); }
+    finally { await handle.close(); }
+    await retryFileOperation(() => renameFile(temporaryPath, fullPath), absoluteDeadlineMs, runtime);
+  } finally {
+    await rm(temporaryPath, { force: true }).catch(() => undefined);
+  }
+}
+
+async function removeManagedFileInPlace(targetPath: string, relPath: string, absoluteDeadlineMs: number, runtime: PackageBridgeInstallRuntime): Promise<void> {
+  const fullPath = resolveManagedFilePath(targetPath, relPath);
+  await retryFileOperation(async () => { await rm(fullPath, { force: true }); }, absoluteDeadlineMs, runtime);
+  await assertPathMissing(fullPath, "PACKAGE_MANAGED_FILE_DELETE_FAILED");
 }
 
 interface VerifiedPackageBridge {

@@ -25,8 +25,8 @@ unitycli init help
 按返回的 `aiInstructions` 和 `nextActions` 处理目标发现、安装和校验。更新 CLI 后必须重新读取新版协议；不要沿用旧版本的安装假设。安装目标和参数以该协议为准，下列入口仅用于区分安装对象：
 
 - `init discover` 只读返回当前项目计划。用户已指定的目标直接沿用，不重复询问，也不扩大到其他项目或目录。
-- Bridge 使用 `init package --project <UnityProject>`。准确目标 Unity 打开着是正常安装状态，直接就地安装：安装器用同级 staging 目录加 rename 替换包文件，不要求先关闭 Editor，也从不启动或重启 Editor。安装成功后，如果该项目 Editor 正在运行，用 `tools run editor.refresh` 让它导入替换后的包，再用 `init package --project <UnityProject> --check` 验证已安装字节。
-- 只有发布阶段报告 `PACKAGE_DIRECTORY_LOCKED` 时才评估关闭：如实报告被占用的目录并说明原状态已回滚，询问一次是否可正常关闭该准确项目，同意后才对该项目加 `--close-editor` 重跑。不得强制终止，也不得替用户处理未保存场景。
+- Bridge 使用 `init package --project <UnityProject>`。准确目标 Unity 打开着是正常安装状态，直接就地安装：已安装的包在原有目录内按文件收敛，只替换字节不同的受管文件，不 rename 包目录。安装成功后，如果该项目 Editor 正在运行，用 `tools run editor.refresh` 让它导入替换后的包，再用 `init package --project <UnityProject> --check` 验证已安装字节。
+- 包更新从不要求关闭 Editor。发布失败时如实报告精确的文件或目录：`PACKAGE_FILE_LOCKED` 的 `details.blockedFiles` 列出仍未写入的受管文件，重跑同一命令即继续收敛；`PACKAGE_DIRECTORY_LOCKED` 只出现在必须替换目录本身的修复路径。不得为促成安装关闭、重启或强制终止 Unity；`--close-editor` 只属于用户自己明确决定的运维动作，不得作为建议或追问的理由。
 - Skill 明确目录使用 `init skill --target <SkillDirectory>`；预设使用 `init skill --agent <.agents|claude> --scope <workspace|user>`，workspace scope 同时传 `--workspace <path>`。明确目录与预设选项不混用。
 - 每个成功的安装或更新效果都用对应原命令加 `--check` 校验。Bridge 与 Skill 是独立效果，一个失败只阻断该效果及其校验，不阻断另一个已授权的效果。
 

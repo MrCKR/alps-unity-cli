@@ -16,12 +16,12 @@ Bridge 与 AI Skill 是两个独立安装对象。先用安装协议发现并选
 unitycli init help
 unitycli init discover
 unitycli init package --project C:\path\UnityProject
-# 仅在发布阶段报告 PACKAGE_DIRECTORY_LOCKED 且用户批准正常关闭该准确项目后使用
+# 仅供运维自己决定时使用；更新协议不会要求或建议关闭 Editor
 unitycli init package --project C:\path\UnityProject --close-editor
 unitycli init package --project C:\path\UnityProject --check
 ```
 
-Editor 打开是正常安装状态：Package 以 staging 目录加 rename 就地替换，安装不要求先关闭 Unity。关闭只在真实出现目录占用时作为显式兜底。
+Editor 打开是正常安装状态：已安装的 Package 在就地按文件收敛，只替换字节不同的受管文件，不 rename 包目录。目录换血只用于首次安装与受管清单不可读的修复。被占用的单个文件会以`details.blockedFiles`精确报告，重跑同一命令即继续收敛。
 
 Bridge 安装内容：
 - `Packages/com.alpsckr.unitycli/` — canonical Bridge 包（copy 模式）

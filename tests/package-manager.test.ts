@@ -23,7 +23,7 @@ test("ensurePackageBridge copies unitypkg contents to Packages/com.alpsckr.unity
   const result = await ensurePackageBridge(project);
 
   assert.equal(result.dependencyName, "com.alpsckr.unitycli");
-  assert.equal(result.packageVersion, "0.10.4");
+  assert.equal(result.packageVersion, "0.10.5");
   assert.equal(result.installMode, "copy");
   assert.equal(result.projectHash.length, 64);
   assert.equal(result.sourceHash.length, 64);
@@ -33,7 +33,7 @@ test("ensurePackageBridge copies unitypkg contents to Packages/com.alpsckr.unity
   const bridgePath = result.bridgePath;
   const packageJson = JSON.parse(await readFile(join(bridgePath, "package.json"), "utf8")) as { name: string; version: string };
   assert.equal(packageJson.name, "com.alpsckr.unitycli");
-  assert.equal(packageJson.version, "0.10.4");
+  assert.equal(packageJson.version, "0.10.5");
 
   // Editor files should be copied
   const bridgeSource = await readFile(join(bridgePath, "Editor", "UnityCliBridge.cs"), "utf8");
@@ -65,14 +65,14 @@ test("canonical package source manifest fixes every file hash and fails closed o
   const sentinelPath = join(root, "target-sentinel.txt");
   try {
     await mkdir(source);
-    const packageBytes = Buffer.from(`${JSON.stringify({ name: "com.alpsckr.unitycli", version: "0.10.4", unity: "2022.3" }, null, 2)}\n`, "utf8");
+    const packageBytes = Buffer.from(`${JSON.stringify({ name: "com.alpsckr.unitycli", version: "0.10.5", unity: "2022.3" }, null, 2)}\n`, "utf8");
     await writeFile(join(source, "package.json"), packageBytes);
     await writeFile(sentinelPath, "unchanged\n", "utf8");
     const sourceHash = await hashPackageTree(source);
     const contract = {
       schemaVersion: 1,
       packageName: "com.alpsckr.unitycli",
-      packageVersion: "0.10.4",
+      packageVersion: "0.10.5",
       sourceHash,
       files: [{ path: "package.json", size: packageBytes.length, sha256: createHash("sha256").update(packageBytes).digest("hex") }],
     };
@@ -104,7 +104,7 @@ test("Bridge inspection distinguishes missing, damaged, drifted, and repaired in
   try {
     const missing = await inspectPackageBridge(project);
     assert.equal(missing.status, "missing");
-    assert.equal(missing.availableVersion, "0.10.4");
+    assert.equal(missing.availableVersion, "0.10.5");
     assert.equal(missing.installedVersion, undefined);
     assert.equal(missing.reasonCode, "PACKAGE_NOT_INSTALLED");
     await assert.rejects(() => stat(missing.bridgePath), { code: "ENOENT" });
@@ -134,8 +134,8 @@ test("Bridge inspection distinguishes missing, damaged, drifted, and repaired in
     await writeFile(installed.installMetadataPath, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
     const drifted = await inspectPackageBridge(project);
     assert.equal(drifted.status, "drifted");
-    assert.equal(drifted.installedVersion, "0.10.4");
-    assert.equal(drifted.availableVersion, "0.10.4");
+    assert.equal(drifted.installedVersion, "0.10.5");
+    assert.equal(drifted.availableVersion, "0.10.5");
     assert.equal(drifted.reasonCode, "PACKAGE_INSTALL_DRIFTED");
     await ensurePackageBridge(project);
     assert.equal((await inspectPackageBridge(project)).status, "installed");
@@ -213,8 +213,8 @@ test("ensurePackageBridge refreshes orphaned legacy metadata when the package di
 
   const installed = await ensurePackageBridge(project);
   const metadata = JSON.parse(await readFile(metadataPath, "utf8")) as Record<string, unknown>;
-  assert.equal(installed.packageVersion, "0.10.4");
-  assert.equal(metadata.packageVersion, "0.10.4");
+  assert.equal(installed.packageVersion, "0.10.5");
+  assert.equal(metadata.packageVersion, "0.10.5");
   assert.equal(metadata.cliCompatibilityRange, ">=0.10.0 <0.11.0");
   assert.match(String(metadata.managedFilesSha256), /^[a-f0-9]{64}$/);
 });
@@ -282,15 +282,37 @@ test("ensurePackageBridge overwrites when version or hash changes", async () => 
 
   // Second install should detect the mismatch and re-copy
   const second = await ensurePackageBridge(project);
-  assert.equal(second.packageVersion, "0.10.4");
+  assert.equal(second.packageVersion, "0.10.5");
   assert.notEqual(second.installTime, first.installTime);
 
   // Verify the metadata was corrected
   const updatedMetadata = JSON.parse(await readFile(metadataPath, "utf8")) as { packageVersion: string };
-  assert.equal(updatedMetadata.packageVersion, "0.10.4");
+  assert.equal(updatedMetadata.packageVersion, "0.10.5");
 });
 
-test("ensurePackageBridge retries transient Windows rename failures before publishing", async () => {
+test("ensurePackageBridge converges an existing install in place without renaming the package directory", async () => {
+  const project = await makeUnityProject();
+  const first = await ensurePackageBridge(project);
+  const managedFile = join(first.bridgePath, "Editor", "UnityCliBridge.cs");
+  await writeFile(managedFile, "// force fresh projection", "utf8");
+  const plan = await preparePackageBridgeInstall(project);
+  let directoryRenames = 0;
+
+  const result = await ensurePackageBridge(project, plan, {
+    absoluteDeadlineMs: Date.now() + 5_000,
+    renameDirectory: async (source, target) => {
+      directoryRenames += 1;
+      await rename(source, target);
+    },
+  });
+
+  // 更新已安装包时不得 rename 包目录：目录级占用不再能让整次发布失败。
+  assert.equal(directoryRenames, 0);
+  assert.match(await readFile(managedFile, "utf8"), /class UnityCliBridge/);
+  assert.equal((await checkPackageBridge(project)).sourceHash, result.sourceHash);
+});
+
+test("ensurePackageBridge retries transient per-file replace failures during in-place convergence", async () => {
   const project = await makeUnityProject();
   const first = await ensurePackageBridge(project);
   const managedFile = join(first.bridgePath, "Editor", "UnityCliBridge.cs");
@@ -301,9 +323,9 @@ test("ensurePackageBridge retries transient Windows rename failures before publi
   const result = await ensurePackageBridge(project, plan, {
     absoluteDeadlineMs: Date.now() + 5_000,
     publishRetryDelayMs: 1,
-    renameDirectory: async (source, target) => {
-      if (target === plan.bridgePath && String(source).includes(".staging-") && publishAttempts++ < 2) {
-        throw Object.assign(new Error("transient publish lock"), { code: "EPERM" });
+    renameFile: async (source, target) => {
+      if (String(target).toLowerCase() === managedFile.toLowerCase() && publishAttempts++ < 2) {
+        throw Object.assign(new Error("transient file lock"), { code: "EPERM" });
       }
       await rename(source, target);
     },
@@ -325,8 +347,8 @@ test("ensurePackageBridge publish window honors the caller immutable deadline in
   const result = await ensurePackageBridge(project, plan, {
     absoluteDeadlineMs: Date.now() + 60_000,
     publishRetryDelayMs: 250,
-    renameDirectory: async (source, target) => {
-      if (target === plan.bridgePath && String(source).includes(".staging-") && publishAttempts++ < 24) {
+    renameFile: async (source, target) => {
+      if (String(target).toLowerCase() === managedFile.toLowerCase() && publishAttempts++ < 24) {
         throw Object.assign(new Error("defender scan lock"), { code: "EPERM" });
       }
       await rename(source, target);
@@ -337,12 +359,49 @@ test("ensurePackageBridge publish window honors the caller immutable deadline in
   assert.equal((await checkPackageBridge(project)).sourceHash, result.sourceHash);
 });
 
-test("ensurePackageBridge restores the previous target when staged publish exhausts its deadline", async () => {
+test("ensurePackageBridge reports exact blocked files and keeps the install converging", async () => {
+  const project = await makeUnityProject();
+  const first = await ensurePackageBridge(project);
+  const blocked = join(first.bridgePath, "Editor", "UnityCliBridge.cs");
+  const repaired = join(first.bridgePath, "Runtime", "Infrastructure", "UnityCliRuntimeBridge.cs");
+  await writeFile(blocked, "// blocked projection", "utf8");
+  await writeFile(repaired, "// pending projection", "utf8");
+  const plan = await preparePackageBridgeInstall(project);
+
+  await assert.rejects(() => ensurePackageBridge(project, plan, {
+    absoluteDeadlineMs: Date.now() + 30,
+    publishRetryDelayMs: 5,
+    renameFile: async (source, target) => {
+      if (String(target).toLowerCase() === blocked.toLowerCase()) throw Object.assign(new Error("persistent file lock"), { code: "EPERM" });
+      await rename(source, target);
+    },
+  }), (error: unknown) => {
+    assert.ok(error instanceof PackageManagerError);
+    assert.equal(error.code, "PACKAGE_FILE_LOCKED");
+    assert.equal(error.transient, true);
+    const details = error.details as { blockedFiles: Array<{ file: string; nativeCode: string }>; replacedFiles: number };
+    assert.deepEqual(details.blockedFiles.map((entry) => entry.file), ["Editor/UnityCliBridge.cs"]);
+    assert.equal(details.blockedFiles[0].nativeCode, "EPERM");
+    assert.ok(details.replacedFiles >= 1);
+    assert.doesNotMatch(error.nextActions.join("\n"), /--close-editor|close Unity/i);
+    return true;
+  });
+
+  // 未被占用的变更文件已经写入；同一命令重跑即收敛剩余文件。
+  assert.match(await readFile(repaired, "utf8"), /class UnityCliRuntimeBridge/);
+  const converged = await ensurePackageBridge(project);
+  assert.equal((await checkPackageBridge(project)).sourceHash, converged.sourceHash);
+  assert.match(await readFile(blocked, "utf8"), /class UnityCliBridge/);
+});
+
+test("ensurePackageBridge restores the previous target when a repair swap exhausts its deadline", async () => {
   const project = await makeUnityProject();
   const first = await ensurePackageBridge(project);
   const managedFile = join(first.bridgePath, "Editor", "UnityCliBridge.cs");
   const previousContent = "// previous target must survive";
   await writeFile(managedFile, previousContent, "utf8");
+  // 元数据缺失时受管集合不可知，只能走目录级修复；这里验证该路径的失败报告与回滚。
+  await rm(first.installMetadataPath, { force: true });
   const plan = await preparePackageBridgeInstall(project);
 
   await assert.rejects(() => ensurePackageBridge(project, plan, {
@@ -358,8 +417,8 @@ test("ensurePackageBridge restores the previous target when staged publish exhau
     assert.ok(error instanceof PackageManagerError);
     assert.equal(error.code, "PACKAGE_DIRECTORY_LOCKED");
     assert.equal(error.transient, false);
-    assert.match(error.nextActions[0], /locked package directory/);
-    assert.match(error.nextActions[1], /--close-editor/);
+    assert.match(error.nextActions[0], /previous package state was restored/i);
+    assert.doesNotMatch(error.nextActions.join("\n"), /--close-editor|ask once/i);
     return true;
   });
 
@@ -406,7 +465,7 @@ test("ensurePackageBridge rejects managed-file traversal without touching an ext
   assert.equal(await readFile(sentinel, "utf8"), "sentinel");
 });
 
-test("checkPackageBridge rejects a subset managed-file manifest", async () => {
+test("ensurePackageBridge repairs a subset managed-file manifest in place while check keeps rejecting it", async () => {
   const project = await makeUnityProject();
   const first = await ensurePackageBridge(project);
   await writeFile(first.fileManifestPath, `${JSON.stringify({ version: 1, files: ["package.json"] })}\n`, "utf8");
@@ -414,9 +473,11 @@ test("checkPackageBridge rejects a subset managed-file manifest", async () => {
 
   await assert.rejects(() => checkPackageBridge(project), (error: unknown) =>
     typeof error === "object" && error !== null && (error as { code?: string }).code === "PACKAGE_FILE_MANIFEST_INVALID");
-  await assert.rejects(() => ensurePackageBridge(project), (error: unknown) =>
-    typeof error === "object" && error !== null && (error as { code?: string }).code === "PACKAGE_FILE_MANIFEST_INVALID");
-  assert.equal(await readFile(join(first.bridgePath, "Editor", "UnityCliBridge.cs"), "utf8"), "// replaced");
+  const converged = await ensurePackageBridge(project);
+  assert.match(await readFile(join(first.bridgePath, "Editor", "UnityCliBridge.cs"), "utf8"), /class UnityCliBridge/);
+  const manifest = JSON.parse(await readFile(first.fileManifestPath, "utf8")) as { files: string[] };
+  assert.ok(manifest.files.length > 1);
+  assert.equal((await checkPackageBridge(project)).sourceHash, converged.sourceHash);
 });
 
 test("ensurePackageBridge rejects empty, duplicate, drive, and UNC managed paths", async () => {
@@ -489,7 +550,7 @@ test("checkPackageBridge succeeds for valid copy-mode install", async () => {
   const checked = await checkPackageBridge(project);
 
   assert.equal(checked.dependencyName, "com.alpsckr.unitycli");
-  assert.equal(checked.packageVersion, "0.10.4");
+  assert.equal(checked.packageVersion, "0.10.5");
   assert.equal(checked.installMode, "copy");
   assert.equal(checked.projectHash.length, 64);
   assert.equal(checked.sourceHash.length, 64);

@@ -12,7 +12,7 @@ const handlers = (await Promise.all(["package.ts", "init-help.ts", "init-discove
 const failures = [];
 const expectedSubcommands = ["help", "discover", "package", "skill"];
 const removedOptions = ["pkg-only", "skill-only", "unity"];
-if (contract.version !== 3 || contract.topLevel !== "init" || contract.schema !== "schemas/init.schema.json") failures.push("init contract identity must be version 3 and reference schemas/init.schema.json");
+if (contract.version !== 4 || contract.topLevel !== "init" || contract.schema !== "schemas/init.schema.json") failures.push("init contract identity must be version 4 and reference schemas/init.schema.json");
 if (JSON.stringify(Object.keys(contract.subcommands)) !== JSON.stringify(expectedSubcommands)) failures.push("init contract subcommands must be help, discover, package, skill in order");
 if (JSON.stringify(contract.subcommands.package.options) !== JSON.stringify(["project", "close-editor", "check", "timeout-ms"])) failures.push("init package options mismatch");
 if (JSON.stringify(contract.subcommands.skill.options) !== JSON.stringify(["agent", "scope", "workspace", "target", "check", "timeout-ms"])) failures.push("init skill options mismatch");

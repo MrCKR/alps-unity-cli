@@ -55,7 +55,7 @@ Installation is split by ownership:
 - `init discover` is a bounded, read-only current-project installation plan with exact Editor running state.
 - `init help` is the static, versioned AI setup protocol.
 
-Bridge and Skill installation are independent effects. The CLI is non-interactive; the AI preserves explicit user targets, infers the unique current project/workspace, and asks only unresolved decisions. A running Editor is a normal installation state: the Bridge copy is replaced in place through a staging-directory rename, so installation never requires closing Unity. Closing is an explicit fallback that requires the install-scoped `--close-editor` plus separate user approval, and only after a reported package-directory lock; force termination is never used.
+Bridge and Skill installation are independent effects. The CLI is non-interactive; the AI preserves explicit user targets, infers the unique current project/workspace, and asks only unresolved decisions. A running Editor is a normal installation state: an existing Bridge copy is converged file by file in place and its directory is never renamed, so a package update never requires closing Unity. A blocked file is reported by exact path and rerunning the same command converges it. `--close-editor` stays available for an operator's own explicit decision only; the installation protocol never asks for a close, and force termination is never used.
 
 The Bridge source is the npm-local canonical `unitypkg`. `contracts/package-files.json` fixes every managed path, size, SHA-256, and the complete tree hash. Installation validates the source before planning and again before effect, publishes through staging/rename, and proves the target from fresh filesystem readback.
 

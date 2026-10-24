@@ -23,14 +23,14 @@ export async function handleInitHelp(args: string[], flags: Record<string, strin
   return success(requestId, {
     action: "init_help",
     audience: "ai",
-    protocolVersion: 3,
+    protocolVersion: 4,
     version: await cliVersion(),
     aiInstructions: [
       "Run `unitycli init discover` from the user's current working directory and use its compact current-project plan.",
       "Treat every project, scope, host, or Skill directory the user already specified as final; never ask them to choose it again. Use `init skill --target` for an explicit directory such as `.pi/skills/unitycli`.",
       "When discovery returns one current or ancestor Unity project, use it without another project-selection question. Ask only entries present in discovery.requiredDecisions.",
       "An open Unity Editor is a normal installation state, not a blocking condition. Run `init package --project <UnityProject>` with the Editor open and running: the installer replaces the package in place and never closes, starts, or restarts Unity for you.",
-      "Only when the publish reports `PACKAGE_DIRECTORY_LOCKED` does closing the Editor matter. Report the locked package directory, state that the previous package state was restored, ask once whether this exact Unity project may be closed normally, and rerun the same command with `--close-editor` only after approval. Never force-terminate Unity.",
+      "A package update never requires closing the Editor: the install converges the existing package file by file and never renames that directory. A failed publish reports the exact files or directory it could not replace; rerun the same command to converge the remaining files. Do not ask the user to close Unity, and do not close, start, or restart it. `--close-editor` exists only for the operator's own explicit decision and is never a suggested next step.",
       "After a successful install into a project whose Editor is running, run `unitycli tools run editor.refresh --instance <projectPath|name|alias>` so the Editor imports the replaced package, then run `init package --check` to verify the installed bytes. A refresh result with `changed:false` means the Editor had nothing left to import and is still a successful step; judge the installation by the install readback and by the check's `cli.version`, `cli.compatibilityRange`, `installedVersion`, and `availableVersion`, not by whether a refresh reported an import.",
       "Bridge and Skill installation are independent authorized effects. A failure blocks only that effect and its check; continue other user-authorized independent installation effects and report every final status.",
       "Run one corresponding `--check` after each successful package or Skill installation and verify its business status.",

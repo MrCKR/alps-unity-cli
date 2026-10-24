@@ -45,7 +45,8 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | `E_EDITOR_STATE_UNVERIFIABLE` | 请求了`--close-editor`，但无法严格判断准确项目的Editor进程，不能确定要关闭哪个进程 | 不加`--close-editor`重新安装，Editor保持打开也会就地替换；或由用户自行正常关闭该项目后重跑同一命令 |
 | `E_EDITOR_CLOSE_FAILED` | 无法向准确目标Editor发送正常关闭请求 | 不加`--close-editor`重新安装；或由用户正常关闭该项目后重跑同一命令 |
 | `E_EDITOR_CLOSE_BLOCKED` | 正常关闭后Editor仍存在，通常有未保存或modal提示 | 由用户处理Unity提示并正常关闭后重跑；或改用不加`--close-editor`的就地安装 |
-| `PACKAGE_DIRECTORY_LOCKED` | Windows持续占用现有Bridge目录，原子替换无法提交；原目录已回滚 | 报告被占用的精确目录；询问一次是否可正常关闭该准确项目，同意后加`--close-editor`重跑；不得强制终止Unity，不得手工部分删除 |
+| `PACKAGE_DIRECTORY_LOCKED` | 目录级修复必须替换现有Bridge目录，Windows持续占用它；原目录已回滚 | 报告被占用的精确目录并说明原状态已回滚；目录句柄释放后重跑同一命令（下一次会先在就地收敛）；不得为促成安装关闭、重启或强制终止Unity，不得手工部分删除 |
+| `PACKAGE_FILE_LOCKED` | 就地收敛时有受管文件被Windows持续占用；其余文件已更新，元数据未提交，`--check`会报`damaged` | 重跑同一命令收敛剩余文件；若重复报告同一批文件，报告`details.blockedFiles`的精确路径；不得手工删除、移动或重命名包文件 |
 | `PACKAGE_ASSEMBLY_CONFLICT` | 项目其他来源提供了UnityCLI必须独占的随包程序集（文件名或assembly identity命中） | 预检在effect前，未写入任何文件。按`details.conflicts`判定：带`identicalToPackageDependency:true`的是与包内字节一致的冗余副本，可由用户移除；项目或Player构建确实需要的副本无法用包内（仅Editor）副本代替，此时应如实报告该项目无法安装Bridge。不得自行删除/移动/重命名项目文件，也存在Assets/Packages/PackageCache内部改名或搬移都清不掉的identity匹配 |
 | `PACKAGE_ASSEMBLY_CONFLICT_LIMIT` | 冲突数量超过可枚举上限 | 按`details.conflicts`处理已列出的冲突后重跑；不要删除整个目录 |
 | `PACKAGE_ASSEMBLY_SCAN_BUDGET_EXHAUSTED` | 扫描规模超出兜底预算，**不代表存在冲突** | 按`details.budget`、`details.limits`、`details.roots`与`details.largestDirectories`报告规模；不得为此删除项目内容或修改已安装包 |

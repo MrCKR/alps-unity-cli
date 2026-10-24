@@ -24,7 +24,7 @@ test("init help is self-contained for minimal decisions, explicit targets, open-
   const data = result.data as any;
   assert.equal(data.action, "init_help");
   assert.equal(data.audience, "ai");
-  assert.equal(data.protocolVersion, 3);
+  assert.equal(data.protocolVersion, 4);
   assert.match(data.version, /^\d+\.\d+\.\d+/);
   assert.equal(data.nextCommand, "unitycli init discover");
   assert.deepEqual(Object.keys(data.commands).sort(), ["discover", "explicitSkillCheck", "explicitSkillInstall", "packageCheck", "packageInstall", "packageInstallAndCloseEditor", "userSkillCheck", "userSkillInstall", "workspaceSkillCheck", "workspaceSkillInstall"]);
@@ -39,9 +39,11 @@ test("init help is self-contained for minimal decisions, explicit targets, open-
   assert.match(instructions, /Ask only entries present in discovery.requiredDecisions/i);
   assert.match(instructions, /open Unity Editor is a normal installation state/i);
   assert.match(instructions, /never closes, starts, or restarts Unity for you/i);
-  assert.match(instructions, /PACKAGE_DIRECTORY_LOCKED/);
-  assert.match(instructions, /ask once whether this exact Unity project may be closed normally/i);
-  assert.match(instructions, /never force-terminate/i);
+  assert.match(instructions, /converges the existing package file by file/i);
+  assert.match(instructions, /never renames that directory/i);
+  assert.match(instructions, /Do not ask the user to close Unity/i);
+  assert.match(instructions, /`--close-editor` exists only for the operator/i);
+  assert.doesNotMatch(instructions, /ask once whether this exact Unity project may be closed normally/i);
   assert.match(instructions, /tools run editor\.refresh/);
   assert.match(instructions, /`changed:false` means the Editor had nothing left to import/i);
   assert.match(instructions, /`cli\.version`, `cli\.compatibilityRange`/);

@@ -12,7 +12,7 @@ const schema = JSON.parse(await readFile("schemas/init.schema.json", "utf8")) as
 function assertValid(value: unknown): void { assert.deepEqual(validateSchema(schema, value), [], JSON.stringify(value)); }
 
 test("init contract and schema enumerate the final command surface only", () => {
-  assert.equal(contract.version, 3);
+  assert.equal(contract.version, 4);
   assert.equal(contract.schema, "schemas/init.schema.json");
   assert.deepEqual(Object.keys(contract.subcommands), ["help", "discover", "package", "skill"]);
   assert.deepEqual(contract.subcommands.skill.agents, [".agents", "claude"]);

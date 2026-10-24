@@ -33,7 +33,7 @@ unitycli init help
 unitycli init discover
 ```
 
-Install or repair the Bridge in one explicit Unity project. Keep the Editor open: the package is replaced in place while Unity runs. Use `--close-editor` only after a reported directory lock and after the user approves normally closing that exact project:
+Install or repair the Bridge in one explicit Unity project. Keep the Editor open: an existing package is converged file by file in place, and its directory is never renamed. A blocked file is reported by path, and rerunning the same command converges it. `--close-editor` stays available for an operator's own decision; the installation protocol never asks for a close:
 
 ```powershell
 unitycli init package --project C:\path\UnityProject

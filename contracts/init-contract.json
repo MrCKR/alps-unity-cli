@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "topLevel": "init",
   "schema": "schemas/init.schema.json",
   "subcommands": {
