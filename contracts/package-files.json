@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
-  "packageVersion": "0.10.2",
-  "sourceHash": "a7c5a009910a426b4e51c54157eb88e3aa6e3501d7b00468408a4e6bff8117be",
+  "packageVersion": "0.10.3",
+  "sourceHash": "98332a1eb84f22dc67823bca24cc643ced3c7b1a67a4092bd4418d391a11807c",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -2752,7 +2752,7 @@
     {
       "path": "package.json",
       "size": 268,
-      "sha256": "2b239f5deb58b46e124a81363b34bc33b73fc300a7e086fb75cdf06178e26245"
+      "sha256": "a2d68558ce2c964c10004610296500c9c63e0dc30e87ba66d924d7abec4c0cdb"
     }
   ]
 }
