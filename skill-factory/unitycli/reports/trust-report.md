@@ -3,7 +3,7 @@
 Status: governed local package
 Owner: alps-unity-cli maintainers
 Review cadence: per-release
-Reviewed: 2026-10-23 for release 0.10.3
+Reviewed: 2026-10-24 for release 0.10.4
 
 ## Scope
 
@@ -34,6 +34,11 @@ The Skill does not add confirmation, intent review, or a predefined operation ra
 - Recorder failure does not change the Unity task result.
 
 ## Verified Evidence
+
+Verified for release 0.10.4 (2026-10-24), scoped to the release content:
+
+- The completion-contract generator and its generated C# registry: affected completion-contract tests 22/22 PASS, `completion:audit` clean, `architecture:validate --strict` with zero failed checks, and `debug.code-flow-run` / `-submit` / `-wait` / `-cancel` completed real calls in the Dev Editor.
+- No Skill runtime projection file changed in this release.
 
 Verified for release 0.10.3 (2026-10-23):
 
