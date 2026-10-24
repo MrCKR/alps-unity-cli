@@ -3,6 +3,7 @@ import { lstat, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "no
 import { createHash } from "node:crypto";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { POWERSHELL_UTF8_OUTPUT_LINE } from "../powershell-transport.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -412,6 +413,7 @@ async function withWindowsInstallMutex<T>(targetRoot: string, deadlineMs: number
   const key = createHash("sha256").update(resolve(targetRoot).toLowerCase()).digest("hex").slice(0, 32);
   const mutexName = `Local\\UnityCliSkillInstall_${key}`;
   const script = [
+    POWERSHELL_UTF8_OUTPUT_LINE,
     "$mutex = [System.Threading.Mutex]::new($false, $env:UNITY_CLI_SKILL_MUTEX_NAME)",
     "$parent = Get-Process -Id ([int]$env:UNITY_CLI_SKILL_PARENT_PID) -ErrorAction Stop",
     "$parentStartTicks = $parent.StartTime.ToUniversalTime().Ticks",

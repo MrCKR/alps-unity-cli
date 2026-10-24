@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CLICK_DIALOG_MIN_EXECUTION_BUDGET_MS, buildClickDialogScript, clickObservedDialog, dialogId, normalizeDialogButton, parseClickDialogOutput, publicDialog, type ObservedEditorDialog } from "../src/editor-dialogs.js";
-import clickDialogTool from "../src/tools/editor/dialog/click.js";
+import { CLICK_DIALOG_MIN_EXECUTION_BUDGET_MS, DIALOG_CLICK_PRE_EFFECT_FAILURES, buildClickDialogScript, clickObservedDialog, dialogId, normalizeDialogButton, parseClickDialogOutput, publicDialog, type ObservedEditorDialog } from "../src/editor-dialogs.js";
+import clickDialogTool, { dialogClickFailureError } from "../src/tools/editor/dialog/click.js";
 import { parseWindowsEditorStateOutput } from "../src/windows-editor-state.js";
 
 test("dialogId is deterministic and never exposes the native hwnd", () => {
@@ -39,8 +39,35 @@ test("dialog click output parser recognizes terminal states and isolates unprove
   assert.deepEqual(parseClickDialogOutput("clicked\n"), { outcome: "clicked" });
   assert.deepEqual(parseClickDialogOutput("stale\n"), { outcome: "stale" });
   assert.deepEqual(parseClickDialogOutput("button-not-found\n"), { outcome: "button-not-found" });
-  assert.deepEqual(parseClickDialogOutput("unproven\n"), { outcome: "unproven" });
+  for (const failure of ["rect-unavailable", "cursor-unavailable", "foreground-refused", "foreground-not-acquired", "cursor-not-moved", "input-rejected", "not-proven"]) {
+    assert.deepEqual(parseClickDialogOutput(`failed:${failure}\n`), { outcome: "unproven", failure });
+  }
+  assert.deepEqual(parseClickDialogOutput("failed:unknown-token\n"), { outcome: "unproven", reason: "parse" });
+  assert.deepEqual(parseClickDialogOutput("unproven\n"), { outcome: "unproven", reason: "parse" });
   assert.deepEqual(parseClickDialogOutput("native exception 0x123\n"), { outcome: "unproven", reason: "parse" });
+});
+
+test("dialog click failure mapping separates provable no-effect failures from unknown-effect ones", () => {
+  for (const failure of ["rect-unavailable", "cursor-unavailable", "foreground-refused", "foreground-not-acquired", "cursor-not-moved"] as const) {
+    assert.equal(DIALOG_CLICK_PRE_EFFECT_FAILURES.has(failure), true);
+    const error = dialogClickFailureError({ outcome: "unproven", failure }, ["recover"]);
+    assert.equal(error.code, "E_DIALOG_CLICK_SUPPRESSED");
+    assert.equal(error.transient, true);
+    assert.equal(error.retryAfterMs, 250);
+    assert.deepEqual(error.details, { reason: failure });
+    assert.match(error.nextActions.join(" "), /Replay the same dialogId and button/);
+  }
+  for (const failure of ["input-rejected", "not-proven"] as const) {
+    assert.equal(DIALOG_CLICK_PRE_EFFECT_FAILURES.has(failure), false);
+    const error = dialogClickFailureError({ outcome: "unproven", failure }, ["recover"]);
+    assert.equal(error.code, "E_DIALOG_CLICK_UNPROVEN");
+    assert.notEqual(error.transient, true);
+    assert.deepEqual(error.details, { reason: failure });
+    assert.deepEqual(error.nextActions, ["recover"]);
+  }
+  const unparsed = dialogClickFailureError({ outcome: "unproven", reason: "timeout" }, ["recover"]);
+  assert.equal(unparsed.code, "E_DIALOG_CLICK_UNPROVEN");
+  assert.deepEqual(unparsed.details, { reason: "timeout" });
 });
 
 test("dialog click runner failure reasons remain stable and do not expose script inputs", async () => {

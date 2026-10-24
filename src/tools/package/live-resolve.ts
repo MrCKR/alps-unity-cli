@@ -7,6 +7,7 @@ import { defaultDataDir } from "../../platform.js";
 import type { ToolContext } from "../define.js";
 import { waitForEditorTransitionEnd } from "../editor/readiness.js";
 import { rejectUnavailableEditorState } from "../editor/state.js";
+import { POWERSHELL_UTF8_OUTPUT_LINE } from "../../powershell-transport.js";
 import { blockedEditorStateError, blockerNextActions, blockerTimeoutMessage, blockersFromDetails, StructuredToolError } from "../errors.js";
 
 export interface LiveResolvedPackage {
@@ -452,6 +453,7 @@ function failureData(error: unknown): { code: string; message: string; nextActio
 }
 
 const PACKAGE_LEASE_GUARD_SCRIPT = `
+${POWERSHELL_UTF8_OUTPUT_LINE}
 $ErrorActionPreference = 'Stop'
 $path = $env:UNITY_CLI_LEASE_PATH
 $revokePath = $env:UNITY_CLI_REVOKE_PATH

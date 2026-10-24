@@ -92,9 +92,17 @@ test("tools describe learns exact Editor operability contracts without a live ca
       const result = await handleToolsCommand("describe", [name], {}, { dataDir, projectTools: [] }, `req_describe_${name.replaceAll(".", "_")}`);
       assert.equal(result.ok, true, JSON.stringify(result));
       if (result.ok) {
-        const data = result.data as { name: string; inputSchema?: unknown };
+        const data = result.data as { name: string; params?: unknown };
         assert.equal(data.name, name);
-        assert.ok(data.inputSchema);
+        // 默认 describe 只发布精简 params 契约，锁定调用所需的名字与类型。
+        assert.ok(Array.isArray(data.params), `${name} 的默认 describe 必须返回 params 数组`);
+      }
+      const detailed = await handleToolsCommand("describe", [name], { detail: "full" }, { dataDir, projectTools: [] }, `req_describe_full_${name.replaceAll(".", "_")}`);
+      assert.equal(detailed.ok, true, JSON.stringify(detailed));
+      if (detailed.ok) {
+        // 完整 inputSchema 只能由 --detail full 显式获取。
+        const data = detailed.data as { inputSchema?: unknown };
+        assert.ok(data.inputSchema && typeof data.inputSchema === "object", `${name} 的 --detail full 必须返回 inputSchema`);
       }
     }
     assert.equal(resolveCatalogIndependentInvocationTool("scene.hierarchy"), undefined);

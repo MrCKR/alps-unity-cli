@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { platform as currentPlatform } from "node:os";
+import { POWERSHELL_UTF8_OUTPUT_LINE } from "./powershell-transport.js";
 
 export interface WindowsEditorButton { label: string; hwnd: string; enabled: boolean; }
 export interface WindowsEditorWindow {
@@ -48,7 +49,7 @@ function normalizeWindow(value: unknown): WindowsEditorWindow[] {
   return [{ hwnd: raw.hwnd, ownerHwnd: typeof raw.ownerHwnd === "string" ? raw.ownerHwnd : null, className: raw.className, title: raw.title, message: raw.message, visible: raw.visible, enabled: raw.enabled, buttons, modal: raw.modal }];
 }
 
-export const WINDOWS_EDITOR_STATE_PS_SCRIPT_TEMPLATE = `
+export const WINDOWS_EDITOR_STATE_PS_SCRIPT_TEMPLATE = `${POWERSHELL_UTF8_OUTPUT_LINE}
 $ErrorActionPreference = 'Stop'
 try {
   Add-Type -TypeDefinition @"

@@ -1,4 +1,4 @@
-import { CLICK_DIALOG_MIN_EXECUTION_BUDGET_MS, clickObservedDialog, observeEditorDialogs } from "../../../editor-dialogs.js";
+import { CLICK_DIALOG_MIN_EXECUTION_BUDGET_MS, DIALOG_CLICK_PRE_EFFECT_FAILURES, clickObservedDialog, observeEditorDialogs, type DialogClickResult } from "../../../editor-dialogs.js";
 import { InstanceRegistryError, selectObservationInstanceForFlags } from "../../../instances.js";
 import { defineTool, type ToolContext } from "../../define.js";
 import { StructuredToolError } from "../../errors.js";
@@ -9,7 +9,7 @@ export interface EditorDialogClickResult { clicked: true; dialogId: string; titl
 export default defineTool<EditorDialogClickRequest, EditorDialogClickResult>({
   name: "editor.dialog-click",
   summary: "Click one enabled button on a currently observed Unity desktop dialog.",
-  description: "Re-observes the selected canonical Unity project, invokes the exact enabled button label returned by editor.dialogs, and proves that the original dialog disappeared or is no longer modal.",
+  description: "Re-observes the selected canonical Unity project, invokes the exact enabled button label returned by editor.dialogs, and proves that the original dialog disappeared or is no longer modal. A click stopped before any synthetic input returns E_DIALOG_CLICK_SUPPRESSED with no effect and may be replayed.",
   group: "editor",
   target: "editor",
   destructiveHint: false,
@@ -46,7 +46,34 @@ export default defineTool<EditorDialogClickRequest, EditorDialogClickResult>({
     const result = await clickObservedDialog(dialog, matches[0], deadlineMs);
     if (result.outcome === "stale") throw new StructuredToolError("E_DIALOG_STALE", "The dialog changed before the click effect could be applied.", recovery);
     if (result.outcome === "button-not-found") throw new StructuredToolError("E_DIALOG_BUTTON_NOT_FOUND", "The requested enabled button changed before the click effect could be applied.", recovery);
-    if (result.outcome !== "clicked") throw new StructuredToolError("E_DIALOG_CLICK_UNPROVEN", "The dialog click did not prove that the original modal dialog closed.", recovery, result.reason ? { reason: result.reason } : undefined);
+    if (result.outcome !== "clicked") throw dialogClickFailureError(result, recovery);
     return { clicked: true, dialogId: dialog.dialogId, title: dialog.title, button: request.button };
   },
 });
+
+/**
+ * 把脚本的失败点映射为确定性公开错误。
+ *
+ * 在单次 SendInput 之前返回的失败可证明没有任何点击效果，因此以可重放错误交付；
+ * 其余情况效果未知，必须重新观察后再决定。错误 details 只给稳定 token，不携带 native 句柄。
+ */
+export function dialogClickFailureError(result: DialogClickResult, recovery: string[]): StructuredToolError {
+  if (result.failure && DIALOG_CLICK_PRE_EFFECT_FAILURES.has(result.failure))
+    return new StructuredToolError(
+      "E_DIALOG_CLICK_SUPPRESSED",
+      "The click stopped before any synthetic mouse input was injected, so no click effect occurred.",
+      [
+        "Replay the same dialogId and button with tools run editor.dialog-click; no click effect occurred.",
+        "Run tools run editor.dialogs first if the dialog or its enabled buttons may have changed.",
+      ],
+      { reason: result.failure },
+      true,
+      250,
+    );
+  return new StructuredToolError(
+    "E_DIALOG_CLICK_UNPROVEN",
+    "The dialog click did not prove that the original modal dialog closed.",
+    recovery,
+    { reason: result.failure ?? result.reason ?? "unclassified" },
+  );
+}

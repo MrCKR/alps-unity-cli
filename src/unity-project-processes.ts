@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { basename } from "node:path";
 import { promisify } from "node:util";
 import { resolveProjectIdentityAsync } from "./project-identity.js";
+import { POWERSHELL_UTF8_OUTPUT_LINE } from "./powershell-transport.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -85,7 +86,8 @@ export async function closeUnityProjectProcesses(processes: UnityProjectProcess[
   return { requested: Number(value.requested), remaining: Number(value.remaining) };
 }
 
-export const WINDOWS_UNITY_PROCESS_CLOSE_SCRIPT = `$ErrorActionPreference = 'Stop'
+export const WINDOWS_UNITY_PROCESS_CLOSE_SCRIPT = `${POWERSHELL_UTF8_OUTPUT_LINE}
+$ErrorActionPreference = 'Stop'
 $items = @([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:UNITYCLI_CLOSE_PROCESSES_BASE64)) | ConvertFrom-Json)
 $deadline = [int64]$env:UNITYCLI_CLOSE_DEADLINE_MS
 $requested = 0
@@ -110,7 +112,8 @@ while ($true) {
 }
 [Console]::Out.WriteLine((@{ requested=$requested; remaining=$remaining } | ConvertTo-Json -Compress))`;
 
-export const WINDOWS_UNITY_PROCESS_DISCOVERY_SCRIPT = `$ErrorActionPreference = 'Stop'
+export const WINDOWS_UNITY_PROCESS_DISCOVERY_SCRIPT = `${POWERSHELL_UTF8_OUTPUT_LINE}
+$ErrorActionPreference = 'Stop'
 Add-Type -TypeDefinition @"
 using System; using System.Runtime.InteropServices;
 public static class UnityCliProjectProcessArgv { [DllImport("shell32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr CommandLineToArgvW(string commandLine, out int argc); [DllImport("kernel32.dll")] public static extern IntPtr LocalFree(IntPtr value); public static string[] Parse(string commandLine) { int argc; var memory=CommandLineToArgvW(commandLine,out argc); if(memory==IntPtr.Zero) return null; try { var result=new string[argc]; for(var i=0;i<argc;i++) result[i]=Marshal.PtrToStringUni(Marshal.ReadIntPtr(memory,i*IntPtr.Size)); return result; } finally { LocalFree(memory); } } }

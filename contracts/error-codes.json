@@ -641,9 +641,9 @@
     "TIMED_OUT"
   ],
   "counts": {
-    "files": 788,
-    "codes": 1009,
-    "classified": 1009,
+    "files": 789,
+    "codes": 1010,
+    "classified": 1010,
     "unclassified": 0,
     "dynamicConcatenationSites": 0
   },
@@ -3942,6 +3942,17 @@
       "fact": "NOT_FOUND",
       "effectStarted": "false",
       "transient": false,
+      "prefix": "DIALOG",
+      "renameTo": null,
+      "emitters": [
+        "src/tools/editor/dialog/click.ts"
+      ]
+    },
+    {
+      "code": "E_DIALOG_CLICK_SUPPRESSED",
+      "fact": "SUPPRESSED",
+      "effectStarted": "false",
+      "transient": true,
       "prefix": "DIALOG",
       "renameTo": null,
       "emitters": [

@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
+import { POWERSHELL_UTF8_OUTPUT_LINE } from "./powershell-transport.js";
 
 export const CANONICALIZATION_VERSION = 1 as const;
 export const INSTANCE_ID_PREFIX = "unity-";
@@ -187,7 +188,7 @@ function resolveNativeCanonicalProjectPath(inputPath: string): NativeCanonicalPr
   const helperSource = canonicalHelperSourcePath();
   const command = [
     "$ErrorActionPreference = 'Stop'",
-    "$OutputEncoding = [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)",
+    POWERSHELL_UTF8_OUTPUT_LINE,
     "Add-Type -Path $env:UNITY_CLI_CANONICAL_HELPER_SOURCE",
     "$result = [UnityCli.UnityCliCanonicalProjectPath]::Resolve($env:UNITY_CLI_CANONICAL_PATH_INPUT)",
     "$result | ConvertTo-Json -Compress -Depth 4",
@@ -253,7 +254,7 @@ function resolveNativeCanonicalProjectPathAsync(inputPath: string, options: Cano
   const helperSource = canonicalHelperSourcePath();
   const command = [
     "$ErrorActionPreference = 'Stop'",
-    "$OutputEncoding = [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)",
+    POWERSHELL_UTF8_OUTPUT_LINE,
     "Add-Type -Path $env:UNITY_CLI_CANONICAL_HELPER_SOURCE",
     "$result = [UnityCli.UnityCliCanonicalProjectPath]::Resolve($env:UNITY_CLI_CANONICAL_PATH_INPUT)",
     "$result | ConvertTo-Json -Compress -Depth 4",

@@ -6,6 +6,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { readAssemblyIdentity } from "./assembly-identity.js";
+import { withPowerShellUtf8Output } from "./powershell-transport.js";
 
 export interface UnityManifest {
   dependencies?: Record<string, string>;
@@ -636,7 +637,7 @@ async function processStartIdentity(pid: number): Promise<string | undefined> {
   if (pid === process.pid && cachedCurrentProcessStartIdentity) return cachedCurrentProcessStartIdentity;
   if (process.platform !== "win32") return pid === process.pid ? packageBridgeProcessStartIdentity : undefined;
   try {
-    const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `$p=Get-Process -Id ${pid} -ErrorAction Stop; $p.StartTime.ToUniversalTime().ToString('O')`], { timeout: 5000, windowsHide: true });
+    const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", withPowerShellUtf8Output(`$p=Get-Process -Id ${pid} -ErrorAction Stop; $p.StartTime.ToUniversalTime().ToString('O')`)], { timeout: 5000, windowsHide: true });
     const value = String(stdout).trim();
     if (pid === process.pid && value) cachedCurrentProcessStartIdentity = value;
     return value || undefined;

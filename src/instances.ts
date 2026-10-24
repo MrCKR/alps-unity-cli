@@ -9,6 +9,7 @@ import { stripBom } from "./util.js";
 import { getBoolean } from "./args.js";
 import { stringFlag } from "./bridge/args.js";
 import { findUnityProjectProcesses } from "./unity-project-processes.js";
+import { withPowerShellUtf8Output } from "./powershell-transport.js";
 import {
   CANONICALIZATION_VERSION,
   ProjectIdentityError,
@@ -1560,7 +1561,7 @@ function runPowerShell(command: string, env: Record<string, string>, timeoutMs: 
   const executable = process.env.SystemRoot
     ? resolve(process.env.SystemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
     : "powershell.exe";
-  return spawnSync(executable, ["-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(command, "utf16le").toString("base64")], {
+  return spawnSync(executable, ["-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(withPowerShellUtf8Output(command), "utf16le").toString("base64")], {
     encoding: "utf8",
     windowsHide: true,
     timeout: timeoutMs,
@@ -1575,7 +1576,7 @@ function runPowerShellAsync(command: string, env: Record<string, string>, timeou
     ? resolve(process.env.SystemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
     : "powershell.exe";
   return new Promise((complete) => {
-    const child = spawn(executable, ["-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(command, "utf16le").toString("base64")], {
+    const child = spawn(executable, ["-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(withPowerShellUtf8Output(command), "utf16le").toString("base64")], {
       windowsHide: true,
       env: { ...process.env, ...env },
     });

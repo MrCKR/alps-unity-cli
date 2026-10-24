@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { inspectProjectProcessClaims, type RegistryIdentity } from "./instances.js";
+import { POWERSHELL_UTF8_OUTPUT_LINE } from "./powershell-transport.js";
 import { probeWindowsEditorState, type WindowsEditorWindow } from "./windows-editor-state.js";
 
 export interface EditorDialog { dialogId: string; title: string; message: string; modal: true; buttons: string[]; }
@@ -33,7 +34,26 @@ function toObservedDialog(window: WindowsEditorWindow, processId: number, proces
 
 export const CLICK_DIALOG_MIN_EXECUTION_BUDGET_MS = 10_000;
 export type DialogClickOutcome = "clicked" | "stale" | "button-not-found" | "unproven";
-export type DialogClickResult = { outcome: DialogClickOutcome; reason?: "timeout" | "exit" | "parse" };
+/**
+ * 脚本给出的确定失败点。前五项都在 SendInput 之前返回，因此能证明没有注入任何鼠标输入；
+ * `input-rejected` 与 `not-proven` 之后效果未知。
+ */
+export type DialogClickFailure =
+  | "rect-unavailable"
+  | "cursor-unavailable"
+  | "foreground-refused"
+  | "foreground-not-acquired"
+  | "cursor-not-moved"
+  | "input-rejected"
+  | "not-proven";
+export const DIALOG_CLICK_FAILURES: ReadonlySet<DialogClickFailure> = new Set<DialogClickFailure>([
+  "rect-unavailable", "cursor-unavailable", "foreground-refused", "foreground-not-acquired", "cursor-not-moved", "input-rejected", "not-proven",
+]);
+/** 可证明未发生任何点击效果的失败点：全部在单次 SendInput 之前返回。 */
+export const DIALOG_CLICK_PRE_EFFECT_FAILURES: ReadonlySet<DialogClickFailure> = new Set<DialogClickFailure>([
+  "rect-unavailable", "cursor-unavailable", "foreground-refused", "foreground-not-acquired", "cursor-not-moved",
+]);
+export type DialogClickResult = { outcome: DialogClickOutcome; reason?: "timeout" | "exit" | "parse"; failure?: DialogClickFailure };
 export type DialogClickRunner = (script: string, timeoutMs: number) => Promise<{ stdout: string; reason?: "timeout" | "exit" }>;
 
 /** 在调用者冻结的 deadline 内执行唯一按钮 effect 并证明原 modal 已消失。 */
@@ -50,8 +70,13 @@ export function buildClickDialogScript(dialog: ObservedEditorDialog, button: { l
 }
 
 export function parseClickDialogOutput(stdout: string): DialogClickResult {
-  const result = stdout.trim().split(/\r?\n/).at(-1);
-  return result === "clicked" || result === "stale" || result === "button-not-found" || result === "unproven" ? { outcome: result } : { outcome: "unproven", reason: "parse" };
+  const result = stdout.trim().split(/\r?\n/).at(-1) ?? "";
+  if (result === "clicked" || result === "stale" || result === "button-not-found") return { outcome: result };
+  if (result.startsWith("failed:")) {
+    const failure = result.slice("failed:".length) as DialogClickFailure;
+    if (DIALOG_CLICK_FAILURES.has(failure)) return { outcome: "unproven", failure };
+  }
+  return { outcome: "unproven", reason: "parse" };
 }
 
 function runClickDialogPowerShell(script: string, timeoutMs: number): Promise<{ stdout: string; reason?: "timeout" | "exit" }> {
@@ -60,7 +85,8 @@ function runClickDialogPowerShell(script: string, timeoutMs: number): Promise<{ 
     resolve({ stdout });
   }));
 }
-const CLICK_DIALOG_SCRIPT = `$ErrorActionPreference='Stop'
+const CLICK_DIALOG_SCRIPT = `${POWERSHELL_UTF8_OUTPUT_LINE}
+$ErrorActionPreference='Stop'
 Add-Type @"
 using System; using System.Runtime.InteropServices; using System.Text; using System.Threading;
 public static class UnityCliDialogClick {
@@ -70,11 +96,11 @@ public static class UnityCliDialogClick {
 [StructLayout(LayoutKind.Sequential)] public struct Input { public uint type; public MouseInput mouse; }
 [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h); [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h); [DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr h); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h,out uint p); [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr h,uint c); [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h,out Rect r); [DllImport("user32.dll")] public static extern bool GetCursorPos(out Point p); [DllImport("user32.dll")] public static extern bool SetCursorPos(int x,int y); [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h); [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern uint SendInput(uint count,Input[] inputs,int size); [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern int GetWindowTextW(IntPtr h,StringBuilder t,int n); [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern int GetClassNameW(IntPtr h,StringBuilder t,int n);
 public static string Text(IntPtr h){var t=new StringBuilder(2048);GetWindowTextW(h,t,t.Capacity);return t.ToString();} public static string ClassName(IntPtr h){var t=new StringBuilder(256);GetClassNameW(h,t,t.Capacity);return t.ToString();} public static bool Modal(IntPtr h){var o=GetWindow(h,4);return IsWindowVisible(h) && ((o!=IntPtr.Zero && !IsWindowEnabled(o)) || string.Equals(ClassName(h),"#32770",StringComparison.Ordinal));}
-public static bool Click(IntPtr dialog,IntPtr button){Rect r;Point previous;if(!GetWindowRect(button,out r)||r.Right<=r.Left||r.Bottom<=r.Top||!GetCursorPos(out previous))return false;if(!SetForegroundWindow(dialog))return false;Thread.Sleep(50);if(GetForegroundWindow()!=dialog)return false;var moved=false;try{if(!SetCursorPos(r.Left+(r.Right-r.Left)/2,r.Top+(r.Bottom-r.Top)/2))return false;moved=true;var inputs=new[]{new Input{type=0,mouse=new MouseInput{dwFlags=0x0002}},new Input{type=0,mouse=new MouseInput{dwFlags=0x0004}}};return SendInput((uint)inputs.Length,inputs,Marshal.SizeOf(typeof(Input)))==(uint)inputs.Length;}finally{if(moved)SetCursorPos(previous.X,previous.Y);}}
+public static string Click(IntPtr dialog,IntPtr button){Rect r;Point previous;if(!GetWindowRect(button,out r)||r.Right<=r.Left||r.Bottom<=r.Top)return "rect-unavailable";if(!GetCursorPos(out previous))return "cursor-unavailable";if(!SetForegroundWindow(dialog))return "foreground-refused";Thread.Sleep(50);if(GetForegroundWindow()!=dialog)return "foreground-not-acquired";var moved=false;try{if(!SetCursorPos(r.Left+(r.Right-r.Left)/2,r.Top+(r.Bottom-r.Top)/2))return "cursor-not-moved";moved=true;var inputs=new[]{new Input{type=0,mouse=new MouseInput{dwFlags=0x0002}},new Input{type=0,mouse=new MouseInput{dwFlags=0x0004}}};return SendInput((uint)inputs.Length,inputs,Marshal.SizeOf(typeof(Input)))==(uint)inputs.Length?null:"input-rejected";}finally{if(moved)SetCursorPos(previous.X,previous.Y);}}
 }
 "@
 $targetProcessId=[uint32]__PID__; $dialog=[IntPtr][Convert]::ToInt64(__DIALOG__.Substring(2),16); $button=[IntPtr][Convert]::ToInt64(__BUTTON__.Substring(2),16); $ownerExpected=__OWNER__; $title=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(__TITLE__)); $buttonLabel=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(__BUTTON_LABEL__))
 $actual=Get-CimInstance Win32_Process -Filter ("ProcessId="+$targetProcessId); if(!$actual -or ([DateTime]$actual.CreationDate).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ',[Globalization.CultureInfo]::InvariantCulture) -ne __START__){'stale';return}
 [uint32]$dialogPid=0;[UnityCliDialogClick]::GetWindowThreadProcessId($dialog,[ref]$dialogPid)|Out-Null;$owner=[UnityCliDialogClick]::GetWindow($dialog,4);$ownerActual=if($owner -eq [IntPtr]::Zero){$null}else{'0x'+$owner.ToInt64().ToString('X')};if(![UnityCliDialogClick]::IsWindow($dialog)-or $dialogPid -ne $targetProcessId -or $ownerActual -ne $ownerExpected -or [UnityCliDialogClick]::Text($dialog) -cne $title -or ![UnityCliDialogClick]::Modal($dialog)){'stale';return}
 [uint32]$buttonPid=0;[UnityCliDialogClick]::GetWindowThreadProcessId($button,[ref]$buttonPid)|Out-Null;$actualButton=([UnityCliDialogClick]::Text($button)).Replace('&','');if(![UnityCliDialogClick]::IsWindow($button)-or $buttonPid -ne $targetProcessId -or [UnityCliDialogClick]::ClassName($button) -cne 'Button' -or $actualButton -cne $buttonLabel -or ![UnityCliDialogClick]::IsWindowEnabled($button)){'button-not-found';return}
-if(![UnityCliDialogClick]::Click($dialog,$button)){'unproven';return};for($i=0;$i -lt 50;$i++){if(![UnityCliDialogClick]::IsWindow($dialog)-or ![UnityCliDialogClick]::IsWindowVisible($dialog)-or ![UnityCliDialogClick]::Modal($dialog)){'clicked';return};Start-Sleep -Milliseconds 100};'unproven'`;
+$failure=[UnityCliDialogClick]::Click($dialog,$button);if($failure){'failed:'+$failure;return};for($i=0;$i -lt 50;$i++){if(![UnityCliDialogClick]::IsWindow($dialog)-or ![UnityCliDialogClick]::IsWindowVisible($dialog)-or ![UnityCliDialogClick]::Modal($dialog)){'clicked';return};Start-Sleep -Milliseconds 100};'failed:not-proven'`;
