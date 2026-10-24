@@ -3,7 +3,7 @@
 Status: governed local package
 Owner: alps-unity-cli maintainers
 Review cadence: per-release
-Reviewed: 2026-10-24 for release 0.10.4
+Reviewed: 2026-10-24 for release 0.10.5
 
 ## Scope
 
@@ -34,6 +34,11 @@ The Skill does not add confirmation, intent review, or a predefined operation ra
 - Recorder failure does not change the Unity task result.
 
 ## Verified Evidence
+
+Verified for release 0.10.5 (2026-10-24), scoped to the release content:
+
+- Package update path: affected init/package tests and the Dev round-trip validation (0.10.4 → 0.10.5 → 0.10.4) with the Editor kept open, plus the blocked-file report and its convergence.
+- No Skill runtime projection file changed in this release.
 
 Verified for release 0.10.4 (2026-10-24), scoped to the release content:
 
