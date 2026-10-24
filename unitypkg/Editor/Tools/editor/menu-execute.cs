@@ -15,17 +15,25 @@ namespace UnityCli
 
         public sealed class Result
         {
+            public sealed class ReceiptInfo
+            {
+                public string Type { get; set; }
+                public bool Complete { get; set; }
+                public bool VerificationRequired { get; set; }
+            }
+
             public string Path { get; set; }
             public bool Executed { get; set; }
             public long ElapsedMs { get; set; }
             public EditorStateInfo State { get; set; }
+            public ReceiptInfo Receipt { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
         {
             Name = "editor.menu-execute",
             Summary = "Execute any Unity Editor menu item by path and return the dispatch result with a fresh Editor state readback.",
-            Description = "Execute one Editor menu item by exact path, so native and project menus such as Tools/<your tool> both work. Success means Unity accepted the path and a fresh Editor state readback was captured in the same turn; it does not prove the menu's own business effect, so confirm the outcome with a read Tool such as editor.state or the affected asset or scene Tool. Before any effect is dispatched the path is preflighted: a path that does not exist fails with E_MENU_NOT_FOUND and a path whose own validate function reports disabled fails with E_MENU_DISABLED. After the effect barrier the outcome is only reported as E_EXECUTION_TIMEOUT with an unknown outcome when Unity declines the dispatch or the handler throws. Refused with E_UNITY_COMPILING, E_UNITY_IMPORTING or E_UNITY_BUSY while a compile, import, build or Play Mode transition is in progress. Works in Edit and Play Mode.", Notes = DebugDomainNotes.MenuExecuteLimits,
+            Description = "Execute one Editor menu item by exact path. The result receipt has type=dispatched and complete=false: Unity accepted the dispatch, but the menu's business effect is not proven. Confirm the outcome with the relevant read Tool. Before any effect is dispatched the path is preflighted: a path that does not exist fails with E_MENU_NOT_FOUND and a path whose own validate function reports disabled fails with E_MENU_DISABLED. After the effect barrier the outcome is only reported as E_EXECUTION_TIMEOUT with an unknown outcome when Unity declines the dispatch or the handler throws. Refused with E_UNITY_COMPILING, E_UNITY_IMPORTING or E_UNITY_BUSY while a compile, import, build or Play Mode transition is in progress. Works in Edit and Play Mode.", Notes = DebugDomainNotes.MenuExecuteLimits,
             Group = "editor",
             DestructiveHint = true,
             SideEffects = new[] { "arbitrary-menu-execution" },
@@ -91,7 +99,8 @@ namespace UnityCli
                 Path = path,
                 Executed = true,
                 ElapsedMs = elapsedMs,
-                State = EditorToolSupport.BuildEditorState()
+                State = EditorToolSupport.BuildEditorState(),
+                Receipt = new Result.ReceiptInfo { Type = "dispatched", Complete = false, VerificationRequired = true }
             });
         }
     }

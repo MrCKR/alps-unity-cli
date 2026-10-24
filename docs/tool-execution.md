@@ -72,7 +72,7 @@ Bridge-backed Tool由Unity Editor主线程执行。业务请求发送前，sessi
 unitycli tools run editor.compile --input '{"includeWarnings":true}' --timeout-ms 120000
 ```
 
-accepted、queued、phase、run ID 和 listener 字段仅属于内部 coordinator，不会成为公开成功。稳定 Play Mode 调用返回 `E_UNITY_COMPILE_REQUIRES_EDIT_MODE`；dry-run 只返回 planned effects，不触发 refresh 或 compile。
+内部 coordinator 的 `accepted`、`queued`、`phase`、run ID 和 listener 字段不会直接成为公开成功。两个明确的非终态 Tool 例外使用业务回执：`debug.code-flow-submit` 返回 `receipt.type="accepted"`、`complete=false` 与 `followUpTool="debug.code-flow-wait"`，只证明流已注册；`editor.menu-execute` 返回 `receipt.type="dispatched"`、`complete=false`，只证明菜单已派发，业务效果必须由调用方用相关只读 Tool 验证。其余成功 Tool 的回执都表示已证明终态。稳定 Play Mode 调用返回 `E_UNITY_COMPILE_REQUIRES_EDIT_MODE`；dry-run 只返回 planned effects，不触发 refresh 或 compile。
 
 ### `editor.refresh`
 

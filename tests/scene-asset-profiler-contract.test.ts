@@ -98,6 +98,7 @@ test("asset/search scene/hierarchy game-object.find and editor/console sources k
   assert.match(consoleSource, /class ConsoleReadTool : IUnityCliTool/);
   assert.match(consoleSource, /EditorToolSupport\.ReadConsolePage\(request\.Type, request\.Filter, pageSize, ctx\.UseReadBudget\(request\.Budget\)\)/);
   assert.match(menuExecuteSource, /class EditorMenuExecuteTool : IUnityCliTool[\s\S]*ExecuteMenuItem\(path\)/);
+  assert.match(menuExecuteSource, /ReceiptInfo[\s\S]*Type = "dispatched"[\s\S]*Complete = false[\s\S]*VerificationRequired = true/);
   assert.match(menuExecuteSource, /ctx\.CommitEffect\(\);[\s\S]*EditorApplication\.ExecuteMenuItem\(path\)/);
   assert.match(menuExecuteSource, /E_MENU_NOT_FOUND[\s\S]*E_MENU_DISABLED/);
   assert.match(menuExecuteSource, /TryGetItemEnabled\(path, out enabled\)[\s\S]*ctx\.CommitEffect\(\)/);

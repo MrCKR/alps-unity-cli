@@ -32,6 +32,13 @@ export interface CodeFlowCancelRequest {
   flowId: string;
 }
 
+/** submit 的机器可读回执：只证明流已注册，不证明用户代码已完成。 */
+export interface CodeFlowSubmitReceipt {
+  type: "accepted";
+  complete: false;
+  followUpTool: "debug.code-flow-wait";
+}
+
 /** submit 的收据：没有 status，因为它不是结论。 */
 export interface CodeFlowSubmitResult {
   registered: true;
@@ -45,6 +52,7 @@ export interface CodeFlowSubmitResult {
   maxFlowsPerSession: number;
   editorSessionId: string;
   note: string;
+  receipt: CodeFlowSubmitReceipt;
 }
 
 /** run / wait / cancel 共享的结果视图；status 是唯一区分器。 */

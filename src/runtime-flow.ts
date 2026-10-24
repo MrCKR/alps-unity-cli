@@ -36,7 +36,9 @@ const flowBudgetDefaultMs = 300_000;
 
 /** 提交一条流并立即返回句柄；它不等待，因此请求超时只需要覆盖编译。 */
 export async function executeRuntimeFlowSubmit(request: RuntimeFlowRequest, runtime: RuntimeCodeRuntime, requestId: string): Promise<Record<string, unknown>> {
-  return dispatchFlowStart("debug.code-flow-submit", request, runtime, requestId, 90_000);
+  const result = await dispatchFlowStart("debug.code-flow-submit", request, runtime, requestId, 90_000);
+  if (result.dryRun === true) return result;
+  return { ...result, receipt: { type: "accepted", complete: false, followUpTool: "debug.code-flow-wait" } };
 }
 
 /** 提交一条流并等到终态；请求超时覆盖流预算与余量，因此不会退回半途状态。 */

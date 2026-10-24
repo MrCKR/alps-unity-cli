@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.10.2",
-  "sourceHash": "8caef123e847898808761000dfd2d07a21b957d22674d2728fa7a0fbaf8e7e05",
+  "sourceHash": "a7c5a009910a426b4e51c54157eb88e3aa6e3501d7b00468408a4e6bff8117be",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -1341,8 +1341,8 @@
     },
     {
       "path": "Editor/Tools/editor/menu-execute.cs",
-      "size": 6024,
-      "sha256": "046a5aef50d2b73617d0d3f38ee7409e2217499813ff647cdefe82dea971c3be"
+      "size": 6301,
+      "sha256": "7fa0bc40351fbaf4fe58c9ce5cec00e2527724c204685856d50b889906b5df05"
     },
     {
       "path": "Editor/Tools/editor/menu-list.cs",

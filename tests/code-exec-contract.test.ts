@@ -24,6 +24,13 @@ test("debug.code-execute publishes direct examples with and without a completion
   assert.doesNotMatch(JSON.stringify(codeExecute.examples), /\{\.\.\.\}|--channel|batchmode|--job/);
 });
 
+test("debug.code-flow-submit exposes accepted-not-terminal receipt semantics", async () => {
+  const source = await readFile("src/runtime-flow.ts", "utf8");
+  assert.match(codeFlowSubmit.description, /type=accepted and complete=false/);
+  assert.match(codeFlowSubmit.description, /followUpTool=debug\.code-flow-wait/);
+  assert.match(source, /receipt: \{ type: "accepted", complete: false, followUpTool: "debug\.code-flow-wait" \}/);
+});
+
 test("debug.code-execute clearly preserves necessary hazardous code and discloses the non-preemptible main-thread boundary", () => {
   assert.match(codeExecute.summary, /cannot be force-stopped by timeout/i);
   assert.match(codeExecute.description, /does not reject infinite loops, long sleeps, blocking waits, lock contention/);
