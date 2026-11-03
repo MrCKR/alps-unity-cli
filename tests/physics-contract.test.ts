@@ -186,11 +186,10 @@ test("physics mutation tools validate before commit and prove fresh observed sta
   const simulation = await readFile(new URL("../unitypkg/Editor/Tools/physics/simulation.cs", import.meta.url), "utf8");
   const support = await readFile(new URL("../unitypkg/Editor/Tools/physics/PhysicsToolSupport.cs", import.meta.url), "utf8");
   assert.match(support, /SimulationMode2D = Physics2D\.simulationMode\.ToString\(\)/);
-  assert.match(support, /Physics\.simulationMode != SimulationMode\.Script/);
-  assert.match(support, /enabled \? SimulationMode\.FixedUpdate : SimulationMode\.Script/);
+  assert.match(support, /UnityCliVersionApi\.AutoSimulation3D/);
   assert.match(settings, /PhysicsToolSupport\.SetAutoSimulation3D\(value\)/);
   assert.match(simulation, /PhysicsToolSupport\.IsAutoSimulation3D\(\)/);
-  assert.doesNotMatch(settings + simulation + support, /Physics\.autoSimulation = value|Physics\.autoSimulation == value|AutoSimulation = Physics\.autoSimulation|if \(Physics\.autoSimulation/);
+  assert.doesNotMatch(settings + simulation + support, /Physics\.simulationMode != SimulationMode\.Script|Physics\.simulationMode = enabled \? SimulationMode\.FixedUpdate : SimulationMode\.Script/);
 });
 
 test("physics.settings canonical descriptor and DTO expose the manual simulation contract", async () => {

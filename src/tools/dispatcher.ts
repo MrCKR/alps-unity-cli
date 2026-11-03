@@ -45,7 +45,6 @@ function createSessionSupervisor(flags: Record<string, string | boolean>, runtim
   return runtime.createSessionSupervisor?.(flags, runtime) ?? new SessionSupervisor(flags, runtime);
 }
 
-const MULTI_TARGET_CATALOG_TOOLS = new Set<string>();
 type TargetAdmissionContext = {
   admissions: Partial<Record<InstanceTarget, RootAdmissionLease>>;
   supervisors: Partial<Record<InstanceTarget, SessionSupervisor>>;
@@ -172,47 +171,14 @@ export async function resolveCatalogToolForInvocation(
     const resolved = await resolveCatalogTool(name, flags, runtime, requestId, context.admissionAbsoluteDeadlineMs, fallbackName);
     return resolved.ok ? { ...resolved, context } : resolved;
   }
-  const acquired = await acquireCatalogAdmissions(
-    `catalog.resolve:${name}`, { name, ...(fallbackName ? { fallbackName } : {}) }, flags, runtime, requestId, context.timeoutMs,
-    context.admissionAbsoluteDeadlineMs, "catalog-resolution-v1",
-  );
-  if ("result" in acquired) return acquired.result as CliResult & { ok: false };
-  const provenances = discoveryProvenances(acquired.admissions);
-  const primary = acquired.admissions.editor ?? acquired.admissions.runtime!;
-  // descriptor discovery consumes only the original top-level admission budget.
-  for (const admission of Object.values(acquired.admissions)) {
-    if (admission) admission.executionAbsoluteDeadlineMs = context.admissionAbsoluteDeadlineMs;
-  }
-  try {
-    const resolved = await resolveCatalogTool(name, flags, {
-      ...runtime, rootAdmission: primary, rootAdmissions: acquired.admissions,
-    }, requestId, context.admissionAbsoluteDeadlineMs, fallbackName);
-    return resolved.ok
-      ? { ...resolved, context: { ...context, discoveryProvenances: provenances } }
-      : resolved;
-  } finally {
-    await releaseUnconsumedCatalogAdmissions(acquired);
-  }
+  const provenances: Partial<Record<InstanceTarget, DiscoveryProvenance>> = {};
+  const scoped = catalogReadRuntime(flags, runtime, context.admissionAbsoluteDeadlineMs, provenances);
+  const resolved = await resolveCatalogTool(name, flags, scoped, requestId, context.admissionAbsoluteDeadlineMs, fallbackName);
+  return resolved.ok
+    ? { ...resolved, context: { ...context, discoveryProvenances: provenances } }
+    : resolved;
 }
 
-function discoveryProvenances(
-  admissions: Partial<Record<InstanceTarget, RootAdmissionLease>>,
-): Partial<Record<InstanceTarget, DiscoveryProvenance>> {
-  const result: Partial<Record<InstanceTarget, DiscoveryProvenance>> = {};
-  for (const target of ["editor", "runtime"] as InstanceTarget[]) {
-    const admission = admissions[target];
-    if (!admission) continue;
-    result[target] = {
-      target,
-      instanceId: admission.instanceId,
-      sessionId: admission.sessionId,
-      ...(target === "editor" ? { editorSessionId: admission.sessionId } : {}),
-      listenerId: admission.listenerId,
-      listenerGeneration: admission.listenerGeneration,
-    };
-  }
-  return result;
-}
 
 /** 公开统一catalog对每个在线target session分别占一个slot，禁止跨池旁路输出。 */
 export async function dispatchCatalogProjection(
@@ -226,56 +192,50 @@ export async function dispatchCatalogProjection(
   if (runtime.projectTools) return execute(runtime);
   const startedAtMs = Date.now();
   const timeoutMs = Math.max(1, executionFromFlags(flags).timeoutMs ?? 30_000);
-  const acquired = await acquireCatalogAdmissions(command, input, flags, runtime, requestId, timeoutMs, startedAtMs + timeoutMs, "catalog-projection-v1");
-  if ("result" in acquired) return acquired.result;
-  const primary = acquired.admissions.editor ?? acquired.admissions.runtime!;
-  try {
-    return await execute({ ...runtime, rootAdmission: primary, rootAdmissions: acquired.admissions });
-  } finally {
-    await releaseUnconsumedCatalogAdmissions(acquired);
-  }
+  return execute(catalogReadRuntime(flags, runtime, startedAtMs + timeoutMs));
 }
 
-async function acquireCatalogAdmissions(
-  command: string,
-  input: Record<string, unknown>,
+/** 每个目标完成一次目录读取后才进入下一目标；短期 grant 不跨目标持有。 */
+function catalogReadRuntime(
   flags: Record<string, string | boolean>,
   runtime: ToolsRuntime,
-  requestId: string,
-  timeoutMs: number,
-  admissionAbsoluteDeadlineMs: number,
-  completionContractIdentity: string,
-  expectedDiscoveryProvenances?: Partial<Record<InstanceTarget, DiscoveryProvenance>>,
-): Promise<TargetAdmissionContext | { result: CliResult }> {
-  const context: TargetAdmissionContext = { admissions: {}, supervisors: {}, executionAbsoluteDeadlineMs: 0 };
-  let firstOffline: CliResult | undefined;
-  for (const target of ["editor", "runtime"] as InstanceTarget[]) {
-    const supervisor = createSessionSupervisor(flags, runtime);
-    try {
-      const admission = await supervisor.acquireRootAdmission({
-        requestId, command, input, dryRun: false, target, completionContractIdentity,
-        captureDiscoveryProvenance: true,
-        expectedDiscoveryProvenance: expectedDiscoveryProvenances?.[target], timeoutMs, admissionAbsoluteDeadlineMs,
-      });
-      context.admissions[target] = admission;
-      context.supervisors[target] = supervisor;
-    } catch (error) {
-      const projected = catalogAdmissionFailure(requestId, error);
-      if (projected.error.code === "E_INSTANCE_NOT_RUNNING" || projected.error.code === "E_RUNTIME_NOT_RUNNING") { firstOffline ??= projected; continue; }
-      await releaseUnconsumedCatalogAdmissions(context);
-      return { result: projected };
-    }
-  }
-  const leases = Object.values(context.admissions).filter((value): value is RootAdmissionLease => !!value);
-  if (leases.length === 0) return { result: firstOffline ?? failure(requestId, "E_INSTANCE_NOT_RUNNING", "No live Unity target is available for catalog projection.", ["Open the target Unity project or development Player."]) };
-  const now = Date.now();
-  if (leases.some((lease) => lease.grantExpiresAtMs <= now)) {
-    await releaseUnconsumedCatalogAdmissions(context);
-    return { result: failure(requestId, "E_UNITY_BUSY", "The Unity task-pool grants for the live catalog did not overlap before the admission deadline; no catalog request was sent.", ["Wait for active UnityCLI tasks to finish, then submit a new request."], { phase: "admission", businessRequestSent: false }, { transient: true, retryAfterMs: 100 }) };
-  }
-  context.executionAbsoluteDeadlineMs = now + timeoutMs;
-  for (const lease of leases) lease.executionAbsoluteDeadlineMs = context.executionAbsoluteDeadlineMs;
-  return context;
+  absoluteDeadlineMs: number,
+  provenances: Partial<Record<InstanceTarget, DiscoveryProvenance>> = {},
+): ToolsRuntime {
+  // 目录传输不继承任何旧 root lease，每个目标在读取前自行取得自己的准入。
+  const base: ToolsRuntime = { ...runtime, rootAdmission: undefined, rootAdmissions: undefined };
+  return {
+    ...base,
+    catalogAbsoluteDeadlineMs: absoluteDeadlineMs,
+    catalogRead: async (target, requestId, command, input) => {
+      const supervisor = createSessionSupervisor(flags, runtime);
+      let admission: RootAdmissionLease | undefined;
+      try {
+        admission = await supervisor.acquireRootAdmission({
+          requestId, command, input, dryRun: false, target,
+          completionContractIdentity: "catalog-projection-v1",
+          captureDiscoveryProvenance: true,
+          expectedDiscoveryProvenance: provenances[target],
+          timeoutMs: Math.max(1, absoluteDeadlineMs - Date.now()),
+          admissionAbsoluteDeadlineMs: absoluteDeadlineMs,
+        });
+        // 目录读取始终消费原始发现预算；申请准入不能延长顶层调用。
+        admission.executionAbsoluteDeadlineMs = absoluteDeadlineMs;
+        provenances[target] = {
+          target, instanceId: admission.instanceId, sessionId: admission.sessionId,
+          ...(target === "editor" ? { editorSessionId: admission.sessionId } : {}),
+          listenerId: admission.listenerId, listenerGeneration: admission.listenerGeneration,
+        };
+        return await executeBridgePayload(requestId, command, input, flags, { ...base, rootAdmission: admission }, {
+          mode: "read", mutation: false, absoluteDeadlineMs,
+        });
+      } catch (error) {
+        return catalogAdmissionFailure(requestId, error);
+      } finally {
+        if (admission) await completeUnconsumedRootAdmission(admission, supervisor);
+      }
+    },
+  };
 }
 
 async function releaseUnconsumedCatalogAdmissions(context: TargetAdmissionContext): Promise<void> {
@@ -961,16 +921,6 @@ async function acquireToolAdmission(
   admissionAbsoluteDeadlineMs: number,
   selected?: InstanceSelection,
 ): Promise<ToolAdmissionContext> {
-  if (MULTI_TARGET_CATALOG_TOOLS.has(tool.name)) {
-    const acquired = await acquireCatalogAdmissions(
-      tool.name, input, flags, runtime, requestId, timeoutMs, admissionAbsoluteDeadlineMs,
-      JSON.stringify(completion), runtime.discoveryProvenances,
-    );
-    if ("result" in acquired) return acquired;
-    const admission = acquired.admissions.editor ?? acquired.admissions.runtime!;
-    const supervisor = acquired.supervisors[admission.target]!;
-    return { admission, supervisor, ...acquired };
-  }
   const target = selected?.instance.activeSession?.target ?? selected?.instance.target ?? toolTarget(tool, flags);
   const admissionFlags = selected ? { ...flags, instance: selected.instance.instanceId } : flags;
   const supervisor = createSessionSupervisor(admissionFlags, runtime);

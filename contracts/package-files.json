@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.10.6",
-  "sourceHash": "11a57933e7009aca04a024c3d59910736af551d357b1d791e940b45a21cbca29",
+  "sourceHash": "fcedb6f7a06095a7e4fd59f59b6f135ea4406b21662c5d8ab5619ed7ac58e742",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -456,8 +456,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliObjectRef.cs",
-      "size": 22416,
-      "sha256": "bc695eea18c7027af6a74f4b37836c22c2bec363bc0e293398bfaca496f99a1f"
+      "size": 22431,
+      "sha256": "8bb1301052ff8eaf236b3785f20e891a4b6a5f730452823af2ddd989abb4b5b5"
     },
     {
       "path": "Editor/Infrastructure/UnityCliObjectSerializer.cs",
@@ -573,6 +573,11 @@
       "path": "Editor/Infrastructure/UnityCliValueConverter.cs",
       "size": 7497,
       "sha256": "440d266cc15d697ba516570521ee533a747fc3efbd93c35c298efb4eac6536e0"
+    },
+    {
+      "path": "Editor/Infrastructure/UnityCliVersionApi.cs",
+      "size": 2318,
+      "sha256": "83150497f824cc884c37610d8ce8ab08a530e3a858091d0dbc150506c90ac80d"
     },
     {
       "path": "Editor/Infrastructure/UnityCliWaiter.cs",
@@ -1306,8 +1311,8 @@
     },
     {
       "path": "Editor/Tools/editor/EditorSearchToolSupport.cs",
-      "size": 7059,
-      "sha256": "06b40b8db105c1590807e9ad2ae574747adb7af444e8f91114719d59c56ccc46"
+      "size": 7003,
+      "sha256": "fd57b305f8de14c9e0d5d26064ab06fd46e59efe6ff6b7dc36dde4e8ffb9145e"
     },
     {
       "path": "Editor/Tools/editor/EditorToolSupport.cs",
@@ -1596,8 +1601,8 @@
     },
     {
       "path": "Editor/Tools/physics/PhysicsToolSupport.cs",
-      "size": 15400,
-      "sha256": "ef6924081bc438915cbb9aa4bb12c6609ca8c721780878ff0af06b49e75fb492"
+      "size": 15332,
+      "sha256": "ba44bc4e3f2fb09c7a8d0d1630fdd039d0554df51a51edbf305fb176b9541a1e"
     },
     {
       "path": "Editor/Tools/physics/assign-material.cs",
@@ -1661,8 +1666,8 @@
     },
     {
       "path": "Editor/Tools/physics/simulation.cs",
-      "size": 4934,
-      "sha256": "5cc8e0a257443fde12a0da417fc70291da96cdbdb21d7555df02f3707f2703f4"
+      "size": 4944,
+      "sha256": "c0c744f45278f72a5967894f7186feefa6a2a0d94474eafd13de8805c61bbb33"
     },
     {
       "path": "Editor/Tools/physics/validate.cs",
@@ -1976,8 +1981,8 @@
     },
     {
       "path": "Editor/Tools/rendering/GraphicsToolSupport.cs",
-      "size": 20648,
-      "sha256": "b0e3591befe6deb763e8469f22dc5bdd0110c1577cff20cc333d8963aea2f6f3"
+      "size": 20645,
+      "sha256": "e0a8c6410c523f3f36beb2219662fbe24bf205593e9145f7eef41804512ac2b1"
     },
     {
       "path": "Editor/Tools/rendering/pipeline-info.cs",
@@ -1991,8 +1996,8 @@
     },
     {
       "path": "Editor/Tools/rendering/quality.cs",
-      "size": 10156,
-      "sha256": "94ca6847c7a73cbd0a1f8dce9e4221ac01f39295a568e37e4011132b19344668"
+      "size": 10153,
+      "sha256": "a088ae09f095c2bf6a00e93e50f969293bbc9cb87733aed64ae3c5a30c7a1939"
     },
     {
       "path": "Editor/Tools/rendering/scene-debug.cs",
@@ -2752,7 +2757,7 @@
     {
       "path": "package.json",
       "size": 268,
-      "sha256": "0c6259f22dd31ed47a323287864c17f1c8d8d044c7f580a4029057d7cb107927"
+      "sha256": "201960b1e846f3d8a471df5b9917ac7c3cae27d5e40277725fcd077bd2ba061c"
     }
   ]
 }

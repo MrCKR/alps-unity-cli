@@ -97,6 +97,52 @@ function attestation(generation: number, target: "editor" | "runtime" = "editor"
   };
 }
 
+test("fresh grant dispatch reuses its attested binding across supervisor instances", async () => {
+  let now = 1_000;
+  let selections = 0;
+  const acquireOwner = new SessionSupervisor({}, {}, {
+    now: () => now,
+    select: async () => { selections++; now += 3_000; return selection("ready"); },
+    acquire: async () => ({ granted: true, token: "a".repeat(64), grantExpiresInMs: 2_000, retryAfterMs: 100, attestation: attestation(1) }),
+  });
+  const admission = await acquireOwner.acquireRootAdmission({
+    requestId: "req_fresh_binding", command: "fixture.read", input: {}, dryRun: false, target: "editor",
+    completionContractIdentity: "fixture", timeoutMs: 30_000, admissionAbsoluteDeadlineMs: 20_000,
+  });
+  const sender = new SessionSupervisor({}, {}, {
+    now: () => now,
+    select: async () => { throw new Error("fresh first send must not repeat OS selection"); },
+    post: async (binding, request, _remaining, lease) => {
+      assert.equal(binding.endpoint, "http://127.0.0.1:50001");
+      assert.equal(lease, admission);
+      assert.ok(admission.grantExpiresAtMs > now);
+      return { response: { ok: true, requestId: request.payload.requestId, data: { sent: true } }, attestation: attestation(1) };
+    },
+  });
+  const result = await sender.read({ requestId: admission.requestId, command: "catalog.editor.describe", input: {}, rootAdmission: admission, absoluteDeadlineMs: admission.executionAbsoluteDeadlineMs });
+  assert.equal(result.ok, true);
+  assert.equal(selections, 1);
+  assert.equal(admission.consumed, true);
+});
+
+test("expired grant binding does not bypass fresh target selection", async () => {
+  let now = 1_000;
+  let selections = 0;
+  const supervisor = new SessionSupervisor({}, {}, {
+    now: () => now,
+    select: async () => { selections++; return selection("ready"); },
+    acquire: async () => ({ granted: true, token: "a".repeat(64), grantExpiresInMs: 2_000, retryAfterMs: 100, attestation: attestation(1) }),
+    post: async (_binding, request) => ({ response: { ok: true, requestId: request.payload.requestId, data: {} }, attestation: attestation(1) }),
+  });
+  const admission = await supervisor.acquireRootAdmission({
+    requestId: "req_expired_binding", command: "fixture.read", input: {}, dryRun: false, target: "editor",
+    completionContractIdentity: "fixture", timeoutMs: 30_000, admissionAbsoluteDeadlineMs: 20_000,
+  });
+  now += 2_001;
+  await supervisor.read({ requestId: admission.requestId, command: "catalog.editor.describe", input: {}, rootAdmission: admission, absoluteDeadlineMs: admission.executionAbsoluteDeadlineMs });
+  assert.equal(selections, 2);
+});
+
 test("supervisor consumes one absolute deadline and redelivers identical read bytes after transition", async () => {
   let now = 1_000;
   let selectCount = 0;

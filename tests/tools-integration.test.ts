@@ -4,6 +4,7 @@ import test from "node:test";
 import type { BridgeRequest, RootAdmissionLease, RootAdmissionRequest } from "../src/bridge/index.js";
 import { readEditorCatalogDescriptor, readEditorCatalogSummary, readRuntimeCatalogDescriptor, type CatalogSummaryQuery } from "../src/catalog-protocol.js";
 import { execute } from "../src/cli.js";
+import { InstanceRegistryError } from "../src/instances.js";
 import type { ToolMetadata } from "../src/tools/metadata/index.js";
 import { makeLiveTool, sceneHierarchyTool } from "./helpers/live-tool-fixtures.js";
 import { resolveCatalogTool } from "../src/tools/catalog.js";
@@ -89,7 +90,11 @@ test("tools group, search, and describe use one connected instance catalog", asy
     assert.equal(Object.hasOwn(describe.data as object, field), false, field);
 });
 
-test("each discovery root performs one bounded catalog transport per target", async () => {
+test("each discovery root consumes target grants before slow next-target selection", async (t) => {
+  let now = Date.now();
+  t.mock.method(Date, "now", () => now);
+  let held: RootAdmissionLease | undefined;
+  const events: string[] = [];
   const live = sceneHierarchyTool();
   const descriptorPayload = { ...bridgeDescriptor(live), outputSchema: { ...live.outputSchema, description: "x".repeat(4_096) } };
   const summary = {
@@ -102,12 +107,17 @@ test("each discovery root performs one bounded catalog transport per target", as
   };
   const calls = new Map<string, number>();
   const acquisitions: Array<RootAdmissionRequest["target"]> = [];
+  const admittedRequestIds: string[] = [];
   const runtime = {
     ...disconnected,
     createSessionSupervisor: () => ({
       acquireRootAdmission: async (request: RootAdmissionRequest): Promise<RootAdmissionLease> => {
+        assert.equal(held, undefined, "no grant may span another target's selection");
+        now += 3_000;
+        events.push(`acquire:${request.target}`);
         acquisitions.push(request.target);
-        return {
+        admittedRequestIds.push(request.requestId);
+        held = {
           requestId: request.requestId,
           command: request.command,
           rootFingerprint: `${request.target === "editor" ? "e" : "f"}`.repeat(64),
@@ -122,14 +132,17 @@ test("each discovery root performs one bounded catalog transport per target", as
           listenerGeneration: 1,
           token: `${request.target === "editor" ? "c" : "d"}`.repeat(64),
           consumed: false,
-          grantExpiresAtMs: Date.now() + 30_000,
+          grantExpiresAtMs: now + 2_000,
           executionAbsoluteDeadlineMs: 0,
           injected: true,
         };
+        return held;
       },
-      completeRootAdmission: async () => undefined,
+      completeRootAdmission: async () => { events.push(`release:${held?.target}`); held = undefined; },
     }),
     bridgeExecute: async (payload: BridgeRequest) => {
+      assert.ok(held && held.grantExpiresAtMs > now, "catalog read must use a live grant");
+      events.push(`post:${held.target}`);
       calls.set(payload.command, (calls.get(payload.command) ?? 0) + 1);
       if (payload.command.endsWith(".groups")) return { ok: true as const, requestId: payload.requestId, data: { catalogGeneration: `${payload.command}-generation`, groups: payload.command.startsWith("catalog.editor") ? [{ name: live.group, toolCount: 1 }] : [] } };
       if (payload.command.endsWith(".summary")) {
@@ -163,6 +176,9 @@ test("each discovery root performs one bounded catalog transport per target", as
     const before = acquisitions.length;
     assert.equal((await execute(argv, runtime as never)).ok, true, argv.join(" "));
     assert.deepEqual(acquisitions.slice(before), ["editor", "runtime"], argv.join(" "));
+    // 两个目标共用同一个准入 requestId 会使池内指纹校验冲突，必须各自唯一。
+    assert.equal(new Set(admittedRequestIds.slice(-2)).size, 2, argv.join(" "));
+    assert.deepEqual(events.splice(0), ["acquire:editor", "post:editor", "release:editor", "acquire:runtime", "post:runtime", "release:runtime"]);
   }
 
   for (const command of ["catalog.editor.groups", "catalog.player.groups", "catalog.editor.describe", "catalog.player.describe"])
@@ -240,6 +256,77 @@ test("tools run carries exact discovery provenance into the business root admiss
     listenerGeneration: 7,
   });
   assert.equal(admissions[2].admissionAbsoluteDeadlineMs, admissions[0].admissionAbsoluteDeadlineMs);
+});
+
+test("slow absent runtime does not expire Editor discovery or business admission", async (t) => {
+  let now = Date.now();
+  t.mock.method(Date, "now", () => now);
+  const events: string[] = [];
+  let held: RootAdmissionLease | undefined;
+  const runtime = {
+    ...disconnected,
+    createSessionSupervisor: () => ({
+      acquireRootAdmission: async (request: RootAdmissionRequest): Promise<RootAdmissionLease> => {
+        assert.equal(held, undefined);
+        events.push(`select:${request.target}`);
+        if (request.target === "runtime") {
+          now += 5_000;
+          throw new InstanceRegistryError("E_RUNTIME_NOT_RUNNING", "No runtime session.", []);
+        }
+        held = {
+          ...request, rootFingerprint: "a".repeat(64), instanceId: `unity-${"b".repeat(64)}`,
+          canonicalProjectPath: "c:\\fixture", sessionId: `session-${"c".repeat(64)}`,
+          processId: process.pid, processStartedAt: "injected-process",
+          listenerId: `listener-${"d".repeat(32)}`, listenerGeneration: 1,
+          token: "e".repeat(64), consumed: false, injected: true,
+          grantExpiresAtMs: now + 2_000, executionAbsoluteDeadlineMs: now + request.timeoutMs,
+        };
+        return held;
+      },
+      completeRootAdmission: async () => { held = undefined; events.push("release:editor"); },
+    }),
+    bridgeExecute: async (payload: BridgeRequest) => {
+      assert.ok(held && held.grantExpiresAtMs > now);
+      events.push(payload.command);
+      if (payload.command === "catalog.editor.describe") return {
+        ok: true as const, requestId: payload.requestId,
+        data: { catalogGeneration: "editor-generation", found: true, descriptor: bridgeDescriptor(goFindTool) },
+      };
+      assert.equal(payload.command, "catalog.editor.run");
+      return { ok: true as const, requestId: payload.requestId, data: { result: {
+        includeInactive: false, items: [], matchCount: 0,
+        pageInfo: { cursor: 0, pageSize: 100, total: 0 }, prefabStageOpen: false,
+        preferPrefabStage: false, query: "Nothing", searchMethod: "by_name",
+      } } };
+    },
+  };
+  for (const argv of [
+    ["tools", "describe", "game-object.find"],
+    ["tools", "run", "game-object.find", "--input", '{"name":"Nothing"}'],
+    ["command", "game-object.find", "--name", "Nothing"],
+  ]) {
+    const result = await execute(argv, runtime as never);
+    assert.equal(result.ok, true, JSON.stringify(result));
+    const observed = events.splice(0);
+    assert.deepEqual(observed.slice(0, 4), ["select:editor", "catalog.editor.describe", "release:editor", "select:runtime"]);
+    if (argv[1] !== "describe") assert.ok(observed.includes("catalog.editor.run"));
+    held = undefined;
+  }
+});
+
+// 缺少目标时只有对应缺失错误可跳过；权限和身份失败不能伪装成离线。
+test("catalog target identity failure stays fatal after Editor catalog read", async () => {
+  const runtime = {
+    ...disconnected,
+    createSessionSupervisor: () => ({
+      acquireRootAdmission: async () => { throw new InstanceRegistryError("E_INSTANCE_UNVERIFIABLE", "Identity unavailable.", []); },
+      completeRootAdmission: async () => undefined,
+    }),
+    bridgeExecute: async () => { throw new Error("must not send catalog or business request"); },
+  };
+  const result = await execute(["tools", "describe", "game-object.find"], runtime as never);
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.error.code, "E_INSTANCE_UNVERIFIABLE");
 });
 
 test("summary protocol bounds a large catalog before transport projection", async () => {

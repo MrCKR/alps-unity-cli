@@ -71,6 +71,12 @@ node dist/cli.js init package --project $project
 node dist/cli.js init package --project $project --check
 ```
 
+## Catalog Admission
+
+Live catalog requests acquire and consume one target's grant before selecting the next target. Editor and Development Player catalog reads retain their own live descriptors, ownership checks, and generation checks. They do not require overlapping grants. Descriptor discovery uses the original invocation deadline. Business execution acquires a separate grant for the selected target and preserves the discovered session and listener identity.
+
+The first request after a grant uses the binding verified during acquisition. Response attestation remains mandatory. Expired grants and subsequent recovery use fresh selection. A registry with no session for the requested target returns the target's not-running error before scanning process identities for another target.
+
 ## Validation Order
 
 1. Finish source, tests, contracts, generated outputs, public Skill, and docs.

@@ -147,7 +147,7 @@ namespace UnityCli
                 VSyncCount = QualitySettings.vSyncCount,
                 AntiAliasing = QualitySettings.antiAliasing,
                 ShadowDistance = QualitySettings.shadowDistance,
-                MasterTextureLimit = QualitySettings.globalTextureMipmapLimit,
+                MasterTextureLimit = UnityCliVersionApi.MasterTextureLimit,
                 LodBias = QualitySettings.lodBias,
                 MaximumLODLevel = QualitySettings.maximumLODLevel,
                 AnisotropicFiltering = QualitySettings.anisotropicFiltering.ToString(),

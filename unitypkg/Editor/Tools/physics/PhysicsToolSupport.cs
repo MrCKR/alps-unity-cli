@@ -72,16 +72,16 @@ namespace UnityCli
             };
         }
 
-        /// <summary>按 Unity 2022.3 SimulationMode 读取旧 autoSimulation 的等价语义。</summary>
+        /// <summary>按当前 Unity 版本读取 3D 物理自动模拟状态。</summary>
         public static bool IsAutoSimulation3D()
         {
-            return Physics.simulationMode != SimulationMode.Script;
+            return UnityCliVersionApi.AutoSimulation3D;
         }
 
         /// <summary>设置 3D 物理自动/脚本模拟模式；自动模式固定恢复为 FixedUpdate。</summary>
         public static void SetAutoSimulation3D(bool enabled)
         {
-            Physics.simulationMode = enabled ? SimulationMode.FixedUpdate : SimulationMode.Script;
+            UnityCliVersionApi.AutoSimulation3D = enabled;
         }
 
         /// <summary>构造 Rigidbody 摘要 DTO。</summary>

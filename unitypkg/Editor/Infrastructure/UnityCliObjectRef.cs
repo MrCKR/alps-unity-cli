@@ -267,7 +267,7 @@ namespace UnityCli
             internal static Component[] BoundedComponents(GameObject gameObject, UnityCliRequestBudget budget)
             {
                 if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-                var componentCount = gameObject.GetComponentCount();
+                var componentCount = UnityCliVersionApi.ComponentCount(gameObject);
                 if (componentCount < 0 || componentCount > MaximumComponentSnapshotItems || !budget.TryConsumeScannedRecords(componentCount))
                     throw new UnityCliRequestBudgetExceededException(componentCount > MaximumComponentSnapshotItems ? "componentSnapshotItems" : budget.ExhaustedDimension);
                 if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);

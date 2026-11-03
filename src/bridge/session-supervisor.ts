@@ -131,6 +131,9 @@ interface ValidatedBinding {
   readonly toolCatalogFingerprint?: string;
 }
 
+// 仅保留当前调用的已证明连接；弱引用不形成跨请求缓存，首次发送即移除。
+const admissionBindings = new WeakMap<RootAdmissionLease, ValidatedBinding>();
+
 interface TransportAttestation {
   target: InstanceTarget;
   instanceId: string;
@@ -284,7 +287,7 @@ export class SessionSupervisor {
           continue;
         }
         if (reply.granted && reply.token) {
-          return {
+          const lease: RootAdmissionLease = {
             requestId: request.requestId,
             command: request.command,
             rootFingerprint: fingerprint,
@@ -306,6 +309,8 @@ export class SessionSupervisor {
             executionAbsoluteDeadlineMs: this.dependencies.now() + request.timeoutMs,
             injected: false,
           };
+          admissionBindings.set(lease, binding);
+          return lease;
         }
         const delayMs = admissionPollDelay(this.dependencies.random());
         await this.dependencies.sleep(Math.min(delayMs, remainingMs));
@@ -323,6 +328,7 @@ export class SessionSupervisor {
 
   /** CLI只撤销尚未消费的本地root；Consumed只能由Unity声明的terminal owner释放。 */
   public async completeRootAdmission(admission: RootAdmissionLease): Promise<void> {
+    admissionBindings.delete(admission);
     if (admission.injected || this.runtime.bridgeExecute || admission.consumed) return;
     const deadlineMs = this.dependencies.now() + ADMISSION_COMPLETE_BUDGET_MS;
     try {
@@ -363,7 +369,14 @@ export class SessionSupervisor {
     // 首次 dispatch 前必须保留一次 bounded blocker probe；ready 快路径不会等待这段预算。
     const preDispatchDeadlineMs = reserveBlockerObservationBudget(startedAtMs, absoluteDeadlineMs);
     const sessionTarget = bridgeTarget(template.command);
-    const target = await this.resolveTarget(sessionTarget, preDispatchDeadlineMs, startedAtMs, absoluteDeadlineMs, template.allowTransitionBinding === true);
+    const lease = template.rootAdmission;
+    const grantedBinding = lease && !lease.consumed && lease.grantExpiresAtMs > this.dependencies.now()
+      ? admissionBindings.get(lease) : undefined;
+    if (lease) admissionBindings.delete(lease);
+    if (grantedBinding && grantedBinding.target !== sessionTarget) throw identityMismatch(grantedBinding.instanceId);
+    const target: SupervisorTarget = grantedBinding
+      ? { target: sessionTarget, instanceId: grantedBinding.instanceId, injected: false }
+      : await this.resolveTarget(sessionTarget, preDispatchDeadlineMs, startedAtMs, absoluteDeadlineMs, template.allowTransitionBinding === true);
     const request = freezeRequest(template, target.instanceId, absoluteDeadlineMs);
 
     if (target.injected) {
@@ -372,7 +385,7 @@ export class SessionSupervisor {
 
     let binding: ValidatedBinding;
     try {
-      binding = await this.bind(target, preDispatchDeadlineMs, false, target.initialSelection, template.allowTransitionBinding === true);
+      binding = grantedBinding ?? await this.bind(target, preDispatchDeadlineMs, false, target.initialSelection, template.allowTransitionBinding === true);
     } catch (error) {
       const observed = target.initialSelection
         ? await this.observeInstance(target.initialSelection.instance, absoluteDeadlineMs)

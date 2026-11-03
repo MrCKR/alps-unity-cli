@@ -9,6 +9,9 @@ import { isRegisteredToolName } from "./tool-name.js";
 export interface ProjectToolRuntime extends Partial<BridgeRuntime> {
   projectTools?: ToolMetadata[];
   runtimeTools?: ToolMetadata[];
+  /** 当前公开调用的目录预算；每个目标在实际读取时独立申请并消费准入。 */
+  catalogAbsoluteDeadlineMs?: number;
+  catalogRead?: (target: "editor" | "runtime", requestId: string, command: string, input: Record<string, unknown>) => Promise<CliResult>;
 }
 
 export type ProjectToolDiscovery = { ok: true; tools: ResolvedToolMetadata[]; mode: "runtime" | "bridge" } | (CliResult & { ok: false });

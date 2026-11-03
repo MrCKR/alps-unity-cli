@@ -94,7 +94,7 @@ function pageSeed(flags: Record<string, string | boolean>): CatalogPageRequest {
 }
 
 function catalogDeadline(runtime: ToolsRuntime): number | undefined {
-  return runtime.rootAdmissions?.editor?.executionAbsoluteDeadlineMs
+  return runtime.catalogAbsoluteDeadlineMs ?? runtime.rootAdmissions?.editor?.executionAbsoluteDeadlineMs
     ?? runtime.rootAdmissions?.runtime?.executionAbsoluteDeadlineMs
     ?? runtime.rootAdmission?.executionAbsoluteDeadlineMs;
 }

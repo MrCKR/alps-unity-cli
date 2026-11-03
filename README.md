@@ -6,7 +6,7 @@ Windows-first Unity Editor automation CLI for AI agents. The executable is `unit
 
 - Windows
 - Node.js 20 or newer
-- Unity 2022.3 or newer
+- Unity 2021.3 or newer
 - A Unity project when installing the Bridge
 - An opened Unity Editor only when using live Unity capabilities; installation may normally close only the exact target Editor after explicit user approval
 

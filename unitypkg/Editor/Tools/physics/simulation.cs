@@ -66,7 +66,7 @@ namespace UnityCli
             if (request.Simulate)
             {
                 if (PhysicsToolSupport.IsAutoSimulation3D() || Physics2D.simulationMode != SimulationMode2D.Script)
-                    throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_MANUAL_SIMULATION_REQUIRED", "Manual simulation requires Physics.autoSimulation=false and Physics2D.simulationMode=Script.", "Configure manual simulation before invoking physics.simulation.");
+                    throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_MANUAL_SIMULATION_REQUIRED", "Manual simulation requires 3D automatic simulation to be disabled and Physics2D.simulationMode=Script.", "Configure manual simulation before invoking physics.simulation.");
                 completion = ctx.RunCompletionProbe(request.CompletionProbe, () =>
                 {
                     for (var i = 0; i < request.Steps; i++)

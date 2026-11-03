@@ -141,7 +141,7 @@ async function readCatalogSummary(
   if (fixture) return summarizeFixture(target, fixture, requestId, query);
 
   const command = target === "editor" ? "catalog.editor.summary" : "catalog.player.summary";
-  const result = await executeBridgePayload(requestId, command, {
+  const result = await executeCatalogRead(target, requestId, command, {
     ...(query.group ? { group: query.group } : {}),
     ...(query.keyword ? { keyword: query.keyword } : {}),
     limit: query.limit,
@@ -150,7 +150,7 @@ async function readCatalogSummary(
     ...(query.localNames ? { localNames: query.localNames } : {}),
     ...(query.cursorContext ? { cursorContext: query.cursorContext } : {}),
     ...(query.cursorToken ? { cursorToken: query.cursorToken } : {}),
-  }, flags, runtime, { mode: "read", mutation: false, absoluteDeadlineMs });
+  }, flags, runtime, absoluteDeadlineMs);
   if (!result.ok) return result as CliResult & { ok: false };
   return parseSummaryResponse(result.data, requestId, command, query);
 }
@@ -170,10 +170,10 @@ async function readCatalogGroups(
   if (fixture) return groupsFixture(target, fixture, requestId, expectedGeneration, reservedNames);
 
   const command = target === "editor" ? "catalog.editor.groups" : "catalog.player.groups";
-  const result = await executeBridgePayload(requestId, command, {
+  const result = await executeCatalogRead(target, requestId, command, {
     ...(expectedGeneration ? { expectedCatalogGeneration: expectedGeneration } : {}),
     reservedNames,
-  }, flags, runtime, { mode: "read", mutation: false, absoluteDeadlineMs });
+  }, flags, runtime, absoluteDeadlineMs);
   if (!result.ok) return result as CliResult & { ok: false };
   return parseGroupsResponse(result.data, requestId, command);
 }
@@ -205,9 +205,16 @@ async function readCatalogDescriptor(
 
   const command = target === "editor" ? "catalog.editor.describe" : "catalog.player.describe";
   const input = target === "editor" && fallbackName ? { name, fallbackName } : { name };
-  const result = await executeBridgePayload(requestId, command, input, flags, runtime, { mode: "read", mutation: false, absoluteDeadlineMs });
+  const result = await executeCatalogRead(target, requestId, command, input, flags, runtime, absoluteDeadlineMs);
   if (!result.ok) return result as CliResult & { ok: false };
   return parseDescriptorResponse(result.data, requestId, command, name, target, target === "editor" ? fallbackName : undefined);
+}
+
+/** 目录请求使用调用级准入 owner；隔离 transport 测试保留直接读取入口。 */
+function executeCatalogRead(target: "editor" | "runtime", requestId: string, command: string, input: Record<string, unknown>, flags: Record<string, string | boolean>, runtime: ProjectToolRuntime, absoluteDeadlineMs?: number): Promise<CliResult> {
+  return runtime.catalogRead
+    ? runtime.catalogRead(target, requestId, command, input)
+    : executeBridgePayload(requestId, command, input, flags, runtime, { mode: "read", mutation: false, absoluteDeadlineMs });
 }
 
 /** 测试注入仍执行真实筛选、generation 与 ownership 规则。 */

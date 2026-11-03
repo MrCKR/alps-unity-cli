@@ -460,6 +460,20 @@ test("missing selected instance errors omit redundant identity details", async (
   }
 });
 
+test("absent runtime session is rejected before probing Editor process identities", async () => {
+  const source = await readFile("src/instances.ts", "utf8");
+  const selector = source.slice(source.indexOf("export async function selectInstanceForFlags("), source.indexOf("async function inspectProjectProcessClaimsWithConvergence("));
+  assert.ok(selector.indexOf("!record.sessions.some") < selector.indexOf("await probeProcessObservations"));
+  assert.match(selector, /sessions\.filter\(\(session\) => session\.target === target\)/);
+  const dataDir = await mkdtemp(join(tmpdir(), "unity-cli-absent-runtime-"));
+  const projectPath = await project("unity-cli-absent-runtime-project-");
+  const identity = registryIdentity(projectPath);
+  const session = await makeRegistrySession("http://127.0.0.1:47991");
+  await writeRegistry(dataDir, makeRegistry(identity, [session]));
+  await assert.rejects(selectInstanceForFlags({ instance: identity.instanceId }, dataDir, projectPath, "runtime"),
+    (error: unknown) => error instanceof InstanceRegistryError && error.code === "E_RUNTIME_NOT_RUNNING");
+});
+
 test("Windows process observation proves the current PID under the production startup budget", { skip: process.platform !== "win32" }, async () => {
   const observation = (await probeProcessObservations([process.pid])).get(process.pid);
   assert.equal(observation?.state, "alive");

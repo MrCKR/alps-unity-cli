@@ -29,6 +29,12 @@ test("core Unity package declares its uGUI compile dependency", async () => {
   assert.ok(assembly.references?.includes("Unity.ugui"));
 });
 
+test("core Unity package declares Unity 2021.3 as its minimum supported editor", async () => {
+  const packageManifest = JSON.parse(await readFile(new URL("../unitypkg/package.json", import.meta.url), "utf8")) as { unity?: string };
+  const closure = JSON.parse(await readFile(new URL("../contracts/package-assembly-closure.json", import.meta.url), "utf8")) as { minimumUnityVersion?: string };
+  assert.equal(packageManifest.unity, "2021.3");
+  assert.equal(closure.minimumUnityVersion, "2021.3");
+});
 test("package install/remove/resolve expose play mode + risk metadata", () => {
   const install = findToolByName("package.install")!;
   assert.equal(install.playModeSupport, "editor-only");

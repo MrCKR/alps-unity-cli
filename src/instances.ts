@@ -452,7 +452,13 @@ export async function selectInstanceForFlags(
   const selection = await resolveInstanceSelectionIdentity(flags, dataDir, cwd);
   const record = await readRegistryRecord(dataDir, selection.identity.instanceId);
   if (!record) throw missingSelectedInstance(selection.identity, selection.explicit, target);
-  const observations = await probeProcessObservations(record.sessions.map((session) => session.processId));
+  // 已验证的 registry 没有该目标会话时，无需扫描其他目标的 PID。
+  if (!record.sessions.some((session) => session.target === target)) {
+    const instance = reduceObservationRegistryRecord(record, new Map(), target);
+    assertRegistryIdentity(instance, selection.identity);
+    throw targetNotRunning(instance, target);
+  }
+  const observations = await probeProcessObservations(record.sessions.filter((session) => session.target === target).map((session) => session.processId));
   const instance = await reduceRegistryRecord(record, observations, Date.now(), target);
   assertRegistryIdentity(instance, selection.identity);
   // Editor 命令行 claim 只补充发现可正向归因的重复进程；正式启动不要求携带 -projectPath。

@@ -65,7 +65,7 @@ test("canonical package source manifest fixes every file hash and fails closed o
   const sentinelPath = join(root, "target-sentinel.txt");
   try {
     await mkdir(source);
-    const packageBytes = Buffer.from(`${JSON.stringify({ name: "com.alpsckr.unitycli", version: "0.10.6", unity: "2022.3" }, null, 2)}\n`, "utf8");
+    const packageBytes = Buffer.from(`${JSON.stringify({ name: "com.alpsckr.unitycli", version: "0.10.6", unity: "2021.3" }, null, 2)}\n`, "utf8");
     await writeFile(join(source, "package.json"), packageBytes);
     await writeFile(sentinelPath, "unchanged\n", "utf8");
     const sourceHash = await hashPackageTree(source);

@@ -30,7 +30,7 @@ namespace UnityCli
             if (limit < 1 || limit > MaxLimit)
                 throw new UnityCliBridge.BridgeCommandException("E_EDITOR_SEARCH_PAGE_INVALID", "limit must be between 1 and 200.", "Use a bounded limit.");
 
-            var active = SearchService.GetActiveProviders().Where(provider => provider != null && provider.active).ToList();
+            var active = UnityCliVersionApi.ActiveSearchProviders();
             var byId = active.GroupBy(provider => provider.id, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
             var requested = request.Providers == null || request.Providers.Count == 0
                 ? active.Select(provider => provider.id).Distinct(StringComparer.Ordinal).ToList()

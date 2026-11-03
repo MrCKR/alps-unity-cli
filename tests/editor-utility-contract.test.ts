@@ -9,6 +9,7 @@ const focus = read("unitypkg/Editor/Tools/editor/focus.cs");
 const focusSupport = read("unitypkg/Editor/Tools/editor/EditorWindowFocusToolSupport.cs");
 const search = read("unitypkg/Editor/Tools/editor/search.cs");
 const searchSupport = read("unitypkg/Editor/Tools/editor/EditorSearchToolSupport.cs");
+const versionApi = read("unitypkg/Editor/Infrastructure/UnityCliVersionApi.cs");
 const capture = read("unitypkg/Editor/Tools/screenshot/editor-element.cs");
 const captureSupport = read("unitypkg/Editor/Tools/screenshot/EditorElementCaptureToolSupport.cs");
 const registry = read("unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs");
@@ -65,7 +66,7 @@ test("editor.focus冻结selected process HWND并以native foreground证明", () 
 
 test("editor.search只使用Unity Search provider并保持scan/page有界", () => {
   assert.match(search, /Name = "editor\.search"/);
-  assert.match(searchSupport, /SearchService\.GetActiveProviders/);
+  assert.match(searchSupport, /UnityCliVersionApi\.ActiveSearchProviders\(\)/);
   assert.match(searchSupport, /SearchService\.CreateContext\(requested, request\.Query, SearchFlags\.Synchronous\)/);
   assert.match(searchSupport, /SearchService\.Request\(context, SearchFlags\.Synchronous\)/);
   assert.match(searchSupport, /MaxProviders = 16/);
@@ -75,6 +76,19 @@ test("editor.search只使用Unity Search provider并保持scan/page有界", () =
   assert.doesNotMatch(searchSupport, /asset\.search|go\.find|CommitEffect/);
 });
 
+test("Unity 版本 API 差异集中在兼容入口", () => {
+  assert.match(versionApi, /#if UNITY_2022_2_OR_NEWER/);
+  assert.match(versionApi, /SearchService\.GetActiveProviders\(\)/);
+  assert.match(versionApi, /SearchService\.Providers/);
+  assert.match(versionApi, /Physics\.simulationMode/);
+  assert.match(versionApi, /Physics\.autoSimulation/);
+  assert.match(versionApi, /QualitySettings\.globalTextureMipmapLimit/);
+  assert.match(versionApi, /QualitySettings\.masterTextureLimit/);
+  assert.match(versionApi, /GetComponentCount\(\)/);
+  assert.match(versionApi, /GetComponents<Component>\(\)\.Length/);
+  assert.match(searchSupport, /UnityCliVersionApi\.ActiveSearchProviders\(\)/);
+  assert.doesNotMatch(searchSupport, /SearchService\.GetActiveProviders\(\)/);
+});
 test("screenshot.editor-element由Unity 6000.7 availability和artifact ceiling双重约束", () => {
   assert.match(capture, /Name = "screenshot\.editor-element"/);
   assert.equal((capture.match(/ctx\.CommitEffect\(\);/g) ?? []).length, 1);
