@@ -131,7 +131,8 @@ test("CLI exit waits for envelope flush and uses one bounded fallback", () => {
   let output = "";
   let flush: (() => void) | undefined;
   let fallback: (() => void) | undefined;
-  let cancelled = 0;
+  let unreferenced = 0;
+  let exitCode: number | undefined;
   const exits: number[] = [];
 
   finishCliProcess(result, false, {
@@ -141,15 +142,19 @@ test("CLI exit waits for envelope flush and uses one bounded fallback", () => {
       fallback = complete;
       return "timer";
     },
-    cancel: (timer) => { assert.equal(timer, "timer"); cancelled += 1; },
+    unref: (timer) => { assert.equal(timer, "timer"); unreferenced += 1; },
+    setExitCode: (code) => { exitCode = code; },
     exit: (code) => { exits.push(code); },
   });
 
   assert.equal(output, "{\"ok\":true,\"requestId\":\"req_exit_fixture\",\"data\":{\"value\":1}}\n");
   assert.deepEqual(exits, []);
   flush?.();
+  assert.deepEqual(exits, []);
+  assert.equal(exitCode, 0);
+  assert.equal(unreferenced, 1);
+  fallback?.();
   assert.deepEqual(exits, [0]);
-  assert.equal(cancelled, 1);
   fallback?.();
   assert.deepEqual(exits, [0]);
 
@@ -158,7 +163,8 @@ test("CLI exit waits for envelope flush and uses one bounded fallback", () => {
   finishCliProcess({ ok: false, requestId: "req_timeout_fixture", error: { code: "E_EXECUTION_TIMEOUT", message: "timeout", nextActions: [], transient: false, retryAfterMs: 0 } }, false, {
     write: () => undefined,
     schedule: (complete) => { fallbackOnly = complete; return "fallback-timer"; },
-    cancel: () => undefined,
+    unref: () => { throw new Error("Pending stdout must retain the watchdog"); },
+    setExitCode: (code) => { assert.equal(code, 1); },
     exit: (code) => { fallbackExits.push(code); },
   });
   fallbackOnly?.();
@@ -245,4 +251,21 @@ test("compiled CLI emits one raw JSON envelope and a failure exit code", (contex
     assert.equal(envelope.ok, false);
     assert.equal(envelope.error.code, "UNKNOWN_COMMAND");
   }
+});
+
+test("compiled CLI allows native cleanup and beforeExit before normal termination", (context) => {
+  const cliPath = fileURLToPath(new URL("../src/cli.js", import.meta.url));
+  if (!existsSync(cliPath)) { context.skip("compiled CLI required"); return; }
+  const script = [
+    `import { finishCliProcess } from ${JSON.stringify(pathToFileURL(cliPath).href)};`,
+    "process.once('beforeExit', () => process.stderr.write('natural-exit'));",
+    "finishCliProcess({ ok: true, requestId: 'req_natural_exit', data: {} }, false);",
+  ].join("\n");
+  const result = spawnSync(process.execPath, ["--input-type=module", "--eval", script], {
+    cwd: process.cwd(), encoding: "utf8", timeout: 4000,
+    env: { ...process.env, UNITY_CLI_ALLOW_NON_WINDOWS: "1" },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stderr, "natural-exit");
+  assert.deepEqual(JSON.parse(result.stdout), { ok: true, requestId: "req_natural_exit", data: {} });
 });

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.10.6",
-  "sourceHash": "fcedb6f7a06095a7e4fd59f59b6f135ea4406b21662c5d8ab5619ed7ac58e742",
+  "sourceHash": "25a43472a4d7e7d2a3004fdaddb09bc4361d15a071c1c4fcbd4453b74165c920",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -381,8 +381,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliCompileCoordinator.cs",
-      "size": 26950,
-      "sha256": "1a4d795d276f88c765e0c2c6c0c82548d4edddea182492aea17f0ddd6760ac10"
+      "size": 28257,
+      "sha256": "b52198723e18684f19f0e71c5f3d25235f0c92b47c83f81addfd937a7e374ed3"
     },
     {
       "path": "Editor/Infrastructure/UnityCliCompletionProbe.cs",
@@ -391,8 +391,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliDoctorDiagnostics.cs",
-      "size": 12428,
-      "sha256": "6e40706720b88e93e9f3f7d73a7a5f2836fa82f745db4836b34ba61706f3f89d"
+      "size": 12635,
+      "sha256": "88f67d440213c1ff87ec8fb49da3665bb8c80919bec890e30fa80b70f4e6ce7b"
     },
     {
       "path": "Editor/Infrastructure/UnityCliDurableStatusCoordinator.cs",

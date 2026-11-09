@@ -272,36 +272,42 @@ export const CLI_OUTPUT_FLUSH_GRACE_MS = 1_000;
 export interface CliExitRuntime {
   write(text: string, complete: () => void): void;
   schedule(complete: () => void, delayMs: number): unknown;
-  cancel(timer: unknown): void;
+  unref(timer: unknown): void;
+  setExitCode(code: number): void;
   exit(code: number): void;
 }
 
-/** 输出与本地owner都完成时退出；单一宽限timer仍是唯一强制退出authority。 */
+/** 输出与本地owner完成后允许事件循环自然结束；单一timer限制残留句柄的退出等待。 */
 export function finishCliProcess(
   result: CliResult,
   pretty: boolean,
   runtime: CliExitRuntime = {
     write: (text, complete) => { process.stdout.write(text, complete); },
     schedule: (complete, delayMs) => setTimeout(complete, delayMs),
-    cancel: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
+    unref: (timer) => (timer as ReturnType<typeof setTimeout>).unref(),
+    setExitCode: (code) => { process.exitCode = code; },
     exit: (code) => process.exit(code),
   },
 ): void {
   const exitCode = result.ok ? 0 : 1;
-  let finished = false;
+  let forced = false;
+  let released = false;
   let outputFlushed = false;
   let ownersSettled = !hasPendingCliProcessOwners();
   let timer: unknown;
-  const finish = (): void => {
-    if (finished) return;
-    finished = true;
-    if (timer !== undefined) runtime.cancel(timer);
+  runtime.setExitCode(exitCode);
+  const forceExit = (): void => {
+    if (forced) return;
+    forced = true;
     runtime.exit(exitCode);
   };
   const finishWhenSettled = (): void => {
-    if (outputFlushed && ownersSettled) finish();
+    if (!forced && !released && outputFlushed && ownersSettled) {
+      released = true;
+      runtime.unref(timer);
+    }
   };
-  timer = runtime.schedule(finish, CLI_OUTPUT_FLUSH_GRACE_MS);
+  timer = runtime.schedule(forceExit, CLI_OUTPUT_FLUSH_GRACE_MS);
   if (!ownersSettled) void waitForCliProcessOwners().then(() => {
     ownersSettled = true;
     finishWhenSettled();

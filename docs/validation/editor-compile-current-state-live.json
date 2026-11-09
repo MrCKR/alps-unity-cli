@@ -1,0 +1,214 @@
+{
+  "clean": {
+    "ok": true,
+    "requestId": "req_07215a1d-00ed-4bb7-8fd6-34c1f2fdf62e",
+    "data": {
+      "compile": {
+        "completed": true,
+        "currentVerified": true,
+        "currentFailed": false,
+        "compilationTriggered": true,
+        "noOpReason": null,
+        "refresh": true,
+        "path": null,
+        "startedAt": "2026-11-09T10:38:41.7905498Z",
+        "finishedAt": "2026-11-09T10:38:57.0580314Z",
+        "durationMs": 15267,
+        "assemblyCount": 0,
+        "errorCount": 0,
+        "warningCount": 0,
+        "status": "clean"
+      },
+      "diagnostics": [],
+      "editorState": {
+        "status": "ready",
+        "compile": {
+          "known": true,
+          "value": false
+        },
+        "import": {
+          "known": true,
+          "value": false
+        },
+        "playMode": {
+          "known": true,
+          "value": "edit"
+        }
+      },
+      "plannedEffects": [
+        {
+          "type": "asset-refresh"
+        },
+        {
+          "type": "script-compile"
+        },
+        {
+          "type": "domain-reload"
+        }
+      ]
+    }
+  },
+  "cycle": {
+    "ok": false,
+    "requestId": "req_49aeea1e-800a-483e-8c26-76ef6e7f7658",
+    "error": {
+      "code": "E_UNITY_COMPILE_FAILED",
+      "message": "Unity reported compiler errors.",
+      "nextActions": [
+        "Fix the listed compiler diagnostics before retrying editor.compile."
+      ],
+      "details": {
+        "compile": {
+          "compilationTriggered": true,
+          "completed": true,
+          "diagnosticsTruncated": 0,
+          "errorCount": 1,
+          "noOpReason": null,
+          "status": "errors",
+          "warningCount": 0
+        },
+        "diagnostics": [
+          {
+            "assembly": "Library/ScriptAssemblies/Assembly-CSharp.dll",
+            "code": "CS1525",
+            "column": 63,
+            "file": "Assets\\UnityCliCurrentCompileProbe.cs",
+            "line": 1,
+            "message": "Assets\\UnityCliCurrentCompileProbe.cs(1,63): error CS1525: Invalid expression term ';'",
+            "severity": "error"
+          }
+        ],
+        "scope": "cycle"
+      },
+      "transient": false,
+      "retryAfterMs": 0
+    }
+  },
+  "current": {
+    "ok": false,
+    "requestId": "req_22f9cffb-e897-46e0-be50-14c2e7274122",
+    "error": {
+      "code": "E_UNITY_COMPILE_FAILED",
+      "message": "Unity has unresolved compiler errors.",
+      "nextActions": [
+        "Fix the current compiler errors, then rerun editor.compile.",
+        "Inspect the Unity Console if diagnostics are incomplete or empty."
+      ],
+      "details": {
+        "compile": {
+          "compilationTriggered": false,
+          "errorCount": 0,
+          "noOpReason": "no-script-changes"
+        },
+        "current": {
+          "compileErrorCount": 1,
+          "compileErrors": [
+            "[18:40:01] Assets\\UnityCliCurrentCompileProbe.cs(1,63): error CS1525: Invalid expression term ';'"
+          ],
+          "compileErrorsTruncated": false,
+          "compiling": false,
+          "hasCompileErrors": true,
+          "nextActions": [
+            "Fix the listed compiler errors, then let Unity finish recompiling."
+          ],
+          "scanComplete": true
+        },
+        "scope": "current"
+      },
+      "transient": false,
+      "retryAfterMs": 0
+    }
+  },
+  "recovery": {
+    "ok": true,
+    "requestId": "req_4a66a57b-fe3c-463b-bf31-45dccaedc296",
+    "data": {
+      "compile": {
+        "completed": true,
+        "currentVerified": true,
+        "currentFailed": false,
+        "compilationTriggered": true,
+        "noOpReason": null,
+        "refresh": true,
+        "path": null,
+        "startedAt": "2026-11-09T10:47:14.3209909Z",
+        "finishedAt": "2026-11-09T10:47:22.5956374Z",
+        "durationMs": 8274,
+        "assemblyCount": 0,
+        "errorCount": 0,
+        "warningCount": 0,
+        "status": "clean"
+      },
+      "diagnostics": [],
+      "editorState": {
+        "status": "ready",
+        "compile": {
+          "known": true,
+          "value": false
+        },
+        "import": {
+          "known": true,
+          "value": false
+        },
+        "playMode": {
+          "known": true,
+          "value": "edit"
+        }
+      },
+      "plannedEffects": [
+        {
+          "type": "asset-refresh"
+        },
+        {
+          "type": "script-compile"
+        },
+        {
+          "type": "domain-reload"
+        }
+      ]
+    }
+  },
+  "unchanged": {
+    "ok": true,
+    "requestId": "req_686c7d2a-fd38-4922-991e-787ca7ff2ba1",
+    "data": {
+      "compile": {
+        "completed": true,
+        "currentVerified": true,
+        "currentFailed": false,
+        "compilationTriggered": false,
+        "noOpReason": "no-script-changes",
+        "refresh": true,
+        "path": null,
+        "startedAt": "2026-11-09T10:47:42.2494141Z",
+        "finishedAt": "2026-11-09T10:47:42.6824231Z",
+        "durationMs": 433,
+        "assemblyCount": 0,
+        "errorCount": 0,
+        "warningCount": 0,
+        "status": "unchanged"
+      },
+      "diagnostics": [],
+      "editorState": {
+        "status": "ready",
+        "compile": {
+          "known": true,
+          "value": false
+        },
+        "import": {
+          "known": true,
+          "value": false
+        },
+        "playMode": {
+          "known": true,
+          "value": "edit"
+        }
+      },
+      "plannedEffects": [
+        {
+          "type": "asset-refresh"
+        }
+      ]
+    }
+  }
+}

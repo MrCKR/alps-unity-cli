@@ -705,7 +705,7 @@ function validateKnownLocalTerminal(
     const compile = objectRecord(record.compile);
     const status = compile?.status;
     const triggered = compile?.compilationTriggered;
-    if (compile?.completed !== true || compile.errorCount !== 0 || typeof triggered !== "boolean"
+    if (compile?.completed !== true || compile.currentVerified !== true || compile.currentFailed !== false || compile.errorCount !== 0 || typeof triggered !== "boolean"
       || (triggered && (status !== "clean" && status !== "warnings" || compile.noOpReason !== null))
       || (!triggered && (status !== "unchanged" || compile.noOpReason !== "no-script-changes"))) {
       throw invalidCompletionProof(toolName, completion, "did not prove an unchanged, clean, or warnings-only compile terminal");

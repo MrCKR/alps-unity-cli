@@ -87,6 +87,8 @@ namespace UnityCli
             const int maxCompileErrorLineBytes = 4096;
             var scanTimer = System.Diagnostics.Stopwatch.StartNew();
             var compiling = EditorApplication.isCompiling;
+            // 当前失败位决定健康状态；Console 历史仅提供有界诊断文本。
+            var failed = EditorUtility.scriptCompilationFailed;
             var scanComplete = true;
             var compileErrorCount = 0L;
             var compileErrorsTruncated = false;
@@ -113,7 +115,7 @@ namespace UnityCli
                     try
                     {
                         var scannedEntries = 0;
-                        for (var index = total - 1; index >= 0; index--)
+                        for (var index = total - 1; failed && index >= 0; index--)
                         {
                             cancellationToken.ThrowIfCancellationRequested();
                             if (scannedEntries >= maxScannedEntries || scanTimer.ElapsedMilliseconds >= maxScanMilliseconds)
@@ -181,16 +183,17 @@ namespace UnityCli
                 else compileErrorsTruncated = true;
             }
 
+            if (failed && errors.Count == 0) scanComplete = false;
             if (!scanComplete) compileErrorsTruncated = true;
             var nextActions = new List<string>();
             if (!scanComplete) nextActions.Add("Inspect the Unity Console because compile diagnostics could not be scanned completely.");
-            if (compileErrorCount > 0) nextActions.Add("Fix the listed compiler errors, then let Unity finish recompiling.");
+            if (failed) nextActions.Add("Fix the listed compiler errors, then let Unity finish recompiling.");
             if (compiling) nextActions.Add("Wait for Unity to finish compiling, then run doctor again.");
             return new Dictionary<string, object>
             {
                 { "compiling", compiling },
                 { "scanComplete", scanComplete },
-                { "hasCompileErrors", compileErrorCount > 0 },
+                { "hasCompileErrors", failed },
                 { "compileErrorCount", compileErrorCount },
                 { "compileErrorsTruncated", compileErrorsTruncated },
                 { "compileErrors", errors },

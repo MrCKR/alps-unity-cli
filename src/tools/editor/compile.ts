@@ -30,6 +30,8 @@ export interface EditorCompileDiagnostic {
 
 export interface EditorCompileSummary {
   completed: boolean;
+  currentVerified: true;
+  currentFailed: false;
   compilationTriggered: boolean;
   noOpReason: "no-script-changes" | null;
   refresh: boolean;
@@ -74,8 +76,8 @@ type RootEnvelope = { ok: boolean; requestId: string; data?: RecordValue; error?
 
 export default defineTool<EditorCompileRequest, EditorCompileResult>({
   name: "editor.compile",
-  summary: "Refresh the live Unity Editor and return any resulting script compilation diagnostics.",
-  description: "Refreshes Unity's Asset Database, lets Unity decide whether imported script changes require compilation, and polls the durable coordinator to a stable terminal under one immutable deadline. Returns status=unchanged when Unity starts no compilation cycle; otherwise it collects diagnostics and survives domain reload.",
+  summary: "Refresh scripts and verify that Unity has no unresolved compiler errors.",
+  description: "Refreshes Unity's Asset Database and waits for any resulting script compilation and domain reload. Success verifies that Unity currently reports no unresolved compiler errors, including when no new cycle starts (status=unchanged). errorCount and diagnostics describe only this call's compilation cycle. Existing errors also return E_UNITY_COMPILE_FAILED with scope=current and bounded Console diagnostics; scope=cycle identifies errors observed in this call. includeWarnings controls cycle warning samples only. Requires Edit Mode.",
   group: "editor",
   target: "editor",
   destructiveHint: false,
@@ -133,7 +135,7 @@ export default defineTool<EditorCompileRequest, EditorCompileResult>({
       await delay(Math.min(100, Math.max(1, absoluteDeadlineMs - Date.now())));
       let status: { data?: unknown };
       try {
-        status = await bridge(statusId, "internal.editor.compile.status", { rootRequestId: context.requestId, rootRequestDigest }, boundContext, statusInvocation);
+        status = await bridge(statusId, "internal.editor.compile.status", { rootRequestId: context.requestId, rootRequestDigest }, boundContext, statusInvocation, false);
       } catch (error) {
         const cause = error instanceof StructuredToolError ? error : undefined;
         throw compileTimeout(cause?.code, cause?.details);
@@ -147,8 +149,12 @@ export default defineTool<EditorCompileRequest, EditorCompileResult>({
   },
 });
 
-async function bridge(requestId: string, command: string, input: RecordValue, context: ToolContext, invocation: ReturnType<typeof withTransitionBinding>): Promise<{ data?: unknown }> {
-  const result = await executeBridgePayload(requestId, command, input, context.flags ?? {}, { dataDir: context.dataDir, rootAdmission: context.rootAdmission, bridgeExecute: context.bridgeExecute }, invocation);
+async function bridge(requestId: string, command: string, input: RecordValue, context: ToolContext, invocation: ReturnType<typeof withTransitionBinding>, includeRootAdmission = true): Promise<{ data?: unknown }> {
+  // 状态查询按同一 durable root 重新绑定 listener；不得携带旧 listener 的准入凭据。
+  const runtime = includeRootAdmission
+    ? { dataDir: context.dataDir, rootAdmission: context.rootAdmission, bridgeExecute: context.bridgeExecute }
+    : { dataDir: context.dataDir, bridgeExecute: context.bridgeExecute };
+  const result = await executeBridgePayload(requestId, command, input, context.flags ?? {}, runtime, invocation);
   if (!result.ok) throw StructuredToolError.from(result.error ?? { code: "BRIDGE_CONNECTION_FAILED", message: "Bridge command failed." });
   return { data: result.data };
 }
@@ -168,7 +174,7 @@ function terminalResult(envelope: RootEnvelope): EditorCompileTerminalResult {
   const status = compile.status;
   const compilationTriggered = compile.compilationTriggered;
   const noOpReason = compile.noOpReason;
-  if (compile.completed !== true || errorCount !== 0 || warningCount === undefined || durationMs === undefined || assemblyCount === undefined
+  if (compile.completed !== true || compile.currentVerified !== true || compile.currentFailed !== false || errorCount !== 0 || warningCount === undefined || durationMs === undefined || assemblyCount === undefined
     || typeof compilationTriggered !== "boolean"
     || (compilationTriggered && ((status !== "clean" && status !== "warnings") || noOpReason !== null || (status === "clean" && warningCount !== 0) || (status === "warnings" && warningCount === 0)))
     || (!compilationTriggered && (status !== "unchanged" || noOpReason !== "no-script-changes" || warningCount !== 0 || assemblyCount !== 0))) {
@@ -188,7 +194,7 @@ function terminalResult(envelope: RootEnvelope): EditorCompileTerminalResult {
   const normalizedNoOpReason = noOpReason as EditorCompileSummary["noOpReason"];
   const plannedEffects = normalizePlannedEffects(data.plannedEffects, compile.path, compile.refresh, compilationTriggered);
   if (!plannedEffects) throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", "Compile terminal planned effects do not match its completed operation.", ["Inspect UnityCliBridge.log before submitting a new compile request."]);
-  return { compile: { completed: true, compilationTriggered, noOpReason: normalizedNoOpReason, refresh: compile.refresh, path: compile.path, startedAt, finishedAt, durationMs, assemblyCount, errorCount, warningCount, status: normalizedStatus }, diagnostics, editorState, plannedEffects };
+  return { compile: { completed: true, currentVerified: true, currentFailed: false, compilationTriggered, noOpReason: normalizedNoOpReason, refresh: compile.refresh, path: compile.path, startedAt, finishedAt, durationMs, assemblyCount, errorCount, warningCount, status: normalizedStatus }, diagnostics, editorState, plannedEffects };
 }
 
 function rootEnvelope(value: unknown, requestId: string): RootEnvelope | undefined {

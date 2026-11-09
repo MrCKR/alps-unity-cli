@@ -49,6 +49,8 @@ function terminalData() {
   return {
     compile: {
       completed: true,
+      currentVerified: true,
+      currentFailed: false,
       compilationTriggered: true,
       noOpReason: null,
       refresh: true,
@@ -200,6 +202,8 @@ test("editor.compile accepts an unchanged terminal when refresh starts no compil
 
 test("editor.compile rejects malformed or transitioning success proof", async () => {
   const cases = [
+    { name: "missing current verification", mutate: (data: ReturnType<typeof terminalData>) => { Reflect.deleteProperty(data.compile, "currentVerified"); } },
+    { name: "current compile failure", mutate: (data: ReturnType<typeof terminalData>) => { data.compile.currentFailed = true; } },
     { name: "fractional diagnostic", mutate: (data: ReturnType<typeof terminalData>) => { data.diagnostics[0].line = 1.5; } },
     { name: "transitioning editor", mutate: (data: ReturnType<typeof terminalData>) => { data.editorState.status = "transitioning"; } },
     { name: "triggered compile with no-op reason", mutate: (data: ReturnType<typeof terminalData>) => { (data.compile as { noOpReason: string | null }).noOpReason = "no-script-changes"; } },
@@ -344,4 +348,26 @@ test("editor.compile preserves the attributed root compiler error", async () => 
   } finally {
     await rm(f.root, { recursive: true, force: true });
   }
+});
+
+test("editor.compile preserves current failure without a new cycle or diagnostic samples", async () => {
+  const f = await fixture();
+  const details = {
+    scope: "current",
+    compile: { compilationTriggered: false, noOpReason: "no-script-changes", errorCount: 0 },
+    current: { hasCompileErrors: true, scanComplete: false, compileErrorCount: 0, compileErrorsTruncated: true, compileErrors: [] },
+  };
+  try {
+    await assert.rejects(async () => await tool.execute({ includeWarnings: false }, context(f.project, f.dataDir, async (payload) => {
+      if (payload.command === "internal.editor.state.snapshot") return { ok: true, requestId: payload.requestId, data: { snapshot: snapshot(f.session, "edit"), progress: [], blockers: [] } };
+      return { ok: true, requestId: payload.requestId, data: { terminal: true, rootEnvelope: {
+        ok: false, requestId: "req_compile_behavior", error: { code: "E_UNITY_COMPILE_FAILED", message: "Unity has unresolved compiler errors.", details, nextActions: ["Fix current errors."], transient: false, retryAfterMs: 0 },
+      } } };
+    })), (error: unknown) => {
+      assert.ok(error instanceof StructuredToolError);
+      assert.equal(error.code, "E_UNITY_COMPILE_FAILED");
+      assert.deepEqual(error.details, details);
+      return true;
+    });
+  } finally { await rm(f.root, { recursive: true, force: true }); }
 });

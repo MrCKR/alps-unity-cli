@@ -53,9 +53,10 @@ test("reload refresh status observers rebind without the root listener admission
   for (const [path, command] of [
     [editorRefreshToolPath, "internal.editor.refresh.status"],
     [assetRefreshToolPath, "internal.asset.refresh.status"],
+    [join(process.cwd(), "src", "tools", "editor", "compile.ts"), "internal.editor.compile.status"],
   ] as const) {
     const source = await readFile(path, "utf8");
-    assert.match(source, new RegExp(`${command.replaceAll(".", "\\.")}[^\\n]+observe, false\\)`));
+    assert.match(source, new RegExp(`${command.replaceAll(".", "\\.")}[^\\n]+(?:observe|statusInvocation), false\\)`));
     assert.match(source, /includeRootAdmission\s*\?\s*\{ dataDir: context\.dataDir, rootAdmission: context\.rootAdmission, bridgeExecute: context\.bridgeExecute \}/);
   }
 });

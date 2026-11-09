@@ -1,0 +1,56 @@
+[
+  {
+    "ok": true,
+    "requestId": "req_a8788cc8-77e5-43ee-a624-9a84f129c90a",
+    "data": {
+      "tools": [
+        {
+          "name": "editor.compile",
+          "summary": "Refresh scripts and verify that Unity has no unresolved compiler errors.",
+          "group": "editor"
+        }
+      ],
+      "pageInfo": {
+        "cursor": "start",
+        "pageSize": 1,
+        "total": 1
+      }
+    }
+  },
+  {
+    "ok": true,
+    "requestId": "req_0af0b126-c631-42dd-bc7c-deba217ac976",
+    "data": {
+      "tools": [
+        {
+          "name": "editor.compile",
+          "summary": "Refresh scripts and verify that Unity has no unresolved compiler errors.",
+          "group": "editor"
+        }
+      ],
+      "pageInfo": {
+        "cursor": "start",
+        "pageSize": 1,
+        "total": 1
+      }
+    }
+  },
+  {
+    "ok": true,
+    "requestId": "req_445a164c-4af5-4c2a-a3c5-fd1b59ebe422",
+    "data": {
+      "tools": [
+        {
+          "name": "editor.compile",
+          "summary": "Refresh scripts and verify that Unity has no unresolved compiler errors.",
+          "group": "editor"
+        }
+      ],
+      "pageInfo": {
+        "cursor": "start",
+        "pageSize": 1,
+        "total": 1
+      }
+    }
+  }
+]

@@ -361,7 +361,7 @@ deadline 关系与实际约束：`pauseTimeout.durationMs` 只约束暂停现场
 | `E_REQUEST_ID_REUSED` | 同一 root request ID 被不同 exact request bytes 使用 |
 | `E_TOOL_COMPLETION_PROOF_INVALID` | Tool 返回值不满足其 completion contract 或 proof 校验 |
 | `E_UNITY_COMPILE_REQUIRES_EDIT_MODE` | `editor.compile` 在稳定 Play Mode 或 queued-before-effect PlayMode 中被拒绝 |
-| `E_UNITY_COMPILE_FAILED` | owned compilation cycle 完成且包含 compiler error；details 带本次 diagnostics |
+| `E_UNITY_COMPILE_FAILED` | 本轮 compiler error（details.scope=cycle，带 diagnostics），或 Unity 当前仍有未解决编译错误（scope=current，带有界 current 诊断）；无新编译周期也可失败 |
 | `E_CODE_COMPILE_FAILED` | Runtime Code 编译失败 |
 | `E_CODE_RUNTIME_EXCEPTION` | Runtime Code 执行异常；message 指向最深可操作 cause，details.causes 为循环安全且受深度/字节限制的 cause chain |
 | `E_SHELL_IO_ERROR` | IO 错误 |

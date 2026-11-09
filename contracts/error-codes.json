@@ -8827,8 +8827,7 @@
       "emitters": [
         "src/instances.ts",
         "src/tools/catalog-control.ts",
-        "src/tools/catalog.ts",
-        "src/tools/dispatcher.ts"
+        "src/tools/catalog.ts"
       ]
     },
     {
@@ -11663,8 +11662,7 @@
         "src/bridge/session-supervisor.ts",
         "src/cli-commands/extensions.ts",
         "src/output.ts",
-        "src/package-manager.ts",
-        "src/tools/dispatcher.ts"
+        "src/package-manager.ts"
       ]
     },
     {

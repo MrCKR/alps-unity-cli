@@ -114,7 +114,7 @@ namespace UnityCli
                     var durationMs = DateTimeOffset.TryParse(startedAt, out var started) ? (long)Math.Max(0, (DateTimeOffset.UtcNow - started).TotalMilliseconds) : 0L;
                     var refresh = Bool(root, "refresh"); var path = string.IsNullOrEmpty(Text(root, "path")) ? null : Text(root, "path"); var compilationTriggered = Bool(root, "compilationObserved");
                     var status = compilationTriggered ? (warnings > 0 ? "warnings" : "clean") : "unchanged";
-                    var compile = new Dictionary<string, object> { { "completed", true }, { "compilationTriggered", compilationTriggered }, { "noOpReason", compilationTriggered ? null : "no-script-changes" }, { "refresh", refresh }, { "path", path }, { "startedAt", startedAt }, { "finishedAt", finishedAt }, { "durationMs", durationMs }, { "assemblyCount", (long)assemblies }, { "errorCount", (long)errors }, { "warningCount", (long)warnings }, { "status", status } };
+                    var compile = new Dictionary<string, object> { { "completed", true }, { "compilationTriggered", compilationTriggered }, { "noOpReason", compilationTriggered ? null : "no-script-changes" }, { "refresh", refresh }, { "path", path }, { "startedAt", startedAt }, { "finishedAt", finishedAt }, { "durationMs", durationMs }, { "assemblyCount", (long)assemblies }, { "errorCount", (long)errors }, { "warningCount", (long)warnings }, { "status", status }, { "currentVerified", true }, { "currentFailed", false } };
                     var effects = new List<object>(); if (path != null) effects.Add(new Dictionary<string, object> { { "type", "asset-import" }, { "path", path } }); else if (refresh) effects.Add(new Dictionary<string, object> { { "type", "asset-refresh" } }); if (compilationTriggered) { effects.Add(new Dictionary<string, object> { { "type", "script-compile" } }); effects.Add(new Dictionary<string, object> { { "type", "domain-reload" } }); }
                     var state = new Dictionary<string, object> { { "status", "ready" }, { "compile", new Dictionary<string, object> { { "known", true }, { "value", false } } }, { "import", new Dictionary<string, object> { { "known", true }, { "value", false } } }, { "playMode", new Dictionary<string, object> { { "known", true }, { "value", EditorApplication.isPlaying ? "play" : "edit" } } } };
                     return new Dictionary<string, object> { { "compile", compile }, { "diagnostics", diagnostics }, { "editorState", state }, { "plannedEffects", effects } };
@@ -138,11 +138,28 @@ namespace UnityCli
                     catch (Exception e) { Fail(root, "E_EXECUTION_TIMEOUT", "Compilation refresh result cannot be confirmed: " + e.Message + "; check the business state."); }
                     finally { activeDispatchRequestId = null; }
                 }
-                private void Complete(Dictionary<string, object> root) { if (Long(root, "diagnosticErrorCount") > 0) Fail(root, "E_UNITY_COMPILE_FAILED", "Unity reported compiler errors.", BuildCompileFailureDetails(root), new[] { "Fix the listed compiler diagnostics before retrying." }); else Succeed(root); }
+                /// <summary>稳定终态必须同时检查本轮诊断和 Unity 当前失败位；旧错误不依赖新周期。</summary>
+                private void Complete(Dictionary<string, object> root)
+                {
+                    if (Long(root, "diagnosticErrorCount") > 0)
+                        Fail(root, "E_UNITY_COMPILE_FAILED", "Unity reported compiler errors.", BuildCompileFailureDetails(root), new[] { "Fix the listed compiler diagnostics before retrying editor.compile." });
+                    else if (EditorUtility.scriptCompilationFailed)
+                    {
+                        var current = (Dictionary<string, object>)DoctorCompileDiagnostic(System.Threading.CancellationToken.None);
+                        Fail(root, "E_UNITY_COMPILE_FAILED", "Unity has unresolved compiler errors.", new Dictionary<string, object>
+                        {
+                            { "scope", "current" },
+                            { "compile", new Dictionary<string, object> { { "compilationTriggered", Bool(root, "compilationObserved") }, { "noOpReason", Bool(root, "compilationObserved") ? null : "no-script-changes" }, { "errorCount", Long(root, "diagnosticErrorCount") } } },
+                            { "current", current }
+                        }, new[] { "Fix the current compiler errors, then rerun editor.compile.", "Inspect the Unity Console if diagnostics are incomplete or empty." });
+                    }
+                    else Succeed(root);
+                }
                 private static object BuildCompileFailureDetails(Dictionary<string, object> root)
                 {
                     return new Dictionary<string, object>
                     {
+                        { "scope", "cycle" },
                         { "compile", new Dictionary<string, object> { { "completed", true }, { "compilationTriggered", true }, { "noOpReason", null }, { "errorCount", Long(root, "diagnosticErrorCount") }, { "warningCount", Long(root, "diagnosticWarningCount") }, { "status", "errors" }, { "diagnosticsTruncated", Long(root, "diagnosticsTruncated") } } },
                         { "diagnostics", root["diagnostics"] }
                     };
