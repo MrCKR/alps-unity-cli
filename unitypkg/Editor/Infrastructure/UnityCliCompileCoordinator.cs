@@ -145,13 +145,18 @@ namespace UnityCli
                         Fail(root, "E_UNITY_COMPILE_FAILED", "Unity reported compiler errors.", BuildCompileFailureDetails(root), new[] { "Fix the listed compiler diagnostics before retrying editor.compile." });
                     else if (EditorUtility.scriptCompilationFailed)
                     {
-                        var current = (Dictionary<string, object>)DoctorCompileDiagnostic(System.Threading.CancellationToken.None);
-                        Fail(root, "E_UNITY_COMPILE_FAILED", "Unity has unresolved compiler errors.", new Dictionary<string, object>
+                        var remaining = Math.Max(0, (Time(root, "deadline") - DateTimeOffset.UtcNow).TotalMilliseconds);
+                        // 诊断扫描共享原调用截止时间；取消源用完即释放，不扩展执行预算。
+                        using (var cancellation = new System.Threading.CancellationTokenSource(TimeSpan.FromMilliseconds(remaining)))
                         {
-                            { "scope", "current" },
-                            { "compile", new Dictionary<string, object> { { "compilationTriggered", Bool(root, "compilationObserved") }, { "noOpReason", Bool(root, "compilationObserved") ? null : "no-script-changes" }, { "errorCount", Long(root, "diagnosticErrorCount") } } },
-                            { "current", current }
-                        }, new[] { "Fix the current compiler errors, then rerun editor.compile.", "Inspect the Unity Console if diagnostics are incomplete or empty." });
+                            var current = (Dictionary<string, object>)DoctorCompileDiagnostic(cancellation.Token);
+                            Fail(root, "E_UNITY_COMPILE_FAILED", "Unity has unresolved compiler errors.", new Dictionary<string, object>
+                            {
+                                { "scope", "current" },
+                                { "compile", new Dictionary<string, object> { { "compilationTriggered", Bool(root, "compilationObserved") }, { "noOpReason", Bool(root, "compilationObserved") ? null : "no-script-changes" }, { "errorCount", Long(root, "diagnosticErrorCount") } } },
+                                { "current", current }
+                            }, new[] { "Fix the current compiler errors, then rerun editor.compile.", "Inspect the Unity Console if diagnostics are incomplete or empty." });
+                        }
                     }
                     else Succeed(root);
                 }

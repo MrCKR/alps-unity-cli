@@ -23,7 +23,7 @@
 
 ## Dev 安装与隔离
 
-Unity 2022.3.61f1；CLI node dist/cli.js；逐进程 UNITYCLI_DATA_DIR=%LOCALAPPDATA%\UnityCli-Dev。项目 D:/workspace/alps-unity-cli/Dev/UnityProject。
+Unity 2022.3.61f1；CLI node dist/cli.js；逐进程 UNITYCLI_DATA_DIR=%LOCALAPPDATA%\UnityCli-Dev。项目 <repo>/Dev/UnityProject。
 
 - init package 同步 canonical Package；verify-installed-package 两次确认全部 551 文件一致，sourceHash=25a43472a4d7e7d2a3004fdaddb09bc4361d15a071c1c4fcbd4453b74165c920。
 - 启动前正式 Unity PID 20504、104520、102408；结束仍存在同一项目和进程。Dev PID 30152，仅 Dev 根注册。
@@ -32,7 +32,7 @@ Unity 2022.3.61f1；CLI node dist/cli.js；逐进程 UNITYCLI_DATA_DIR=%LOCALAPP
 
 ## Dev 调用证据
 
-通用前缀：node dist/cli.js，--instance D:/workspace/alps-unity-cli/Dev/UnityProject。编译调用 --timeout-ms 60000。
+通用前缀：node dist/cli.js，--instance <repo>/Dev/UnityProject。编译调用 --timeout-ms 60000。
 
 - PASS 无变化干净：req_758792cd-a1cf-450e-9b99-2b19936b270d，tools run editor.compile --input '{"includeWarnings":false}'；ok=true，unchanged，currentVerified=true，currentFailed=false。
 - 夹具：Assets/UnityCliCurrentCompileProbe.cs，第 2 行非法表达式 int value = ;。Unity 自动编译后 CS1525。
@@ -77,3 +77,11 @@ Unity 2022.3.61f1；CLI node dist/cli.js；逐进程 UNITYCLI_DATA_DIR=%LOCALAPP
 ## 最终结论
 
 受影响自动化39项、契约、Dev真实周期/当前错误/恢复、退出复现路径及 fresh capability gate 均通过。两个阻断已修复。原失败记录保留用于审计；不表示最终版本仍失败。未发布、未对正式项目安装 Package。Dev Editor 保持打开，夹具已清理。
+
+## 发布检查补充
+
+- 发布架构门禁发现扫描传入 CancellationToken.None；已改为由原 root deadline 创建并释放 cancellation source，不增加预算。重新运行编译相关18项及版本API测试1项均通过，strict architecture 零失败。
+- canonical Package 重新安装到 Dev，551文件一致，sourceHash=bcfece9f086480acc0579071631c8d58996473629b076f270771ee0ee8bb320a。
+- 最终补充 Live：本轮失败 req_e5a1f9fa-34e2-4f52-900b-363c053ec7cd scope=cycle；已有错误 req_d896841c-3c4a-4466-afae-d02f700278d2 scope=current；夹具删除后 req_94ab9e1d-50b3-4ee2-8219-bdbf39304202 跨reload恢复 clean。
+- fresh gate 04a60d11-c28a-425 PASS；模型 LMD/aliyun-deepseek-v4.1-flash；首次业务调用 req_e85bd293-3c97-40f5-bcd5-84365e0cf52a 正确定位已有 CS1525。原始记录见 editor-compile-release-gate-pass.txt。
+- 原验证记录改用 <repo> 相对标识；已有版本API测试仅修正标题，行为断言未改。

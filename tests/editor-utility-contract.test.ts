@@ -76,7 +76,7 @@ test("editor.search只使用Unity Search provider并保持scan/page有界", () =
   assert.doesNotMatch(searchSupport, /asset\.search|go\.find|CommitEffect/);
 });
 
-test("Unity 版本 API 差异集中在兼容入口", () => {
+test("Unity 版本 API 差异集中在版本适配入口", () => {
   assert.match(versionApi, /#if UNITY_2022_2_OR_NEWER/);
   assert.match(versionApi, /SearchService\.GetActiveProviders\(\)/);
   assert.match(versionApi, /SearchService\.Providers/);
