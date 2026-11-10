@@ -212,7 +212,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | `E_HOOK_PATCH_FAILED` | 建立或撤销本 CLI 自己的 Patch 失败 | 检查 Unity Console 与目标签名后重新提交 |
 | `E_HOOK_STORE_FAILED` | 定义快照无法发布或读回，终态无法证明 | 检查项目 `Library/UnityCli/debug` 可写性；先观察业务状态再决定后续 |
 | `E_HOOK_CALLBACK_FAILED` | 回调抛错导致该定义停止派发（worker 线程上的故障按发生时的 revision 记录，由主线程提交状态） | 读取 `debug.hook-info` 的 last fault 与 staleFaults，修正后显式 replace 或 enable |
-| `E_HOOK_CALLBACK_OVERRUN` | 回调正常返回但超过 overrun 阈值 | 缩短回调耗时；该阈值不是抢占式超时 |
+| `E_HOOK_CALLBACK_OVERRUN` | 回调正常返回但耗时超过 10 ms overrun 阈值，该定义随即 faulted 并停止派发 | 缩短回调耗时，改用 `ctx.Emit` 收集证据，不要在回调内做阻塞等待、文件或网络 IO 或资产操作；该阈值不是抢占式超时 |
 | `E_DEBUG_RESOURCE_CONFLICT` | 同一 exact target 上已有活动的回调定义；回调体的写范围无法静态证明，因此不允许第二个干预 owner（effect 之前拒绝） | 改用或删除已有的回调定义；需要独立观察时安装 capture-only 观察（可共存且顺序确定） |
 | `E_HOOK_LIMIT_EXCEEDED` | 定义、源码、State 或快照超出已声明的硬上限 | 按上限摘要缩小输入；`disable`/`remove` 仍然可用 |
 | `E_COMPILER_BUDGET_EXHAUSTED` | 当前域共享的编译产物预算耗尽（`debug.code-execute`、Hook 回调、program、pause evaluate 共用同一份计数；错误码保留既有名称） | 读取 `error.details` 的占用与剩余额度，停用或删除不再需要的定义，或 reload domain；删除不会回收已加载程序集，不会自动 reload |
@@ -359,7 +359,7 @@ deadline 关系与实际约束：`pauseTimeout.durationMs` 只约束暂停现场
 | `E_UNITY_TRANSITION_TIMEOUT` | 首次ready记录或可恢复状态变化未在原命令截止时间内稳定；确认Unity仍在推进后才使用更大的timeout重试 |
 | `E_EXECUTION_TIMEOUT` | 已放行调用或本地执行未在既有absolute deadline内返回终态、连接提前断开、首次mutation POST后Editor session改变，或`details.replay="blocked"`表示该identity的终态已被有界缓存挤出所以不重放；outcome unknown，公开terminal固定且迟到settlement不能改写或重投effect |
 | `E_REQUEST_ID_REUSED` | 同一 root request ID 被不同 exact request bytes 使用 |
-| `E_TOOL_COMPLETION_PROOF_INVALID` | Tool 返回值不满足其 completion contract 或 proof 校验 |
+| `E_TOOL_COMPLETION_PROOF_INVALID` | Tool 返回值不满足其 completion contract 或 proof 校验；`editor.compile` 的 `details.reason` 区分具体分支（`start-not-accepted`、`start-missing-root-digest`、`status-terminal-invalid`、`terminal-error-operation-identity`、`terminal-not-completed`、`terminal-shape`、`terminal-diagnostics-mismatch`、`terminal-planned-effects-mismatch` 等），并在可归因时带 `details.causeCode`；公开错误文本里出现本机路径不属于泄露 |
 | `E_UNITY_COMPILE_REQUIRES_EDIT_MODE` | `editor.compile` 在稳定 Play Mode 或 queued-before-effect PlayMode 中被拒绝 |
 | `E_UNITY_COMPILE_FAILED` | 本轮 compiler error（details.scope=cycle，带 diagnostics），或 Unity 当前仍有未解决编译错误（scope=current，带有界 current 诊断）；无新编译周期也可失败 |
 | `E_CODE_COMPILE_FAILED` | Runtime Code 编译失败 |

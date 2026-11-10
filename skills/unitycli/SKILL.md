@@ -1,6 +1,6 @@
 ---
 name: unitycli
-description: `unitycli` 是操作 Unity Editor 的能力通道，提供这些能力域：Editor 状态与 PlayMode、场景与层级、GameObject 与组件、资产导入与检索、Prefab、材质与 Shader、纹理与 ScriptableObject、UI、相机与截图、动画与 Animator、Timeline、光照与烘焙、NavMesh 与遮挡剔除、物理、渲染与 Volume、序列化字段、离线文档与类型查询、构建与 Build Profile、测试、Profiler、包、扩展与项目设置、Player 运行时、运行时调试，以及已装扩展带来的域（Cinemachine、ProBuilder、URP/HDRP、VFX Graph）；完整分组与可用状态在运行时用 `tools group` 读取。任务涉及这些域，或需要操作、观察、验证已打开的 Unity Editor 时，先读本 Skill。
+description: unitycli 是操作 Unity Editor 的能力通道，提供这些能力域：Editor 状态与 PlayMode、场景与层级、GameObject 与组件、资产导入与检索、Prefab、材质与 Shader、纹理与 ScriptableObject、UI、相机与截图、动画与 Animator、Timeline、光照与烘焙、NavMesh 与遮挡剔除、物理、渲染与 Volume、序列化字段、离线文档与类型查询、构建与 Build Profile、测试、Profiler、包、扩展与项目设置、Player 运行时、运行时调试，以及已装扩展带来的域（Cinemachine、ProBuilder、URP/HDRP、VFX Graph）；完整分组与可用状态在运行时用 `tools group` 读取。任务涉及这些域，或需要操作、观察、验证已打开的 Unity Editor 时，先读本 Skill。
 license: MIT
 ---
 # UnityCLI

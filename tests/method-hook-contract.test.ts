@@ -95,6 +95,18 @@ test("debug hook completion contracts match the observed-state and atomic execut
   }
 });
 
+test("hook descriptors disclose the overrun budget and the finite listener rearm rule", async () => {
+  const notes = await source(join("unitypkg", "Editor", "Tools", "debug", "DebugDomainNotes.cs"));
+  assert.match(notes, /DebugLimits\.CallbackOverrunMs\.ToString\(/, "the disclosed overrun threshold is read from the single DebugLimits owner");
+  assert.match(notes, /E_HOOK_CALLBACK_OVERRUN/, "the overrun fault code is named in the callback rules");
+  assert.match(notes, /ctx\.Emit/, "the callback cost rule names the bounded evidence path");
+  assert.match(notes, /file and network IO/, "the callback cost rule excludes blocking IO");
+  assert.match(notes, /E_HOOK_LISTENER_NOT_REARMED/, "the finite listener rearm rule is named");
+  assert.match(notes, /never rearmed/, "a finite listener budget is never rearmed automatically");
+  const limits = await source(join("unitypkg", "Editor", "Infrastructure", "Debug", "DebugLimits.cs"));
+  assert.match(limits, /internal const int CallbackOverrunMs = 10;/, "the disclosed threshold stays the owner constant");
+});
+
 test("debug hook command contract reuses the same live catalog entry", async () => {
   const contract = JSON.parse(await readFile("contracts/command-contract.json", "utf8")) as {
     commands: Array<{ bridgeCommand: string; group: string; command: string; handler_type: string; csharp_handler: string }>;

@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
@@ -696,21 +697,37 @@ namespace UnityCli.Tests
         }
 
         /// <summary>
-        /// 回调失败语义必须在 install 的公开描述里自足：否则调用方会把“hook 已经停止派发、原方法照常执行”
+        /// 回调失败语义必须在 install 的公开 notes 里自足：否则调用方会把“hook 已经停止派发、原方法照常执行”
         /// 误认为“逻辑已经被改写”。本断言与上面的行为断言配套，防止描述再次漂移。
         /// </summary>
         [Test]
         public void InstallDescriptorDisclosesCallbackFaultSemantics()
         {
-            var description = new MethodHookInstallTool().Describe().Description;
-            Assert.That(description, Does.Contain("Callback failure:"));
-            Assert.That(description, Does.Contain("E_HOOK_CALLBACK_FAILED"));
-            Assert.That(description, Does.Contain("the definition becomes faulted"));
-            Assert.That(description, Does.Contain("stops dispatching"));
-            Assert.That(description, Does.Contain("keeps its original behaviour"));
-            Assert.That(description, Does.Contain("debug.hook-info lastFault"));
-            Assert.That(description, Does.Contain("kind=fault"));
-            Assert.That(description, Does.Contain("debug.hook-enable"));
+            var notes = string.Join(" ", new MethodHookInstallTool().Describe().Notes);
+            Assert.That(notes, Does.Contain("Callback failure:"));
+            Assert.That(notes, Does.Contain("E_HOOK_CALLBACK_FAILED"));
+            Assert.That(notes, Does.Contain("the definition becomes faulted"));
+            Assert.That(notes, Does.Contain("stops dispatching"));
+            Assert.That(notes, Does.Contain("keeps its original behaviour"));
+            Assert.That(notes, Does.Contain("debug.hook-info lastFault"));
+            Assert.That(notes, Does.Contain("kind=fault"));
+            Assert.That(notes, Does.Contain("debug.hook-enable"));
+        }
+
+        /// <summary>
+        /// overrun 阈值与有限 listener 的重新武装规则也必须在 install 的公开 notes 里自足：
+        /// 回调内做阻塞 IO 会让定义 faulted，有限 maxHits 在重载后不会自动重装。
+        /// </summary>
+        [Test]
+        public void InstallDescriptorDisclosesOverrunAndListenerRearmRules()
+        {
+            var notes = string.Join(" ", new MethodHookInstallTool().Describe().Notes);
+            Assert.That(notes, Does.Contain("more than " + DebugLimits.CallbackOverrunMs.ToString(CultureInfo.InvariantCulture) + " ms is an overrun"));
+            Assert.That(notes, Does.Contain("E_HOOK_CALLBACK_OVERRUN"));
+            Assert.That(notes, Does.Contain("ctx.Emit"));
+            Assert.That(notes, Does.Contain("file and network IO"));
+            Assert.That(notes, Does.Contain("E_HOOK_LISTENER_NOT_REARMED"));
+            Assert.That(notes, Does.Contain("never rearmed"));
         }
 
         public static class ForeignPatches
