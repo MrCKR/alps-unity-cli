@@ -1,0 +1,76 @@
+# Release 0.10.8 warnings
+
+`npm run release:check` 在 0.10.8 报告中给出以下 warnings（均为存量 descriptor description 超过 150-token 建议值，非 blocker）。发布前已逐条告知项目所有者。
+
+- `component.get: description 186 tokens exceeds the 150-token target`
+- `debug.code-execute: description 289 tokens exceeds the 150-token target`
+- `debug.code-flow-cancel: description 225 tokens exceeds the 150-token target`
+- `debug.code-flow-run: description 300 tokens exceeds the 150-token target`
+- `debug.code-flow-submit: description 296 tokens exceeds the 150-token target`
+- `debug.code-flow-wait: description 298 tokens exceeds the 150-token target`
+- `debug.console-read: description 156 tokens exceeds the 150-token target`
+- `debug.events-read: description 294 tokens exceeds the 150-token target`
+- `debug.hook-disable: description 264 tokens exceeds the 150-token target`
+- `debug.hook-enable: description 239 tokens exceeds the 150-token target`
+- `debug.hook-info: description 249 tokens exceeds the 150-token target`
+- `debug.hook-install: description 299 tokens exceeds the 150-token target`
+- `debug.hook-list: description 198 tokens exceeds the 150-token target`
+- `debug.hook-remove: description 258 tokens exceeds the 150-token target`
+- `debug.hook-replace: description 258 tokens exceeds the 150-token target`
+- `debug.input-info: description 280 tokens exceeds the 150-token target`
+- `debug.input-key: description 258 tokens exceeds the 150-token target`
+- `debug.input-pointer: description 286 tokens exceeds the 150-token target`
+- `debug.input-release: description 278 tokens exceeds the 150-token target`
+- `debug.method-find: description 260 tokens exceeds the 150-token target`
+- `debug.pause-evaluate: description 299 tokens exceeds the 150-token target`
+- `debug.pause-inspect: description 251 tokens exceeds the 150-token target`
+- `debug.pause-list: description 286 tokens exceeds the 150-token target`
+- `debug.pause-resume: description 255 tokens exceeds the 150-token target`
+- `debug.pause-wait: description 235 tokens exceeds the 150-token target`
+- `debug.program-info: description 269 tokens exceeds the 150-token target`
+- `debug.program-install: description 207 tokens exceeds the 150-token target`
+- `debug.program-list: description 245 tokens exceeds the 150-token target`
+- `debug.program-remove: description 286 tokens exceeds the 150-token target`
+- `debug.program-replace: description 287 tokens exceeds the 150-token target`
+- `debug.program-run: description 257 tokens exceeds the 150-token target`
+- `debug.program-stop: description 268 tokens exceeds the 150-token target`
+- `debug.program-wait: description 295 tokens exceeds the 150-token target`
+- `debug.run-begin: description 294 tokens exceeds the 150-token target`
+- `debug.run-compare: description 293 tokens exceeds the 150-token target`
+- `debug.run-end: description 293 tokens exceeds the 150-token target`
+- `debug.run-info: description 297 tokens exceeds the 150-token target`
+- `debug.run-list: description 291 tokens exceeds the 150-token target`
+- `debug.run-wait: description 279 tokens exceeds the 150-token target`
+- `debug.session-create: description 291 tokens exceeds the 150-token target`
+- `debug.session-export: description 292 tokens exceeds the 150-token target`
+- `debug.session-info: description 267 tokens exceeds the 150-token target`
+- `debug.session-remove: description 250 tokens exceeds the 150-token target`
+- `debug.session-stop: description 283 tokens exceeds the 150-token target`
+- `debug.thread-list: description 212 tokens exceeds the 150-token target`
+- `debug.type-schema: description 211 tokens exceeds the 150-token target`
+- `debug.value-write: description 295 tokens exceeds the 150-token target`
+- `editor.menu-execute: description 191 tokens exceeds the 150-token target`
+- `editor.menu-list: description 165 tokens exceeds the 150-token target`
+- `editor.refresh: description 186 tokens exceeds the 150-token target`
+- `game-object.delete: description 220 tokens exceeds the 150-token target`
+- `game-object.find: description 167 tokens exceeds the 150-token target`
+- `probuilder.append-vertices-to-edge: description 209 tokens exceeds the 150-token target`
+- `probuilder.bevel-edges: description 209 tokens exceeds the 150-token target`
+- `probuilder.bridge-edges: description 164 tokens exceeds the 150-token target`
+- `probuilder.connect-elements: description 173 tokens exceeds the 150-token target`
+- `probuilder.extrude-edges: description 165 tokens exceeds the 150-token target`
+- `probuilder.extrude-faces: description 155 tokens exceeds the 150-token target`
+- `probuilder.insert-vertex: description 221 tokens exceeds the 150-token target`
+- `profiler.memory-snapshot-take: description 153 tokens exceeds the 150-token target`
+- `scene.hierarchy: description 156 tokens exceeds the 150-token target`
+- `scene.load: description 172 tokens exceeds the 150-token target`
+- `screenshot.surround: description 152 tokens exceeds the 150-token target`
+- `timeline.clip-add: description 173 tokens exceeds the 150-token target`
+- `timeline.create: description 151 tokens exceeds the 150-token target`
+- `timeline.info: description 199 tokens exceeds the 150-token target`
+
+Summary: warnings 
+66
+；failures 
+0
+；notes 最高项 debug.hook-install 1715 / 2000；description 最高项 debug.code-flow-run 300 / 300。
