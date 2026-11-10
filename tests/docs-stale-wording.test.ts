@@ -132,7 +132,13 @@ test("README is an operational npm page for one-line AI setup and manual verific
   for (const behavior of ["unique current Unity project", "exact Skill directory", "normally close", "independently authorized effects"]) assert.match(readme, new RegExp(behavior, "i"));
   for (const command of ["unitycli init help", "unitycli init discover", "unitycli init package --project", "--close-editor", "unitycli init skill --target", "unitycli init skill --agent .agents --scope workspace", "unitycli init skill --agent claude --scope user", "--check", "unitycli doctor", "unitycli instances list", "npm uninstall -g @alpsckr/unitycli"]) assert.match(readme, new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(readme, /Node\.js 20/);
-  assert.match(readme, /Unity 2022\.3/);
+  // 最低 Unity 版本只有一个所有权：契约声明，README 必须与它一致，避免两侧各写一个数字后漂移。
+  const closure = JSON.parse(readDocFile("contracts/package-assembly-closure.json")) as { minimumUnityVersion: string };
+  assert.ok(closure.minimumUnityVersion, "package closure must declare minimumUnityVersion");
+  assert.ok(
+    readme.includes(`Unity ${closure.minimumUnityVersion}`),
+    `README must state the declared minimum Unity version ${closure.minimumUnityVersion}`
+  );
   assert.match(readme, /First Unity Call/);
   assert.doesNotMatch(readme, /Project Baseline|Bridge command、handler、journal|completion contract都是内部实现|--pkg-only|--skill-only/);
   assert.match(readDocFile("docs/architecture.md"), /Registry v3|Health v3|Tool Catalog|Installation Control Plane/);
