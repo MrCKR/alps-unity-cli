@@ -303,13 +303,13 @@ test("editor.compile rejects private operation fields in root error details", as
   }
 });
 
-test("editor.compile rejects private paths in root error text", async () => {
+test("editor.compile rejects private operation identity in root error text", async () => {
   const f = await fixture();
   try {
     await assert.rejects(async () => await tool.execute({}, context(f.project, f.dataDir, async (payload) => {
       if (payload.command === "internal.editor.state.snapshot") return { ok: true, requestId: payload.requestId, data: { snapshot: snapshot(f.session, "edit"), progress: [], blockers: [] } };
       if (payload.command === "internal.editor.compile.start") return { ok: true, requestId: payload.requestId, data: { terminal: false, accepted: true, rootRequestDigest: mockRootRequestDigest } };
-      return { ok: true, requestId: payload.requestId, data: { terminal: true, rootEnvelope: { ok: false, requestId: "req_compile_behavior", error: { code: "E_EXECUTION_TIMEOUT", message: "Failed at C:\\Users\\builder\\journal.json", nextActions: [], transient: false, retryAfterMs: 0 } } } };
+      return { ok: true, requestId: payload.requestId, data: { terminal: true, rootEnvelope: { ok: false, requestId: "req_compile_behavior", error: { code: "E_EXECUTION_TIMEOUT", message: "Failed during " + "journal" + ".json write", nextActions: [], transient: false, retryAfterMs: 0 } } } };
     })), (error: unknown) => error instanceof StructuredToolError && error.code === "E_TOOL_COMPLETION_PROOF_INVALID");
   } finally {
     await rm(f.root, { recursive: true, force: true });
@@ -367,6 +367,50 @@ test("editor.compile preserves current failure without a new cycle or diagnostic
       assert.ok(error instanceof StructuredToolError);
       assert.equal(error.code, "E_UNITY_COMPILE_FAILED");
       assert.deepEqual(error.details, details);
+      return true;
+    });
+  } finally { await rm(f.root, { recursive: true, force: true }); }
+});
+
+test("editor.compile keeps a compile failure readable when its message names a local path", async () => {
+  const f = await fixture();
+  const diagnostics = [{ assembly: "Assembly-CSharp.dll", severity: "error", code: "CS1525", message: "Invalid expression term", file: "Assets/Broken.cs", line: 2, column: 13 }];
+  const details = {
+    scope: "cycle",
+    compile: { completed: true, compilationTriggered: true, noOpReason: null, errorCount: 1, warningCount: 0, status: "errors", diagnosticsTruncated: 0 },
+    diagnostics,
+  };
+  const message = "Unity reported compiler errors in D:\\Project\\Assets\\Broken.cs.";
+  try {
+    await assert.rejects(async () => await tool.execute({}, context(f.project, f.dataDir, async (payload) => {
+      if (payload.command === "internal.editor.state.snapshot") return { ok: true, requestId: payload.requestId, data: { snapshot: snapshot(f.session, "edit"), progress: [], blockers: [] } };
+      return { ok: true, requestId: payload.requestId, data: { terminal: true, rootEnvelope: {
+        ok: false, requestId: "req_compile_behavior", error: { code: "E_UNITY_COMPILE_FAILED", message, details, nextActions: ["Fix the listed compiler diagnostics before retrying editor.compile."], transient: false, retryAfterMs: 0 },
+      } } };
+    })), (error: unknown) => {
+      assert.ok(error instanceof StructuredToolError);
+      assert.equal(error.code, "E_UNITY_COMPILE_FAILED", "a local path in the message is not private operation data");
+      assert.equal(error.message, message);
+      assert.deepEqual((error.details as { diagnostics: unknown[] }).diagnostics, diagnostics);
+      return true;
+    });
+  } finally { await rm(f.root, { recursive: true, force: true }); }
+});
+
+test("editor.compile names the proof branch that rejected a private terminal", async () => {
+  const f = await fixture();
+  try {
+    await assert.rejects(async () => await tool.execute({}, context(f.project, f.dataDir, async (payload) => {
+      if (payload.command === "internal.editor.state.snapshot") return { ok: true, requestId: payload.requestId, data: { snapshot: snapshot(f.session, "edit"), progress: [], blockers: [] } };
+      return { ok: true, requestId: payload.requestId, data: { terminal: true, rootEnvelope: {
+        ok: false, requestId: "req_compile_behavior", error: { code: "E_UNITY_COMPILE_FAILED", message: "Compile failed for requestDigest " + mockRootRequestDigest, nextActions: [], transient: false, retryAfterMs: 0 },
+      } } };
+    })), (error: unknown) => {
+      assert.ok(error instanceof StructuredToolError);
+      assert.equal(error.code, "E_TOOL_COMPLETION_PROOF_INVALID");
+      const details = error.details as { reason?: string; causeCode?: string };
+      assert.equal(details.reason, "terminal-error-operation-identity");
+      assert.equal(details.causeCode, "E_UNITY_COMPILE_FAILED");
       return true;
     });
   } finally { await rm(f.root, { recursive: true, force: true }); }

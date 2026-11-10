@@ -116,18 +116,18 @@ export default defineTool<EditorCompileRequest, EditorCompileResult>({
     try {
       start = await bridge(context.requestId, "internal.editor.compile.start", input, boundContext, startInvocation);
     } catch (error) {
-      if (error instanceof StructuredToolError && error.details && containsPrivateCompileField(error.details)) throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", "Compile root error exposed private operation data.", ["Inspect UnityCliBridge.log before submitting a new compile request."]);
+      if (error instanceof StructuredToolError && error.details && containsPrivateCompileField(error.details)) throw proofError("start-error-operation-identity", "Compile root error exposed private operation data.", ["Inspect UnityCliBridge.log before submitting a new compile request."], error.code);
       throw error;
     }
     const startData = record(start.data);
     if (startData.terminal === true) {
       const directTerminal = rootEnvelope(startData.rootEnvelope, context.requestId);
-      if (!directTerminal) throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", "Compile start returned an invalid recovered root terminal.", ["Inspect UnityCliBridge.log before submitting a new compile request."]);
+      if (!directTerminal) throw proofError("start-terminal-invalid", "Compile start returned an invalid recovered root terminal.", ["Inspect UnityCliBridge.log before submitting a new compile request."]);
       return terminalResult(directTerminal);
     }
-    if (startData.terminal !== false || startData.accepted !== true) throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", "Compile start returned neither acceptance nor a root terminal.", ["Inspect UnityCliBridge.log before submitting a new compile request."]);
+    if (startData.terminal !== false || startData.accepted !== true) throw proofError("start-not-accepted", "Compile start returned neither acceptance nor a root terminal.", ["Inspect UnityCliBridge.log before submitting a new compile request."]);
     const rootRequestDigest = typeof startData.rootRequestDigest === "string" && /^[a-f0-9]{64}$/.test(startData.rootRequestDigest) ? startData.rootRequestDigest : undefined;
-    if (!rootRequestDigest) throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", "Compile start omitted its exact root digest.", ["Inspect UnityCliBridge.log before submitting a new compile request."]);
+    if (!rootRequestDigest) throw proofError("start-missing-root-digest", "Compile start omitted its exact root digest.", ["Inspect UnityCliBridge.log before submitting a new compile request."]);
 
     const statusId = compileChildRequestId(context.requestId, "_compile_status");
     for (;;) {
@@ -143,7 +143,7 @@ export default defineTool<EditorCompileRequest, EditorCompileResult>({
       const data = record(status.data);
       if (data.terminal !== true) continue;
       const envelope = rootEnvelope(data.rootEnvelope, context.requestId);
-      if (!envelope) throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", "Compile status returned an invalid root terminal envelope.", ["Inspect UnityCliBridge.log and retry after the selected session is stable."]);
+      if (!envelope) throw proofError("status-terminal-invalid", "Compile status returned an invalid root terminal envelope.", ["Inspect UnityCliBridge.log and retry after the selected session is stable."]);
       return terminalResult(envelope);
     }
   },
@@ -162,7 +162,7 @@ async function bridge(requestId: string, command: string, input: RecordValue, co
 function terminalResult(envelope: RootEnvelope): EditorCompileTerminalResult {
   if (!envelope.ok) {
     const error = envelope.error;
-    if ((error?.details && containsPrivateCompileField(error.details)) || containsPrivateCompileText(error?.message) || error?.nextActions?.some(containsPrivateCompileText)) throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", "Compile terminal error exposed private operation data.", ["Inspect UnityCliBridge.log before submitting a new compile request."]);
+    if ((error?.details && containsPrivateCompileField(error.details)) || containsPrivateCompileText(error?.message) || error?.nextActions?.some(containsPrivateCompileText)) throw proofError("terminal-error-operation-identity", "Compile terminal error exposed private operation data.", ["Inspect UnityCliBridge.log before submitting a new compile request."], error?.code);
     throw new StructuredToolError(error?.code ?? "E_TOOL_COMPLETION_PROOF_INVALID", error?.message ?? "Compile failed without a structured root error.", error?.nextActions ?? [], error?.details, error?.transient, error?.retryAfterMs);
   }
   const data = record(envelope.data);
@@ -178,22 +178,22 @@ function terminalResult(envelope: RootEnvelope): EditorCompileTerminalResult {
     || typeof compilationTriggered !== "boolean"
     || (compilationTriggered && ((status !== "clean" && status !== "warnings") || noOpReason !== null || (status === "clean" && warningCount !== 0) || (status === "warnings" && warningCount === 0)))
     || (!compilationTriggered && (status !== "unchanged" || noOpReason !== "no-script-changes" || warningCount !== 0 || assemblyCount !== 0))) {
-    throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", "Compile terminal did not prove an unchanged, clean, or warnings-only completion.", ["Inspect returned compiler diagnostics and fix errors before retrying."]);
+    throw proofError("terminal-not-completed", "Compile terminal did not prove an unchanged, clean, or warnings-only completion.", ["Inspect returned compiler diagnostics and fix errors before retrying."]);
   }
   const diagnostics = normalizeDiagnostics(data.diagnostics);
   const editorState = normalizeEditorState(record(data.editorState));
   const startedAt = timestamp(compile.startedAt);
   const finishedAt = timestamp(compile.finishedAt);
   if (!editorState || typeof compile.refresh !== "boolean" || (compile.path !== null && typeof compile.path !== "string") || !startedAt || !finishedAt || Date.parse(finishedAt) < Date.parse(startedAt)) {
-    throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", "Compile terminal has an invalid business proof shape.", ["Inspect UnityCliBridge.log and retry after the selected session is stable."]);
+    throw proofError("terminal-shape", "Compile terminal has an invalid business proof shape.", ["Inspect UnityCliBridge.log and retry after the selected session is stable."]);
   }
   if (!diagnostics || (!compilationTriggered && diagnostics.length !== 0)) {
-    throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", "Compile terminal diagnostics do not match its compilation outcome.", ["Inspect UnityCliBridge.log before submitting a new compile request."]);
+    throw proofError("terminal-diagnostics-mismatch", "Compile terminal diagnostics do not match its compilation outcome.", ["Inspect UnityCliBridge.log before submitting a new compile request."]);
   }
   const normalizedStatus = status as EditorCompileSummary["status"];
   const normalizedNoOpReason = noOpReason as EditorCompileSummary["noOpReason"];
   const plannedEffects = normalizePlannedEffects(data.plannedEffects, compile.path, compile.refresh, compilationTriggered);
-  if (!plannedEffects) throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", "Compile terminal planned effects do not match its completed operation.", ["Inspect UnityCliBridge.log before submitting a new compile request."]);
+  if (!plannedEffects) throw proofError("terminal-planned-effects-mismatch", "Compile terminal planned effects do not match its completed operation.", ["Inspect UnityCliBridge.log before submitting a new compile request."]);
   return { compile: { completed: true, currentVerified: true, currentFailed: false, compilationTriggered, noOpReason: normalizedNoOpReason, refresh: compile.refresh, path: compile.path, startedAt, finishedAt, durationMs, assemblyCount, errorCount, warningCount, status: normalizedStatus }, diagnostics, editorState, plannedEffects };
 }
 
@@ -260,6 +260,11 @@ function compileTimeout(causeCode?: string, details?: RecordValue): StructuredTo
   const blockers = blockersFromDetails(details);
   return new StructuredToolError("E_EXECUTION_TIMEOUT", blockerTimeoutMessage("editor.compile", blockers), blockers ? blockerNextActions() : ["Inspect editor.state and the Unity compiler state before deciding whether to submit a new request."], { ...(causeCode ? { causeCode } : {}), ...(blockers ? { blockers } : {}) }, false, 0);
 }
+/** proof 失败必须可分类：同一个公开错误码下用 details.reason 区分具体校验分支，并保留原业务码。 */
+function proofError(reason: string, message: string, nextActions: string[], causeCode?: string): StructuredToolError {
+  return new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", message, nextActions, { reason, ...(causeCode ? { causeCode } : {}) });
+}
+
 function containsPrivateCompileField(value: unknown): boolean {
   if (!value || typeof value !== "object") return false;
   if (Array.isArray(value)) return value.some(containsPrivateCompileField);
@@ -267,7 +272,7 @@ function containsPrivateCompileField(value: unknown): boolean {
   return Object.entries(value as RecordValue).some(([key, child]) => forbidden.has(key.replace(/[^a-z0-9]/gi, "").toLowerCase()) || containsPrivateCompileField(child));
 }
 function containsPrivateCompileText(value: unknown): boolean {
-  return typeof value === "string" && /(?:compileOperation|listener(?:Id|Generation)|requestDigest|rootEnvelope|terminalEnvelope|\bjournal\b|\brunId\b|\blease\b|\bendpoint\b|\bport\b|127\.0\.0\.1|[A-Za-z]:\\|\/(?:Users|home|tmp|var|private)\/)/i.test(value);
+  return typeof value === "string" && /(?:compileOperation|listener(?:Id|Generation)|requestDigest|rootEnvelope|terminalEnvelope|\bjournal\b|\brunId\b|\blease\b|\bendpoint\b|\bport\b)/i.test(value);
 }
 function record(value: unknown): RecordValue { return value && typeof value === "object" && !Array.isArray(value) ? value as RecordValue : {}; }
 function nonnegativeInteger(value: unknown): number | undefined { return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined; }

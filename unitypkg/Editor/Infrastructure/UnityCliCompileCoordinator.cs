@@ -135,7 +135,12 @@ namespace UnityCli
                         else AssetDatabase.Refresh(Bool(root, "forceUpdate") ? ImportAssetOptions.ForceUpdate : ImportAssetOptions.Default);
                         Update(x => { if (Text(x, "phase") == "dispatching") x["phase"] = "awaiting_started"; });
                     }
-                    catch (Exception e) { Fail(root, "E_EXECUTION_TIMEOUT", "Compilation refresh result cannot be confirmed: " + e.Message + "; check the business state."); }
+                    catch (Exception e)
+                    {
+                        // 公开message只给稳定结论；异常原文可能包含本机路径，只能进Bridge日志。
+                        WriteLog("compile_refresh_failed requestId=" + Text(root, "requestId") + " " + e.GetType().Name + ": " + e.Message);
+                        Fail(root, "E_EXECUTION_TIMEOUT", "Compilation refresh result cannot be confirmed; inspect the Editor and business state before retrying.");
+                    }
                     finally { activeDispatchRequestId = null; }
                 }
                 /// <summary>稳定终态必须同时检查本轮诊断和 Unity 当前失败位；旧错误不依赖新周期。</summary>
