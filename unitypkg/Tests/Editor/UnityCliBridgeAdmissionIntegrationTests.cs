@@ -1154,6 +1154,67 @@ namespace UnityCli.Tests
             return item;
         }
 
+        /// <summary>排队期间到期的普通读必须在未开始时结算，否则会永久占用准入槽位。</summary>
+        [Test]
+        public void ExpiredQueuedReadSettlesBeforeStartAndReleasesItsAdmission()
+        {
+            var stale = Request("expired-queued-read");
+            stale.Command = "catalog.editor.list";
+            var raw = RequestBytes(stale);
+            var deadline = Deadline(stale);
+            var grant = pool.Acquire(stale.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+            Assert.That(grant.Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.Granted));
+            bool created;
+            var item = Enqueue(stale, raw, grant.Token, deadline, out created);
+            Assert.That(created, Is.True);
+            Assert.That(pool.Capture().Active, Is.EqualTo(1));
+            // publication 后只推进测试持有的 request 时钟视图，确定性模拟排队期间 deadline 流逝。
+            stale.Execution.AbsoluteDeadlineUtc = DateTimeOffset.FromUnixTimeMilliseconds(0).ToString("O");
+
+            Assert.That(UnityCliBridge.ExpireQueuedWorkForTests(state), Is.EqualTo(0));
+
+            Assert.That(item.HasStarted, Is.False);
+            Assert.That(item.NoEffectRejected, Is.True);
+            Assert.That(item.Completed.IsSet, Is.True);
+            Assert.That(item.Response, Does.Contain("E_EXECUTION_TIMEOUT"));
+            Assert.That(item.Response, Does.Contain("before Unity started executing it"));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(0));
+            Assert.That(state.PendingSettlementWork, Is.Empty);
+        }
+
+        /// <summary>带 direct completion evidence 的实例清理完成后必须移交 durable owner，不能挂在 owner-changed。</summary>
+        [Test]
+        public void CompletedInstancePruneTransfersItsAdmissionToTheDurableOwner()
+        {
+            var request = Request("completed-instance-prune");
+            request.Command = "internal.instances.prune";
+            var raw = RequestBytes(request);
+            var deadline = Deadline(request);
+            var grant = pool.Acquire(request.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+            Assert.That(grant.Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.Granted));
+            bool created;
+            var item = Enqueue(request, raw, grant.Token, deadline, out created);
+            Assert.That(created, Is.True);
+            var digest = UnityCliRequestDigest.Compute(raw, request.InstanceId);
+            state.SaveOperation("direct-mutation", new Dictionary<string, object>
+            {
+                { "requestId", request.RequestId },
+                { "requestDigest", digest },
+                { "editorSessionId", UnityCliBridge.EditorSessionId() }
+            });
+
+            Assert.That(UnityCliBridge.CompleteWorkItemForTests(item, Success(request.RequestId)), Is.True, "a completed prune must settle its admission");
+
+            Assert.That(item.Completed.IsSet, Is.True);
+            Assert.That(state.PendingSettlementWork, Is.Empty);
+            Assert.That(state.OperationExists("direct-mutation-admission-owner"), Is.True, "the durable owner must be recorded at completion");
+            Assert.That(pool.TryGetConsumedIdentity(request.RequestId, out var owner), Is.True);
+            Assert.That(owner.OwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.Recovery));
+            state.ClearOperation("direct-mutation-admission-owner");
+            state.ClearOperation("direct-mutation");
+        }
+
         private UnityCliBridge.BridgeWorkItem Enqueue(BridgeRequest request, byte[] raw, string token, long deadline, out bool created)
         {
             var reservation = new UnityCliBridge.AdmissionQueueReservation

@@ -1415,7 +1415,7 @@ namespace UnityCli
         /// <summary>root观察不确定时用队列冻结身份建立可执行Recovery marker；候选缺失时继续保留WorkItem。</summary>
         private static AdmissionTransferResult PersistWorkItemRecoveryAfterTransferFailure(BridgeQueueState state, BridgeWorkItem item, AdmissionOwnerIdentity identity, string command, string response)
         {
-            if (identity == null || (!AdmissionDurableRootCommand(command) && command != "catalog.editor.run" && command != "debug.code-execute"))
+            if (identity == null || (!AdmissionDurableRootCommand(command) && !IsDirectMutationCommand(command)))
                 return AdmissionTransferResult.TransferPending;
             try
             {
@@ -1456,7 +1456,7 @@ namespace UnityCli
         private static AdmissionTransferResult TransferAdmissionAfterAcceptedWork(BridgeQueueState state, BridgeWorkItem item, AdmissionOwnerIdentity identity, string command, string response)
         {
             if (identity == null) return AdmissionTransferResult.NotAccepted;
-            var directMutation = command == "catalog.editor.run" || command == "debug.code-execute";
+            var directMutation = IsDirectMutationCommand(command);
             if (!AdmissionDurableRootCommand(command) && !directMutation) return AdmissionTransferResult.NotAccepted;
             string markerScope;
             string rootScope;
@@ -1750,7 +1750,7 @@ namespace UnityCli
                     if (command == "internal.test.run.cancel") return false;
                     bool ownsLease;
                     if (!queueState.TryIsLeaseOwned(identity.RequestId, identity.RequestDigest, out ownsLease)) return false;
-                    if (command == "catalog.editor.run" || command == "debug.code-execute")
+                    if (IsDirectMutationCommand(command))
                     {
                         durable = ownsLease;
                         return true;
@@ -1804,8 +1804,15 @@ namespace UnityCli
             return UnityCliActiveOperation.TryGetTerminal(scope, request.RequestId, digest, out terminal);
         }
 
+        /// <summary>带direct effect与direct completion evidence的内部命令：准入在effect前已交给Recovery owner，完成时沿用同一scope转移。</summary>
+        private static bool IsDirectMutationCommand(string command)
+        {
+            return command == "catalog.editor.run" || command == "debug.code-execute" || command == "internal.instances.prune";
+        }
+
         private static string AdmissionTerminalScope(string command)
         {
+            if (IsDirectMutationCommand(command)) return "direct-mutation";
             switch (command)
             {
                 case "internal.build.run.start": return "build";
@@ -1818,9 +1825,6 @@ namespace UnityCli
                 case "internal.test.run.cancel": return "test-cancel";
                 case "internal.navmesh.bake.start": return "navmesh-bake";
                 case "internal.occlusion.bake.start": return "occlusion-bake";
-                case "catalog.editor.run":
-                case "debug.code-execute":
-                    return "direct-mutation";
                 default:
                     return null;
             }

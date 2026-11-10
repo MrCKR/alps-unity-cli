@@ -239,7 +239,7 @@ function help(version: string): Record<string, unknown> {
       "target alias set <name|projectPath> <alias> [--force]",
       "target alias unset <alias>",
       "instances list [--all]",
-      "instances prune",
+      "instances prune --instance <name|alias|projectPath> [--timeout-ms <n>]",
       "doctor [--instance <name|alias|projectPath>] [--project <path>]"
     ],
     options: [

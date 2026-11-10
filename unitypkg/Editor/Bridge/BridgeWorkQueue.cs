@@ -194,6 +194,7 @@ namespace UnityCli
             UnityCliWaitScheduler.Tick();
             RetryDirectMutationTerminalCleanup();
             RetryPendingWorkItemSettlements();
+            ExpireQueuedWork(state);
 
             // 新listener先保留至少一个主线程update的transitioning状态；后续生命周期变化即时发布，30秒刷新只修复漏事件。
             if (listenerWasStarted && started && InitialPublicationGate.Published
@@ -226,6 +227,47 @@ namespace UnityCli
                 lock (state.QueueLock) state.RunningWork.Add(item);
                 _ = ExecuteWorkItemAsync(item);
             }
+        }
+
+        /// <summary>未开始请求的到期回收不受业务屏障阻挡：只拒绝可证明未开始的项，并按no-effect结算释放响应与准入槽位。</summary>
+        private static void ExpireQueuedWork(BridgeQueueState state)
+        {
+            if (state == null) return;
+            var expired = new List<BridgeWorkItem>();
+            lock (state.QueueLock)
+            {
+                var cursor = state.WorkQueue.First;
+                var examined = 0;
+                while (cursor != null && examined < UnityCliBridgeQueuePolicy.MaxFifoNodesExaminedPerTick)
+                {
+                    var item = cursor.Value;
+                    cursor = cursor.Next;
+                    examined += 1;
+                    int remainingMs;
+                    // TryDeadlineRemainingMs 为 false 时与 TryStart 一致：没有可用预算，按已过期处理。
+                    if (item.Request == null || item.Request.TryDeadlineRemainingMs(out remainingMs)) continue;
+                    if (!item.CancelBeforeStart()) continue;
+                    RemoveQueuedItemUnderLock(state, item);
+                    expired.Add(item);
+                }
+            }
+            foreach (var item in expired)
+            {
+                item.Response = UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
+                    item.Request.RequestId,
+                    "E_EXECUTION_TIMEOUT",
+                    "Bridge request deadline elapsed before Unity started executing it.",
+                    nextActions: new[] { "Inspect editor.state and submit a new request after Unity is ready." }));
+                item.MarkNoEffectRejected();
+                CompleteWorkItem(item);
+            }
+        }
+
+        internal static int ExpireQueuedWorkForTests(BridgeQueueState state)
+        {
+            if (state == null || state.IsolatedExecution == null) throw new ArgumentException("Expiry test state must be isolated.", "state");
+            ExpireQueuedWork(state);
+            lock (state.QueueLock) return state.WorkQueue.Count;
         }
 
         /// <summary>control proof在锁外冻结；每个linked-list节点在lane访问当下完成唯一policy检查。</summary>
