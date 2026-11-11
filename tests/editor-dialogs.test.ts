@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CLICK_DIALOG_MIN_EXECUTION_BUDGET_MS, DIALOG_CLICK_PRE_EFFECT_FAILURES, buildClickDialogScript, clickObservedDialog, dialogId, normalizeDialogButton, parseClickDialogOutput, publicDialog, type ObservedEditorDialog } from "../src/editor-dialogs.js";
+import { CLICK_DIALOG_MIN_EXECUTION_BUDGET_MS, DIALOG_CLICK_PRE_EFFECT_FAILURES, DIALOG_IDENTITY_UNPROVEN_REASONS, attributeDialogProcess, buildClickDialogScript, clickObservedDialog, dialogId, normalizeDialogButton, parseClickDialogOutput, publicDialog, type ObservedEditorDialog } from "../src/editor-dialogs.js";
 import clickDialogTool, { dialogClickFailureError } from "../src/tools/editor/dialog/click.js";
 import { parseWindowsEditorStateOutput } from "../src/windows-editor-state.js";
 
@@ -102,4 +102,37 @@ test("Windows dialog probe preserves standard dialog body and enabled button tar
   const projected = publicDialog({ dialogId: "dialog_test", title: "Scene(s) Have Been Modified", message: "Save changes?", modal: true, buttons: ["Save", "Cancel"], hwnd: "0x1", ownerHwnd: null, processId: 1, processStartedAt: "2026-07-19T00:00:00.000Z", buttonTargets: [] });
   assert.deepEqual(projected, { dialogId: "dialog_test", title: "Scene(s) Have Been Modified", message: "Save changes?", modal: true, buttons: ["Save", "Cancel"] });
   assert.equal(normalizeDialogButton("&Don't &Save"), "Don't Save");
+});
+
+const registeredSession = { processId: 41920, processStartedAt: "2026-11-11T01:35:10.1617582Z" };
+const claimOf = (processIds: number[], verification: "verified" | "unverifiable" | "unsupported" = "verified") => ({
+  verification,
+  processIds,
+  ...(verification === "verified" ? { processClaims: processIds.map((processId) => ({ processId, processStartedAt: "2026-11-11T01:35:10.1617582Z" })) } : {}),
+});
+
+test("dialog observation attributes a verified Registry session when no command line claims -projectPath", () => {
+  assert.deepEqual(attributeDialogProcess(claimOf([]), registeredSession), { outcome: "attributed", processId: 41920, processStartedAt: "2026-11-11T01:35:10.161Z" });
+  assert.deepEqual(attributeDialogProcess(claimOf([41920]), registeredSession), { outcome: "attributed", processId: 41920, processStartedAt: "2026-11-11T01:35:10.161Z" });
+  // 命令行扫描本身失败不是死亡证据；Registry session 仍是 ownership 来源。
+  assert.deepEqual(attributeDialogProcess(claimOf([], "unverifiable"), registeredSession), { outcome: "attributed", processId: 41920, processStartedAt: "2026-11-11T01:35:10.161Z" });
+});
+
+test("dialog observation keeps conflict and mismatch rejections when a Registry session exists", () => {
+  assert.deepEqual(attributeDialogProcess(claimOf([41920, 41921]), registeredSession), { outcome: "conflict", reason: "multiple-process-claims" });
+  assert.deepEqual(attributeDialogProcess(claimOf([41921]), registeredSession), { outcome: "unproven", reason: "registry-claim-mismatch" });
+  assert.deepEqual(attributeDialogProcess(claimOf([]), { processId: 41920, processStartedAt: "not-a-timestamp" }), { outcome: "unproven", reason: "process-start-unproven" });
+  assert.deepEqual(attributeDialogProcess(claimOf([]), undefined), { outcome: "offline" });
+  assert.deepEqual(attributeDialogProcess(claimOf([], "unverifiable"), undefined), { outcome: "unproven", reason: "process-claims-unverifiable" });
+  assert.deepEqual(attributeDialogProcess(claimOf([], "unsupported"), registeredSession), { outcome: "unsupported" });
+});
+
+test("dialog observation falls back to the sole command line claim without a Registry session", () => {
+  assert.deepEqual(attributeDialogProcess(claimOf([41920]), undefined), { outcome: "attributed", processId: 41920, processStartedAt: "2026-11-11T01:35:10.161Z" });
+  assert.deepEqual(attributeDialogProcess(claimOf([41920, 41921]), undefined), { outcome: "conflict", reason: "multiple-process-claims" });
+  assert.deepEqual(attributeDialogProcess({ verification: "verified", processIds: [41920] }, undefined), { outcome: "unproven", reason: "process-start-unproven" });
+});
+
+test("instance identity unproven reasons stay a closed set for the public error mapping", () => {
+  assert.deepEqual([...DIALOG_IDENTITY_UNPROVEN_REASONS].sort(), ["process-claims-unverifiable", "process-start-unproven", "registry-claim-mismatch"]);
 });

@@ -1,4 +1,4 @@
-import { observeEditorDialogs, publicDialog, type EditorDialog } from "../../editor-dialogs.js";
+import { DIALOG_IDENTITY_UNPROVEN_REASONS, observeEditorDialogs, publicDialog, type EditorDialog } from "../../editor-dialogs.js";
 import { InstanceRegistryError, selectObservationInstanceForFlags } from "../../instances.js";
 import { defineTool, type ToolContext } from "../define.js";
 import { StructuredToolError } from "../errors.js";
@@ -29,8 +29,8 @@ export async function readEditorDialogs(request: EditorDialogsRequest, context: 
   catch (error) { if (error instanceof InstanceRegistryError) throw new StructuredToolError(error.code, error.message, error.nextActions, error.details); throw error; }
   if (instance.status === "conflict") throw new StructuredToolError("E_INSTANCE_CONFLICT", "Multiple verified Unity Editor sessions claim the selected project identity.", ["Close duplicate Unity Editor processes before reading dialogs."]);
   if (instance.status === "unverifiable") throw new StructuredToolError("E_INSTANCE_UNVERIFIABLE", "Unity Editor process ownership could not be verified safely.", ["Run unitycli instances list or tools run editor.state to observe the identity again."]);
-  const observed = await observeEditorDialogs({ instanceId: instance.instanceId, canonicalProjectPath: instance.canonicalProjectPath, displayProjectPath: instance.displayProjectPath }, Math.max(0, deadlineMs - Date.now()));
-  if (observed.outcome === "unproven" && observed.reason === "process-claims-unverifiable") throw new StructuredToolError("E_INSTANCE_UNVERIFIABLE", "Unity Editor process ownership could not be verified safely.", ["Run unitycli instances list or tools run editor.state to observe the identity again."]);
+  const observed = await observeEditorDialogs({ instanceId: instance.instanceId, canonicalProjectPath: instance.canonicalProjectPath, displayProjectPath: instance.displayProjectPath }, Math.max(0, deadlineMs - Date.now()), instance.activeSession);
+  if (observed.outcome === "unproven" && DIALOG_IDENTITY_UNPROVEN_REASONS.has(observed.reason ?? "")) throw new StructuredToolError("E_INSTANCE_UNVERIFIABLE", "Unity Editor process ownership could not be verified safely.", ["Run unitycli instances list or tools run editor.state to observe the identity again."]);
   if (observed.outcome === "unproven") throw new StructuredToolError("E_DIALOG_OBSERVATION_FAILED", "Windows dialog observation could not be proven for the selected Unity project.", ["Retry tools run editor.dialogs after the selected Unity process is stable."], { reason: observed.reason });
   if (observed.outcome === "conflict") throw new StructuredToolError("E_INSTANCE_CONFLICT", "Multiple verified Unity Editor processes claim the selected project identity.", ["Close duplicate Unity Editor processes before reading dialogs."]);
   if (observed.outcome === "offline") throw new StructuredToolError("E_INSTANCE_NOT_RUNNING", "The selected Unity project has no attributable Unity process.", ["Open the selected Unity project in Unity Editor."]);

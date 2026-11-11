@@ -1,31 +1,59 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { inspectProjectProcessClaims, type RegistryIdentity } from "./instances.js";
+import { inspectProjectProcessClaims, type ProjectProcessClaimInspection, type RegistryIdentity } from "./instances.js";
 import { POWERSHELL_UTF8_OUTPUT_LINE } from "./powershell-transport.js";
 import { probeWindowsEditorState, type WindowsEditorWindow } from "./windows-editor-state.js";
 
 export interface EditorDialog { dialogId: string; title: string; message: string; modal: true; buttons: string[]; }
 export interface ObservedEditorDialog extends EditorDialog { hwnd: string; ownerHwnd: string | null; processId: number; processStartedAt: string; buttonTargets: Array<{ label: string; hwnd: string; enabled: boolean }>; }
 export type DialogObservation = { outcome: "observed"; processId: number; processStartedAt: string; dialogs: ObservedEditorDialog[] } | { outcome: "unproven" | "conflict" | "offline" | "unsupported"; reason?: string };
+export interface DialogSessionIdentity { processId: number; processStartedAt: string; }
+export type DialogProcessAttribution = { outcome: "attributed"; processId: number; processStartedAt: string } | { outcome: "offline" | "conflict" | "unproven" | "unsupported"; reason?: string };
+/** 归属失败中只代表“身份不可证明”的 reason，调用方必须映射为 E_INSTANCE_UNVERIFIABLE。 */
+export const DIALOG_IDENTITY_UNPROVEN_REASONS: ReadonlySet<string> = new Set(["process-claims-unverifiable", "process-start-unproven", "registry-claim-mismatch"]);
 
-/** 只在可验证的唯一 canonical project PID 上读取 modal；Bridge 不参与此路径。 */
-export async function observeEditorDialogs(identity: RegistryIdentity, timeoutMs: number): Promise<DialogObservation> {
-  const deadlineMs = Date.now() + Math.max(0, timeoutMs);
-  const remaining = () => Math.max(0, deadlineMs - Date.now());
-  const claims = await inspectProjectProcessClaims(identity, remaining());
+/**
+ * 选择唯一可注入窗口的进程归属。
+ *
+ * 已验证的 Registry editor session 就是 ownership 来源；命令行 `-projectPath` claim 只作为额外正向证据，
+ * 因此 Hub 或普通方式启动、命令行不含该参数的合法 Editor 仍可读取与点击弹窗。无 session 时才回退到 claim。
+ */
+export function attributeDialogProcess(claims: ProjectProcessClaimInspection, registeredSession?: DialogSessionIdentity): DialogProcessAttribution {
   if (claims.verification === "unsupported") return { outcome: "unsupported" };
+  if (registeredSession) {
+    if (claims.verification === "verified" && claims.processIds.length > 1) return { outcome: "conflict", reason: "multiple-process-claims" };
+    if (claims.verification === "verified" && claims.processIds.length === 1 && claims.processIds[0] !== registeredSession.processId) return { outcome: "unproven", reason: "registry-claim-mismatch" };
+    const startedAt = millisecondTimestamp(registeredSession.processStartedAt);
+    if (!startedAt) return { outcome: "unproven", reason: "process-start-unproven" };
+    return { outcome: "attributed", processId: registeredSession.processId, processStartedAt: startedAt };
+  }
   if (claims.verification !== "verified") return { outcome: "unproven", reason: "process-claims-unverifiable" };
   if (claims.processIds.length === 0) return { outcome: "offline" };
   if (claims.processIds.length !== 1) return { outcome: "conflict", reason: "multiple-process-claims" };
-  const processId = claims.processIds[0];
-  const claim = claims.processClaims?.find((value) => value.processId === processId);
-  if (!claim) return { outcome: "unproven", reason: "process-start-unproven" };
+  const claim = claims.processClaims?.find((value) => value.processId === claims.processIds[0]);
+  const startedAt = claim ? millisecondTimestamp(claim.processStartedAt) : undefined;
+  if (!claim || !startedAt) return { outcome: "unproven", reason: "process-start-unproven" };
+  return { outcome: "attributed", processId: claim.processId, processStartedAt: startedAt };
+}
+
+/** 点击脚本以 `yyyy-MM-ddTHH:mm:ss.fffZ` 比较进程启动时间，Registry 的 `O` 格式必须先归一到毫秒精度。 */
+function millisecondTimestamp(value: string): string | undefined {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined;
+}
+
+/** 只在可验证的唯一 canonical project PID 上读取 modal；Bridge 不参与此路径。 */
+export async function observeEditorDialogs(identity: RegistryIdentity, timeoutMs: number, registeredSession?: DialogSessionIdentity): Promise<DialogObservation> {
+  const deadlineMs = Date.now() + Math.max(0, timeoutMs);
+  const remaining = () => Math.max(0, deadlineMs - Date.now());
+  const attribution = attributeDialogProcess(await inspectProjectProcessClaims(identity, remaining()), registeredSession);
+  if (attribution.outcome !== "attributed") return attribution;
   const probeBudgetMs = remaining();
   if (probeBudgetMs < 1) return { outcome: "unproven", reason: "deadline" };
-  const probe = await probeWindowsEditorState(processId, { timeoutMs: probeBudgetMs });
+  const probe = await probeWindowsEditorState(attribution.processId, { timeoutMs: probeBudgetMs });
   if (probe.outcome === "unproven") return { outcome: "unproven", reason: probe.reason };
   if (probe.outcome === "unsupported") return { outcome: "unsupported" };
-  return { outcome: "observed", processId, processStartedAt: claim.processStartedAt, dialogs: probe.windows.filter((window) => window.modal).map((window) => toObservedDialog(window, processId, claim.processStartedAt)) };
+  return { outcome: "observed", processId: attribution.processId, processStartedAt: attribution.processStartedAt, dialogs: probe.windows.filter((window) => window.modal).map((window) => toObservedDialog(window, attribution.processId, attribution.processStartedAt)) };
 }
 export function publicDialog(dialog: ObservedEditorDialog): EditorDialog { return { dialogId: dialog.dialogId, title: dialog.title, message: dialog.message, modal: true, buttons: dialog.buttons }; }
 export function dialogId(processId: number, processStartedAt: string, hwnd: string): string { return `dialog_${createHash("sha256").update(`${processId}\0${processStartedAt}\0${hwnd}`).digest("hex")}`; }
