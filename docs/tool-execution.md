@@ -66,7 +66,7 @@ Bridge-backed Tool由Unity Editor主线程执行。业务请求发送前，sessi
 
 ### `editor.compile`
 
-`editor.compile` 是唯一公开编译 Tool。一次调用等待已有 import/compile 稳定、刷新 Asset Database，并由 Unity 判断是否需要新编译周期；不额外调用 `RequestScriptCompilation()`。无新周期时返回 `status="unchanged"`、`compilationTriggered=false` 和 `noOpReason="no-script-changes"`。成功必须同时证明本轮 `errorCount=0`、`currentVerified=true`、`currentFailed=false` 和 Editor 稳定；当前失败状态来自 `EditorUtility.scriptCompilationFailed`。本轮诊断含错误时返回 `E_UNITY_COMPILE_FAILED`、`error.details.scope="cycle"` 和结构化 `diagnostics`。即使没有新周期，当前仍失败时也返回同一错误码、`scope="current"` 和 `current` 诊断摘要。`current.compileErrors` 复用 doctor 的有界 Console 文本扫描，可能包含历史消息；它只用于定位，不决定当前失败状态。扫描不完整或没有文本也不能将失败变为成功。`includeWarnings=false` 只排除本轮 warning 样例，不跳过当前失败检查。
+`editor.compile` 是唯一公开编译 Tool。一次调用等待已有 import/compile 稳定、刷新 Asset Database，并由 Unity 判断是否需要新编译周期；不额外调用 `RequestScriptCompilation()`。无新周期时返回 `status="unchanged"`、`compilationTriggered=false` 和 `noOpReason="no-script-changes"`。成功必须同时证明 `compile.completed=true`、本轮 `errorCount=0`、`currentVerified=true`、`currentFailed=false` 和 Editor 稳定；当前失败状态来自 `EditorUtility.scriptCompilationFailed`。本轮诊断含错误时返回 `E_UNITY_COMPILE_FAILED`、`error.details.scope="cycle"` 和结构化 `diagnostics`。即使没有新周期，当前仍失败时也返回同一错误码、`scope="current"` 和 `current` 诊断摘要。`current.compileErrors` 复用 doctor 的有界 Console 文本扫描，可能包含历史消息；它只用于定位，不决定当前失败状态。扫描不完整或没有文本也不能将失败变为成功。`includeWarnings=false` 只排除本轮 warning 样例，不跳过当前失败检查。
 
 ```powershell
 unitycli tools run editor.compile --input '{"includeWarnings":true}' --timeout-ms 120000
